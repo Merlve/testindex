@@ -25,13 +25,20 @@ let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home'
 };
-if (fs.existsSync(configPath) && fs.statSync(configPath).isFile()) {
-  try {
-    const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    appConfig = { ...appConfig, ...loaded };
-  } catch (e) {
-    console.error('Error reading config', e);
+try {
+  if (fs.existsSync(configPath)) {
+    if (fs.statSync(configPath).isFile()) {
+      const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      appConfig = { ...appConfig, ...loaded };
+      console.log(`[STARTUP] Successfully loaded config from ${configPath}`);
+    } else {
+      console.warn(`[STARTUP] Warning: ${configPath} exists but is not a file.`);
+    }
+  } else {
+    console.log(`[STARTUP] No config file found at ${configPath}, using defaults.`);
   }
+} catch (e) {
+  console.error(`[STARTUP ERROR] Failed to read or parse config from ${configPath}:`, e);
 }
 
 // Ensure env variables take precedence over saved config if provided
@@ -64,12 +71,19 @@ function saveConfig() {
 // Simple JSON DB for TMDB corrections
 const dbPath = path.join(_dirname, 'db.json');
 let tmdbCache: Record<string, any> = {};
-if (fs.existsSync(dbPath) && fs.statSync(dbPath).isFile()) {
-  try {
-    tmdbCache = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-  } catch (e) {
-    console.error('Error reading DB', e);
+try {
+  if (fs.existsSync(dbPath)) {
+    if (fs.statSync(dbPath).isFile()) {
+      tmdbCache = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+      console.log(`[STARTUP] Successfully loaded TMDB cache from ${dbPath}`);
+    } else {
+      console.warn(`[STARTUP] Warning: ${dbPath} exists but is not a file.`);
+    }
+  } else {
+    console.log(`[STARTUP] No TMDB cache DB found at ${dbPath}, starting fresh.`);
   }
+} catch (e) {
+  console.error(`[STARTUP ERROR] Failed to read or parse DB from ${dbPath}:`, e);
 }
 function saveDb() {
   try { fs.writeFileSync(dbPath, JSON.stringify(tmdbCache, null, 2)); } catch (e) { console.error("Db write error", e); }
@@ -78,9 +92,20 @@ function saveDb() {
 
 // Watchlist DB
 const watchlistPath = path.join(_dirname, 'watchlist.json');
-let watchlistDb = {};
-if (fs.existsSync(watchlistPath) && fs.statSync(watchlistPath).isFile()) {
-  try { watchlistDb = JSON.parse(fs.readFileSync(watchlistPath, 'utf8')); } catch (e) {}
+let watchlistDb: Record<string, any> = {};
+try {
+  if (fs.existsSync(watchlistPath)) {
+    if (fs.statSync(watchlistPath).isFile()) {
+      watchlistDb = JSON.parse(fs.readFileSync(watchlistPath, 'utf8'));
+      console.log(`[STARTUP] Successfully loaded Watchlist DB from ${watchlistPath}`);
+    } else {
+      console.warn(`[STARTUP] Warning: ${watchlistPath} exists but is not a file.`);
+    }
+  } else {
+    console.log(`[STARTUP] No Watchlist DB found at ${watchlistPath}, starting fresh.`);
+  }
+} catch (e) {
+  console.error(`[STARTUP ERROR] Failed to read or parse Watchlist DB from ${watchlistPath}:`, e);
 }
 function saveWatchlist() {
   try { fs.writeFileSync(watchlistPath, JSON.stringify(watchlistDb, null, 2)); } catch (e) {}
