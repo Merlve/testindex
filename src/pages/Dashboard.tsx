@@ -6,6 +6,7 @@ import Loader from '../components/Loader';
 import { Play, RefreshCw } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import FeaturedSlide from '../components/FeaturedSlide';
+import TrendingCarousel from '../components/TrendingCarousel';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -82,6 +83,7 @@ export default function Dashboard() {
       )}
 
       <div className="px-4 sm:px-8 flex-1 space-y-12 pb-12">
+        <TrendingCarousel categories={categories} />
         {categories.map(cat => (
           <div key={cat.name}>
             <div className="flex justify-between items-end mb-4">

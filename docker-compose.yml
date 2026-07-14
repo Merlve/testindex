@@ -14,3 +14,4 @@ services:
     volumes:
       - ./config.json:/app/config.json
       - ./db.json:/app/db.json
+      - ./watchlists:/app/watchlists

@@ -90,31 +90,48 @@ function saveDb() {
 }
 
 
-// Watchlist DB
-const watchlistPath = path.join(process.cwd(), 'watchlist.json');
-let watchlistDb: Record<string, any> = {};
-try {
-  if (fs.existsSync(watchlistPath)) {
-    if (fs.statSync(watchlistPath).isFile()) {
-      watchlistDb = JSON.parse(fs.readFileSync(watchlistPath, 'utf8'));
-      console.log(`[STARTUP] Successfully loaded Watchlist DB from ${watchlistPath}`);
-    } else {
-      console.warn(`[STARTUP] Warning: ${watchlistPath} exists but is not a file.`);
-    }
-  } else {
-    console.log(`[STARTUP] No Watchlist DB found at ${watchlistPath}, starting fresh.`);
+// Watchlists storage
+const watchlistsDir = path.join(process.cwd(), 'watchlists');
+if (!fs.existsSync(watchlistsDir)) {
+  try {
+    fs.mkdirSync(watchlistsDir, { recursive: true });
+    console.log(`[STARTUP] Created watchlists directory at ${watchlistsDir}`);
+  } catch (e) {
+    console.error(`[STARTUP ERROR] Failed to create watchlists directory:`, e);
   }
-} catch (e) {
-  console.error(`[STARTUP ERROR] Failed to read or parse Watchlist DB from ${watchlistPath}:`, e);
 }
-function saveWatchlist() {
-  try { fs.writeFileSync(watchlistPath, JSON.stringify(watchlistDb, null, 2)); } catch (e) {}
+
+function getUserWatchlistPath(user: string) {
+  // Sanitize username to prevent path traversal
+  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(watchlistsDir, `${safeUser}.json`);
+}
+
+function loadUserWatchlist(user: string): any[] {
+  const filePath = getUserWatchlistPath(user);
+  try {
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+  } catch (e) {
+    console.error(`Error loading watchlist for user ${user}:`, e);
+  }
+  return [];
+}
+
+function saveUserWatchlist(user: string, list: any[]) {
+  const filePath = getUserWatchlistPath(user);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(list, null, 2));
+  } catch (e) {
+    console.error(`Error saving watchlist for user ${user}:`, e);
+  }
 }
 
 app.get('/api/watchlist', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  res.json(watchlistDb[user] || []);
+  res.json(loadUserWatchlist(user));
 });
 
 app.post('/api/watchlist/toggle', (req, res) => {
@@ -122,9 +139,8 @@ app.post('/api/watchlist/toggle', (req, res) => {
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { item, category, parentPath } = req.body;
-  if (!watchlistDb[user]) watchlistDb[user] = [];
+  const list = loadUserWatchlist(user);
   
-  const list = watchlistDb[user];
   const existingIndex = list.findIndex(i => i.item.name === item.name && i.parentPath === parentPath);
   
   if (existingIndex >= 0) {
@@ -133,7 +149,7 @@ app.post('/api/watchlist/toggle', (req, res) => {
     list.push({ item, category, parentPath });
   }
   
-  saveWatchlist();
+  saveUserWatchlist(user, list);
   res.json({ success: true, watchlist: list, added: existingIndex < 0 });
 });
 
@@ -141,7 +157,7 @@ app.get('/api/watchlist/check', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   const { name, parentPath } = req.query;
   if (!user || !name || !parentPath) return res.json({ inWatchlist: false });
-  const list = watchlistDb[user] || [];
+  const list = loadUserWatchlist(user);
   const exists = list.some(i => i.item.name === name && i.parentPath === parentPath);
   res.json({ inWatchlist: exists });
 });
@@ -532,6 +548,20 @@ app.get('/api/tmdb/search', async (req, res) => {
     }
     res.json(null);
   } catch (error: any) {
+    res.status(500).json({ error: 'TMDB fetch failed' });
+  }
+});
+
+app.get('/api/tmdb/trending', async (req, res) => {
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json({ results: [] });
+  
+  try {
+    const url = `https://api.themoviedb.org/3/trending/all/day?api_key=${tmdbKey}`;
+    const response = await axios.get(url);
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('TMDB Trending Error', error.message);
     res.status(500).json({ error: 'TMDB fetch failed' });
   }
 });
