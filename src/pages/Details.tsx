@@ -160,14 +160,16 @@ export default function Details() {
   useEffect(() => {
     const fetchContent = async () => {
       try {
-        const isFile = /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
-        if (isFile) {
-          setItems([{ name, is_dir: false }]);
-        } else {
-          // Fetch contents
-          const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}` }, { headers: { Authorization: token } });
-          if (res.data.code === 200) {
-            setItems(res.data.data.content || []);
+        if (token) {
+          const isFile = /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
+          if (isFile) {
+            setItems([{ name, is_dir: false }]);
+          } else {
+            // Fetch contents
+            const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}` }, { headers: { Authorization: token } });
+            if (res.data.code === 200) {
+              setItems(res.data.data.content || []);
+            }
           }
         }
       } catch (err) {
@@ -192,7 +194,7 @@ export default function Details() {
         setLoading(false);
       }
     };
-    if (token && fullPath) fetchContent();
+    if (fullPath) fetchContent();
   }, [fullPath, token, name, category]);
 
   const getSignedUrl = async (fileName: string) => {
@@ -475,11 +477,27 @@ export default function Details() {
               )}
             </div>
 
-            {user === 'guest' ? (
-              <div className="text-center py-10">
+            {(!user || user === 'guest') ? (
+              <div className="text-center py-12 flex flex-col items-center gap-4">
                 <p className="text-gray-300 font-medium text-lg">
-                  <a href="https://shutter.ng" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors font-bold underline underline-offset-4">Sign up for a website account here</a> to access episodes and files.
+                  Please log in to access episodes and files.
                 </p>
+                <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+                  <button 
+                    onClick={() => navigate('/login')} 
+                    className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-2.5 rounded-xl font-bold transition shadow-lg shadow-purple-600/20"
+                  >
+                    Log In
+                  </button>
+                  <a 
+                    href="https://shutter.ng" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-8 py-2.5 rounded-xl font-bold transition"
+                  >
+                    Sign Up
+                  </a>
+                </div>
               </div>
             ) : (
               <>
