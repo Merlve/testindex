@@ -630,6 +630,133 @@ app.post('/api/tmdb/override', async (req, res) => {
   }
 });
 
+let autoFetchJob = {
+  isRunning: false,
+  message: '',
+  targetPath: '',
+  count: 0,
+  failedItems: [] as { name: string, path: string }[]
+};
+
+app.get('/api/tmdb/autofetch/status', (req, res) => {
+  res.json(autoFetchJob);
+});
+
+app.post('/api/tmdb/autofetch/start', (req, res) => {
+  if (autoFetchJob.isRunning) {
+    return res.json({ success: false, message: 'Already running' });
+  }
+
+  let token = req.headers.authorization;
+  if (!token || token === 'guest-token') token = getOpenlistApiKey();
+
+  let { targetPath } = req.body;
+  targetPath = targetPath || appConfig.basePath || '/home';
+
+  autoFetchJob = {
+    isRunning: true,
+    message: 'Starting auto-fetch...',
+    targetPath,
+    count: 0,
+    failedItems: []
+  };
+
+  const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  const runAutoFetch = async () => {
+    try {
+      const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
+      const tmdbKey = process.env.TMDB_API_KEY;
+
+      const scanCategory = async (catPath: string, catName: string) => {
+        if (!autoFetchJob.isRunning) return;
+        autoFetchJob.message = `Scanning category: ${catName} at ${catPath}...`;
+        const listUrl = `${openlistUrl}/api/fs/list`;
+        const catRes = await axios.post(listUrl, { path: catPath, password: "" }, { headers: { Authorization: token } });
+        const items = catRes.data?.data?.content || [];
+        
+        for (const item of items) {
+          if (!autoFetchJob.isRunning) break;
+          const { cleanName, year } = parseMediaName(item.name);
+          autoFetchJob.message = `Checking metadata for: ${cleanName}...`;
+          
+          try {
+            // Check cache first
+            const cacheKey = `${catName}-${cleanName.toLowerCase().trim()}${year ? `-${year}` : ''}`;
+            if (!tmdbCache[cacheKey] && tmdbKey) {
+              const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes((catName || '').toUpperCase()) ? 'tv' : 'movie';
+              let url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanName)}`;
+              if (year) {
+                url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
+              }
+              const response = await axios.get(url);
+              let data = response.data;
+
+              if (data.results && data.results.length === 0) {
+                let altQuery = null;
+                if (cleanName.includes('&')) altQuery = cleanName.replace(/&/g, 'and');
+                else if (cleanName.match(/\band\b/i)) altQuery = cleanName.replace(/\band\b/ig, '&');
+                
+                if (altQuery) {
+                  let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
+                  if (year) altUrl += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
+                  try {
+                    const altRes = await axios.get(altUrl);
+                    if (altRes.data?.results?.length > 0) data = altRes.data;
+                  } catch(e) {}
+                }
+              }
+
+              if (data.results && data.results.length > 0) {
+                tmdbCache[cacheKey] = data.results[0];
+                saveDb();
+              } else {
+                autoFetchJob.failedItems.push({ name: item.name, path: catPath });
+              }
+              await delay(400); // Rate limit protection
+            }
+            autoFetchJob.count++;
+          } catch (e) {
+            console.error(`Failed to fetch tmdb for ${cleanName}`, e);
+            autoFetchJob.failedItems.push({ name: item.name, path: catPath });
+          }
+        }
+      };
+
+      if (targetPath === appConfig.basePath || targetPath === '/home') {
+        const listUrl = `${openlistUrl}/api/fs/list`;
+        const homeRes = await axios.post(listUrl, { path: targetPath, password: "" }, { headers: { Authorization: token } });
+        const categories = (homeRes.data?.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
+        for (const cat of categories) {
+          if (!autoFetchJob.isRunning) break;
+          await scanCategory(`${targetPath === '/' ? '' : targetPath}/${cat}`, cat);
+        }
+      } else {
+        const parts = targetPath.split('/').filter(Boolean);
+        const catName = parts[parts.length - 1] || 'UNKNOWN';
+        await scanCategory(targetPath, catName);
+      }
+
+      if (autoFetchJob.isRunning) {
+        autoFetchJob.message = `Finished auto-fetching metadata for ${autoFetchJob.count} items!`;
+      }
+    } catch (e: any) {
+      autoFetchJob.message = `Error during auto-fetch: ${e.message}`;
+    } finally {
+      autoFetchJob.isRunning = false;
+    }
+  };
+
+  runAutoFetch();
+  res.json({ success: true, message: 'Started' });
+});
+
+app.post('/api/tmdb/autofetch/stop', (req, res) => {
+  autoFetchJob.isRunning = false;
+  autoFetchJob.message = 'Auto-fetch stopped.';
+  res.json({ success: true, message: 'Stopped' });
+});
+
 // API: Gemini Chatbot
 app.post('/api/chat', async (req, res) => {
   try {

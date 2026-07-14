@@ -17,12 +17,27 @@ export default function Admin() {
   const [autoFetchPath, setAutoFetchPath] = useState('');
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
   const [autoFetchLoading, setAutoFetchLoading] = useState(false);
+  const [autoFetchFailed, setAutoFetchFailed] = useState<{name: string, path: string}[]>([]);
 
   useEffect(() => {
     axios.get('/api/config').then(res => {
       setConfig(res.data);
       if (!autoFetchPath) setAutoFetchPath(res.data.basePath || '/home');
     });
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await axios.get('/api/tmdb/autofetch/status');
+        setAutoFetchLoading(res.data.isRunning);
+        if (res.data.message) {
+          setAutoFetchMsg(res.data.message);
+        }
+        if (res.data.failedItems) {
+          setAutoFetchFailed(res.data.failedItems);
+        }
+      } catch(e) {}
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleConfigSave = async () => {
@@ -47,49 +62,19 @@ export default function Admin() {
   };
 
   const handleAutoFetch = async () => {
+    if (autoFetchLoading) {
+      // Stop it
+      await axios.post('/api/tmdb/autofetch/stop');
+      setAutoFetchLoading(false);
+      return;
+    }
     setAutoFetchLoading(true);
     setAutoFetchMsg('Starting auto-fetch...');
     try {
       const targetPath = autoFetchPath || config.basePath || '/home';
-      let count = 0;
-
-      const scanCategory = async (catPath: string, catName: string) => {
-        setAutoFetchMsg(`Scanning category: ${catName} at ${catPath}...`);
-        const catRes = await axios.post('/api/fs/list', { reqPath: catPath }, { headers: { Authorization: token } });
-        const items = catRes.data.data.content || [];
-        let c = 0;
-        for (const item of items) {
-          const { cleanName, year } = parseMediaName(item.name);
-          setAutoFetchMsg(`Checking metadata for: ${cleanName}...`);
-          try {
-            await axios.get(`/api/tmdb/search?query=${encodeURIComponent(cleanName)}&type=${catName}${year ? `&year=${year}` : ''}`);
-            c++;
-            // Delay to avoid rate limiting
-            await new Promise(r => setTimeout(r, 400));
-          } catch (e) {
-            console.error(`Failed to fetch tmdb for ${cleanName}`);
-          }
-        }
-        return c;
-      };
-
-      if (targetPath === config.basePath || targetPath === '/home') {
-        const homeRes = await axios.post('/api/fs/list', { reqPath: targetPath }, { headers: { Authorization: token } });
-        const categories = homeRes.data.data.content.filter((c: any) => c.is_dir).map((c: any) => c.name);
-        for (const cat of categories) {
-          count += await scanCategory(`${targetPath === '/' ? '' : targetPath}/${cat}`, cat);
-        }
-      } else {
-        // Assume targetPath is a category folder itself
-        const parts = targetPath.split('/').filter(Boolean);
-        const catName = parts[parts.length - 1] || 'UNKNOWN';
-        count += await scanCategory(targetPath, catName);
-      }
-
-      setAutoFetchMsg(`Finished auto-fetching metadata for ${count} items!`);
+      await axios.post('/api/tmdb/autofetch/start', { targetPath }, { headers: { Authorization: token } });
     } catch (e: any) {
       setAutoFetchMsg(`Error during auto-fetch: ${e.message}`);
-    } finally {
       setAutoFetchLoading(false);
     }
   };
@@ -136,11 +121,22 @@ export default function Admin() {
               placeholder="/home or /home/ANIME"
             />
           </div>
-          <button onClick={handleAutoFetch} disabled={autoFetchLoading} className="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-6 py-2 rounded-xl font-bold hover:bg-blue-500/30 transition-all disabled:opacity-50">
-            {autoFetchLoading ? 'Fetching...' : 'Start Auto-Fetch'}
+          <button onClick={handleAutoFetch} className={`border px-6 py-2 rounded-xl font-bold transition-all ${autoFetchLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
+            {autoFetchLoading ? 'Stop Auto-Fetch' : 'Start Auto-Fetch'}
           </button>
           {autoFetchMsg && (
             <p className="text-sm font-mono text-gray-400 bg-black/50 p-4 rounded-xl border border-white/5 whitespace-pre-wrap">{autoFetchMsg}</p>
+          )}
+          {autoFetchFailed.length > 0 && (
+            <div className="mt-4 bg-red-900/20 border border-red-500/30 p-4 rounded-xl">
+              <h4 className="text-red-400 font-bold mb-2 text-sm">Failed to fetch metadata for {autoFetchFailed.length} items:</h4>
+              <ul className="text-sm text-red-200/70 max-h-48 overflow-y-auto space-y-1 font-mono">
+                {autoFetchFailed.map((item, idx) => (
+                  <li key={idx}>• {item.name} <span className="opacity-50 text-xs">({item.path})</span></li>
+                ))}
+              </ul>
+              <p className="text-xs text-red-400/50 mt-2">You can manually correct these below.</p>
+            </div>
           )}
         </div>
       </div>
