@@ -626,7 +626,8 @@ app.post('/api/chat', async (req, res) => {
 
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const isProd = process.env.NODE_ENV === "production" || _filename.endsWith('.cjs');
+  if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
