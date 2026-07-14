@@ -1,6 +1,6 @@
 import Loader from "../components/Loader";
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useLocation } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Play, Download, Copy, ExternalLink, ChevronLeft, ChevronDown, ChevronUp, X, Edit2, Bookmark, BookmarkCheck } from 'lucide-react';
@@ -149,6 +149,7 @@ export default function Details() {
 
   
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Get raw URL for playing
   const [config, setConfig] = useState<any>({});
@@ -484,7 +485,7 @@ export default function Details() {
                 </p>
                 <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
                   <button 
-                    onClick={() => navigate('/login')} 
+                    onClick={() => navigate('/login', { state: { from: `${location.pathname}${location.search}${location.hash}` } })} 
                     className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-2.5 rounded-xl font-bold transition shadow-lg shadow-purple-600/20"
                   >
                     Log In

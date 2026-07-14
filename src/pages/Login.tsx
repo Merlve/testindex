@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
@@ -16,6 +16,7 @@ export default function Login() {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (localStorage.getItem('guest_timeout') === 'true') {
@@ -56,7 +57,8 @@ export default function Login() {
         }
 
         login(username, token);
-        navigate('/');
+        const from = location.state?.from || '/';
+        navigate(from);
       } else {
         let errorMsg = res.data.message || 'Login failed';
         if (errorMsg.toLowerCase().includes('disabled')) {
@@ -135,7 +137,8 @@ export default function Login() {
               disabled={loading}
               onClick={() => {
                 login('guest', 'guest-token');
-                navigate('/');
+                const from = location.state?.from || '/';
+                navigate(from);
               }}
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold py-1.5 px-4 rounded-full transition-all disabled:opacity-50"
             >
