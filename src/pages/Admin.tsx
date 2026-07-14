@@ -14,11 +14,15 @@ export default function Admin() {
   const [tmdbData, setTmdbData] = useState('');
 
   // Auto Fetch
+  const [autoFetchPath, setAutoFetchPath] = useState('');
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
   const [autoFetchLoading, setAutoFetchLoading] = useState(false);
 
   useEffect(() => {
-    axios.get('/api/config').then(res => setConfig(res.data));
+    axios.get('/api/config').then(res => {
+      setConfig(res.data);
+      if (!autoFetchPath) setAutoFetchPath(res.data.basePath || '/home');
+    });
   }, []);
 
   const handleConfigSave = async () => {
@@ -46,31 +50,45 @@ export default function Admin() {
     setAutoFetchLoading(true);
     setAutoFetchMsg('Starting auto-fetch...');
     try {
-      const basePath = config.basePath || '/home';
-      const homeRes = await axios.post('/api/fs/list', { reqPath: basePath }, { headers: { Authorization: token } });
-      const categories = homeRes.data.data.content.filter((c: any) => c.is_dir).map((c: any) => c.name);
-      
+      const targetPath = autoFetchPath || config.basePath || '/home';
       let count = 0;
-      for (const cat of categories) {
-        setAutoFetchMsg(`Scanning category: ${cat}...`);
-        const catRes = await axios.post('/api/fs/list', { reqPath: `${basePath}/${cat}` }, { headers: { Authorization: token } });
-        const items = catRes.data.data.content;
+
+      const scanCategory = async (catPath: string, catName: string) => {
+        setAutoFetchMsg(`Scanning category: ${catName} at ${catPath}...`);
+        const catRes = await axios.post('/api/fs/list', { reqPath: catPath }, { headers: { Authorization: token } });
+        const items = catRes.data.data.content || [];
+        let c = 0;
         for (const item of items) {
           const { cleanName, year } = parseMediaName(item.name);
           setAutoFetchMsg(`Checking metadata for: ${cleanName}...`);
           try {
-            await axios.get(`/api/tmdb/search?query=${encodeURIComponent(cleanName)}&type=${cat}${year ? `&year=${year}` : ''}`);
-            count++;
+            await axios.get(`/api/tmdb/search?query=${encodeURIComponent(cleanName)}&type=${catName}${year ? `&year=${year}` : ''}`);
+            c++;
             // Delay to avoid rate limiting
             await new Promise(r => setTimeout(r, 400));
           } catch (e) {
             console.error(`Failed to fetch tmdb for ${cleanName}`);
           }
         }
+        return c;
+      };
+
+      if (targetPath === config.basePath || targetPath === '/home') {
+        const homeRes = await axios.post('/api/fs/list', { reqPath: targetPath }, { headers: { Authorization: token } });
+        const categories = homeRes.data.data.content.filter((c: any) => c.is_dir).map((c: any) => c.name);
+        for (const cat of categories) {
+          count += await scanCategory(`${targetPath === '/' ? '' : targetPath}/${cat}`, cat);
+        }
+      } else {
+        // Assume targetPath is a category folder itself
+        const parts = targetPath.split('/').filter(Boolean);
+        const catName = parts[parts.length - 1] || 'UNKNOWN';
+        count += await scanCategory(targetPath, catName);
       }
+
       setAutoFetchMsg(`Finished auto-fetching metadata for ${count} items!`);
-    } catch (e) {
-      setAutoFetchMsg('Error during auto-fetch. Please check network or configuration.');
+    } catch (e: any) {
+      setAutoFetchMsg(`Error during auto-fetch: ${e.message}`);
     } finally {
       setAutoFetchLoading(false);
     }
@@ -107,8 +125,17 @@ export default function Admin() {
 
       <div className="bg-[#1a1a22]/80 p-8 rounded-2xl border border-white/10 shadow-2xl backdrop-blur-sm">
         <h3 className="text-xl font-bold text-white mb-4 tracking-tight">Auto-Fetch Missing Metadata</h3>
-        <p className="text-gray-400 mb-4 text-sm">Automatically scans all folders and queries TMDB for missing metadata.</p>
+        <p className="text-gray-400 mb-4 text-sm">Automatically scans folders and queries TMDB for missing metadata.</p>
         <div className="space-y-4">
+          <div>
+            <label className="block text-gray-400 mb-2 text-xs font-bold uppercase tracking-wider">Target Scan Path</label>
+            <input 
+              className="w-full bg-[#08080a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-600/50 transition-colors"
+              value={autoFetchPath}
+              onChange={e => setAutoFetchPath(e.target.value)}
+              placeholder="/home or /home/ANIME"
+            />
+          </div>
           <button onClick={handleAutoFetch} disabled={autoFetchLoading} className="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-6 py-2 rounded-xl font-bold hover:bg-blue-500/30 transition-all disabled:opacity-50">
             {autoFetchLoading ? 'Fetching...' : 'Start Auto-Fetch'}
           </button>
