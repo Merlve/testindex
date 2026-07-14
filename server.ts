@@ -20,12 +20,12 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Simple file-based config storage
-const configPath = path.join(process.cwd(), 'config.json');
+const configPath = path.join(_dirname, 'config.json');
 let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home'
 };
-if (fs.existsSync(configPath) && fs.statSync(configPath).isFile()) {
+if (fs.existsSync(configPath)) {
   try {
     const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     appConfig = { ...appConfig, ...loaded };
@@ -58,13 +58,13 @@ function parseMediaName(rawName: string) {
 }
 
 function saveConfig() {
-  if (!fs.existsSync(configPath) || fs.statSync(configPath).isFile()) fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+  fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
 }
 
 // Simple JSON DB for TMDB corrections
-const dbPath = path.join(process.cwd(), 'db.json');
+const dbPath = path.join(_dirname, 'db.json');
 let tmdbCache: Record<string, any> = {};
-if (fs.existsSync(dbPath) && fs.statSync(dbPath).isFile()) {
+if (fs.existsSync(dbPath)) {
   try {
     tmdbCache = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
   } catch (e) {
@@ -72,59 +72,35 @@ if (fs.existsSync(dbPath) && fs.statSync(dbPath).isFile()) {
   }
 }
 function saveDb() {
-  try { if (!fs.existsSync(dbPath) || fs.statSync(dbPath).isFile()) fs.writeFileSync(dbPath, JSON.stringify(tmdbCache, null, 2)); } catch (e) { console.error("Db write error", e); }
+  try { fs.writeFileSync(dbPath, JSON.stringify(tmdbCache, null, 2)); } catch (e) { console.error("Db write error", e); }
 }
 
 
-
-// Watchlist DB per user
-const watchlistsDir = path.join(process.cwd(), 'watchlists');
-if (!fs.existsSync(watchlistsDir)) {
-  try { fs.mkdirSync(watchlistsDir, { recursive: true }); } catch (e) {}
+// Watchlist DB
+const watchlistPath = path.join(_dirname, 'watchlist.json');
+let watchlistDb = {};
+if (fs.existsSync(watchlistPath)) {
+  try { watchlistDb = JSON.parse(fs.readFileSync(watchlistPath, 'utf8')); } catch (e) {}
 }
-
-// Migrate old data if exists
-const oldWatchlistPath = path.join(process.cwd(), 'watchlist.json');
-if (fs.existsSync(oldWatchlistPath)) {
-  try {
-    const oldDb = JSON.parse(fs.readFileSync(oldWatchlistPath, 'utf8'));
-    for (const [usr, list] of Object.entries(oldDb)) {
-       const userFile = path.join(watchlistsDir, `${usr}.json`);
-       if (!fs.existsSync(userFile)) {
-         fs.writeFileSync(userFile, JSON.stringify(list, null, 2));
-       }
-    }
-  } catch (e) {}
-}
-
-function getUserWatchlist(user: string) {
-  const userFile = path.join(watchlistsDir, `${user}.json`);
-  if (fs.existsSync(userFile)) {
-     try { return JSON.parse(fs.readFileSync(userFile, 'utf8')); } catch (e) { return []; }
-  }
-  return [];
-}
-
-function saveUserWatchlist(user: string, list: any[]) {
-  const userFile = path.join(watchlistsDir, `${user}.json`);
-  try { fs.writeFileSync(userFile, JSON.stringify(list, null, 2)); } catch (e) { console.error("Failed to save watchlist for", user, e); }
+function saveWatchlist() {
+  try { fs.writeFileSync(watchlistPath, JSON.stringify(watchlistDb, null, 2)); } catch (e) {}
 }
 
 app.get('/api/watchlist', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user || typeof user !== 'string') return res.status(401).json({ error: 'Unauthorized' });
-  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
-  res.json(getUserWatchlist(safeUser));
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  res.json(watchlistDb[user] || []);
 });
 
 app.post('/api/watchlist/toggle', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user || typeof user !== 'string') return res.status(401).json({ error: 'Unauthorized' });
-  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { item, category, parentPath } = req.body;
-  const list = getUserWatchlist(safeUser);
-  const existingIndex = list.findIndex((i: any) => i.item.name === item.name && i.parentPath === parentPath);
+  if (!watchlistDb[user]) watchlistDb[user] = [];
+  
+  const list = watchlistDb[user];
+  const existingIndex = list.findIndex(i => i.item.name === item.name && i.parentPath === parentPath);
   
   if (existingIndex >= 0) {
     list.splice(existingIndex, 1);
@@ -132,18 +108,16 @@ app.post('/api/watchlist/toggle', (req, res) => {
     list.push({ item, category, parentPath });
   }
   
-  saveUserWatchlist(safeUser, list);
+  saveWatchlist();
   res.json({ success: true, watchlist: list, added: existingIndex < 0 });
 });
 
 app.get('/api/watchlist/check', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   const { name, parentPath } = req.query;
-  if (!user || typeof user !== 'string' || !name || !parentPath) return res.json({ inWatchlist: false });
-
-  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const list = getUserWatchlist(safeUser);
-  const exists = list.some((i: any) => i.item.name === name && i.parentPath === parentPath);
+  if (!user || !name || !parentPath) return res.json({ inWatchlist: false });
+  const list = watchlistDb[user] || [];
+  const exists = list.some(i => i.item.name === name && i.parentPath === parentPath);
   res.json({ inWatchlist: exists });
 });
 
