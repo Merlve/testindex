@@ -59,9 +59,6 @@ export default function App() {
             <Route path="category/:name" element={<Category />} />
             <Route path="watchlist" element={<Watchlist />} />
             <Route path="admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
-          </Route>
-
-          <Route path="/" element={<Layout />}>
             <Route path="home/*" element={<Details />} />
           </Route>
         </Routes>

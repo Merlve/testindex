@@ -8,10 +8,20 @@ import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { parseMediaName } from '../utils/nameParser';
 
+function formatBytes(bytes: number, decimals = 2) {
+  if (!+bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
 function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { item: any, fullPath: string, token: string | null, selected: boolean, onToggleSelect: () => void, onPlay: (url: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fileSize, setFileSize] = useState<number | undefined>(item.size);
 
   useEffect(() => {
     let isMounted = true;
@@ -19,8 +29,9 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
       try {
         const cleanPath = fullPath.replace(/\/+$/, '');
         const res = await axios.post('/api/fs/get', { reqPath: `${cleanPath}/${item.name}` }, { headers: { Authorization: token } });
-        if (isMounted && res.data?.data?.raw_url) {
-          setUrl(res.data.data.raw_url);
+        if (isMounted && res.data?.data) {
+          if (res.data.data.raw_url) setUrl(res.data.data.raw_url);
+          if (res.data.data.size !== undefined && fileSize === undefined) setFileSize(res.data.data.size);
         }
       } catch (e) {
         console.error(e);
@@ -40,7 +51,12 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
             checked={selected}
             onChange={onToggleSelect}
           />
-          <span className="text-xs font-semibold text-gray-200 truncate" title={item.name}>{item.name}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-semibold text-gray-200 break-all leading-snug" title={item.name}>{item.name}</span>
+            {fileSize !== undefined && (
+              <span className="text-[10px] text-gray-500 font-mono mt-0.5">{formatBytes(fileSize)}</span>
+            )}
+          </div>
         </div>
         
         <div className="flex gap-2 items-center shrink-0">
@@ -506,7 +522,7 @@ export default function Details() {
                   <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {dirItems.map((dir, i) => (
                        <button key={i} onClick={() => navigate(`/${fullPath}/${dir.name}`)} className="flex items-center justify-center p-4 bg-white/5 rounded-xl hover:border-purple-600/50 transition text-white text-sm font-semibold border border-white/10 overflow-hidden">
-                         <span className="truncate">📁 {dir.name}</span>
+                         <span className="break-all leading-snug">📁 {dir.name}</span>
                        </button>
                     ))}
                   </div>
