@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "4344:4344"
+    environment:
+      - SERVER_PORT=4344
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - APP_URL=${APP_URL}
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - OPENLIST_SERVER_URL=${OPENLIST_SERVER_URL}
+      - OPENLIST_API_KEY=${OPENLIST_API_KEY}
+    volumes:
+      - ./config.json:/app/config.json
+      - ./db.json:/app/db.json

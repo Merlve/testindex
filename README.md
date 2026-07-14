@@ -1,11 +1,46 @@
-<div align="center">
+# Shutter
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+A modern OpenList client.
 
-  <h1>Built with AI Studio</h2>
+## Deployment
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+The application uses `SERVER_PORT` for the backend. By default, it runs on port 3000.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+### 1. Docker Compose (Recommended)
+You can deploy this on your VPS using Docker Compose. It maps the container's internal port to port 8700 on your host.
 
-</div>
+Create a `docker-compose.yml`:
+```yaml
+version: '3.8'
+services:
+  shutter:
+    build: .
+    ports:
+      - "8700:3000"
+    environment:
+      - NODE_ENV=production
+      - SERVER_PORT=3000
+    restart: always
+```
+
+Run with:
+```bash
+docker-compose up -d
+```
+
+### 2. NodeJS on a VPS
+To run it directly via Node on your VPS:
+
+```bash
+# Install dependencies
+npm install
+
+# Build the application
+npm run build
+
+# Start the application on port 8700
+SERVER_PORT=8700 npm run start
+```
+
+### 3. Vercel
+Vercel is primarily serverless, but this app uses a custom Express server (`server.ts`). To deploy to Vercel, you would typically need to split the backend into Vercel Serverless Functions (`api/` folder) and deploy the frontend as a Vite SPA. Since this uses a full-stack Express server, deploying to **Render**, **Railway**, or a VPS (as shown above) is heavily recommended over Vercel.

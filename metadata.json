@@ -1,0 +1,6 @@
+{
+  "name": "Qplay Stream",
+  "description": "A movie streaming website using Openlist API and TMDB metadata.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

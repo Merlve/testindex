@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+.markdown-body p {
+  margin-bottom: 0.5rem;
+}
+.markdown-body a {
+  color: #ef4444;
+  text-decoration: underline;
+}
+.markdown-body ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
