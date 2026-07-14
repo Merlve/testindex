@@ -25,7 +25,7 @@ let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home'
 };
-if (fs.existsSync(configPath)) {
+if (fs.existsSync(configPath) && fs.statSync(configPath).isFile()) {
   try {
     const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     appConfig = { ...appConfig, ...loaded };
@@ -58,13 +58,13 @@ function parseMediaName(rawName: string) {
 }
 
 function saveConfig() {
-  fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+  if (!fs.existsSync(configPath) || fs.statSync(configPath).isFile()) fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
 }
 
 // Simple JSON DB for TMDB corrections
 const dbPath = path.join(process.cwd(), 'db.json');
 let tmdbCache: Record<string, any> = {};
-if (fs.existsSync(dbPath)) {
+if (fs.existsSync(dbPath) && fs.statSync(dbPath).isFile()) {
   try {
     tmdbCache = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
   } catch (e) {
@@ -72,7 +72,7 @@ if (fs.existsSync(dbPath)) {
   }
 }
 function saveDb() {
-  try { fs.writeFileSync(dbPath, JSON.stringify(tmdbCache, null, 2)); } catch (e) { console.error("Db write error", e); }
+  try { if (!fs.existsSync(dbPath) || fs.statSync(dbPath).isFile()) fs.writeFileSync(dbPath, JSON.stringify(tmdbCache, null, 2)); } catch (e) { console.error("Db write error", e); }
 }
 
 
