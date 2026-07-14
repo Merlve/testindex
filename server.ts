@@ -25,7 +25,7 @@ let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home'
 };
-if (fs.existsSync(configPath)) {
+if (fs.existsSync(configPath) && fs.statSync(configPath).isFile()) {
   try {
     const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     appConfig = { ...appConfig, ...loaded };
@@ -64,7 +64,7 @@ function saveConfig() {
 // Simple JSON DB for TMDB corrections
 const dbPath = path.join(_dirname, 'db.json');
 let tmdbCache: Record<string, any> = {};
-if (fs.existsSync(dbPath)) {
+if (fs.existsSync(dbPath) && fs.statSync(dbPath).isFile()) {
   try {
     tmdbCache = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
   } catch (e) {
@@ -79,7 +79,7 @@ function saveDb() {
 // Watchlist DB
 const watchlistPath = path.join(_dirname, 'watchlist.json');
 let watchlistDb = {};
-if (fs.existsSync(watchlistPath)) {
+if (fs.existsSync(watchlistPath) && fs.statSync(watchlistPath).isFile()) {
   try { watchlistDb = JSON.parse(fs.readFileSync(watchlistPath, 'utf8')); } catch (e) {}
 }
 function saveWatchlist() {
