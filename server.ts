@@ -20,7 +20,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Simple file-based config storage
-const configPath = path.join(_dirname, 'config.json');
+const configPath = path.join(process.cwd(), 'config.json');
 let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home'
@@ -69,7 +69,7 @@ function saveConfig() {
 }
 
 // Simple JSON DB for TMDB corrections
-const dbPath = path.join(_dirname, 'db.json');
+const dbPath = path.join(process.cwd(), 'db.json');
 let tmdbCache: Record<string, any> = {};
 try {
   if (fs.existsSync(dbPath)) {
@@ -91,7 +91,7 @@ function saveDb() {
 
 
 // Watchlist DB
-const watchlistPath = path.join(_dirname, 'watchlist.json');
+const watchlistPath = path.join(process.cwd(), 'watchlist.json');
 let watchlistDb: Record<string, any> = {};
 try {
   if (fs.existsSync(watchlistPath)) {
