@@ -20,7 +20,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Simple file-based config storage
-const configPath = path.join(_dirname, 'config.json');
+const configPath = path.join(process.cwd(), 'config.json');
 let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home'
@@ -38,12 +38,31 @@ if (fs.existsSync(configPath)) {
 const getOpenlistUrl = () => process.env.OPENLIST_SERVER_URL || appConfig.openlistUrl;
 const getOpenlistApiKey = () => process.env.OPENLIST_API_KEY;
 
+
+function parseMediaName(rawName: string) {
+  let cleanName = rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
+  cleanName = cleanName.replace(/[\(\[].*?[\)\]]/g, "");
+  const yearRegex = /[._\-\s](19\d{2}|20\d{2})(?=[._\-\s]|$)/g;
+  let match;
+  let lastMatch = null;
+  while ((match = yearRegex.exec(cleanName)) !== null) {
+    lastMatch = match;
+  }
+  let year = '';
+  if (lastMatch) {
+    year = lastMatch[1];
+    cleanName = cleanName.substring(0, lastMatch.index);
+  }
+  cleanName = cleanName.replace(/\./g, " ").trim();
+  return { cleanName, year };
+}
+
 function saveConfig() {
   fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
 }
 
 // Simple JSON DB for TMDB corrections
-const dbPath = path.join(_dirname, 'db.json');
+const dbPath = path.join(process.cwd(), 'db.json');
 let tmdbCache: Record<string, any> = {};
 if (fs.existsSync(dbPath)) {
   try {
@@ -57,31 +76,55 @@ function saveDb() {
 }
 
 
-// Watchlist DB
-const watchlistPath = path.join(_dirname, 'watchlist.json');
-let watchlistDb = {};
-if (fs.existsSync(watchlistPath)) {
-  try { watchlistDb = JSON.parse(fs.readFileSync(watchlistPath, 'utf8')); } catch (e) {}
+
+// Watchlist DB per user
+const watchlistsDir = path.join(process.cwd(), 'watchlists');
+if (!fs.existsSync(watchlistsDir)) {
+  try { fs.mkdirSync(watchlistsDir, { recursive: true }); } catch (e) {}
 }
-function saveWatchlist() {
-  try { fs.writeFileSync(watchlistPath, JSON.stringify(watchlistDb, null, 2)); } catch (e) {}
+
+// Migrate old data if exists
+const oldWatchlistPath = path.join(process.cwd(), 'watchlist.json');
+if (fs.existsSync(oldWatchlistPath)) {
+  try {
+    const oldDb = JSON.parse(fs.readFileSync(oldWatchlistPath, 'utf8'));
+    for (const [usr, list] of Object.entries(oldDb)) {
+       const userFile = path.join(watchlistsDir, `${usr}.json`);
+       if (!fs.existsSync(userFile)) {
+         fs.writeFileSync(userFile, JSON.stringify(list, null, 2));
+       }
+    }
+  } catch (e) {}
+}
+
+function getUserWatchlist(user: string) {
+  const userFile = path.join(watchlistsDir, `${user}.json`);
+  if (fs.existsSync(userFile)) {
+     try { return JSON.parse(fs.readFileSync(userFile, 'utf8')); } catch (e) { return []; }
+  }
+  return [];
+}
+
+function saveUserWatchlist(user: string, list: any[]) {
+  const userFile = path.join(watchlistsDir, `${user}.json`);
+  try { fs.writeFileSync(userFile, JSON.stringify(list, null, 2)); } catch (e) { console.error("Failed to save watchlist for", user, e); }
 }
 
 app.get('/api/watchlist', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  res.json(watchlistDb[user] || []);
+  if (!user || typeof user !== 'string') return res.status(401).json({ error: 'Unauthorized' });
+  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
+  res.json(getUserWatchlist(safeUser));
 });
 
 app.post('/api/watchlist/toggle', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!user || typeof user !== 'string') return res.status(401).json({ error: 'Unauthorized' });
+  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
   
   const { item, category, parentPath } = req.body;
-  if (!watchlistDb[user]) watchlistDb[user] = [];
-  
-  const list = watchlistDb[user];
-  const existingIndex = list.findIndex(i => i.item.name === item.name && i.parentPath === parentPath);
+  const list = getUserWatchlist(safeUser);
+  const existingIndex = list.findIndex((i: any) => i.item.name === item.name && i.parentPath === parentPath);
   
   if (existingIndex >= 0) {
     list.splice(existingIndex, 1);
@@ -89,16 +132,18 @@ app.post('/api/watchlist/toggle', (req, res) => {
     list.push({ item, category, parentPath });
   }
   
-  saveWatchlist();
+  saveUserWatchlist(safeUser, list);
   res.json({ success: true, watchlist: list, added: existingIndex < 0 });
 });
 
 app.get('/api/watchlist/check', (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   const { name, parentPath } = req.query;
-  if (!user || !name || !parentPath) return res.json({ inWatchlist: false });
-  const list = watchlistDb[user] || [];
-  const exists = list.some(i => i.item.name === name && i.parentPath === parentPath);
+  if (!user || typeof user !== 'string' || !name || !parentPath) return res.json({ inWatchlist: false });
+
+  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const list = getUserWatchlist(safeUser);
+  const exists = list.some((i: any) => i.item.name === name && i.parentPath === parentPath);
   res.json({ inWatchlist: exists });
 });
 
@@ -231,6 +276,63 @@ app.post('/api/fs/search', async (req, res) => {
       }
     }
     
+    // NEW LOGIC: SEARCH TMDB CACHE for titles available on the app
+    try {
+      const q = (keywords || '').toLowerCase().trim();
+      if (q.length >= 2) {
+        const matchingKeys = Object.keys(tmdbCache).filter(key => {
+          const entry = tmdbCache[key];
+          if (!entry) return false;
+          const title = (entry.title || '').toLowerCase();
+          const name = (entry.name || '').toLowerCase();
+          const orig = (entry.original_name || entry.original_title || '').toLowerCase();
+          return title.includes(q) || name.includes(q) || orig.includes(q);
+        });
+
+        if (matchingKeys.length > 0) {
+          const keysByCategory: Record<string, Set<string>> = {};
+          for (const key of matchingKeys) {
+            const catMatch = key.match(/^([^-]+)-/);
+            if (catMatch) {
+               const cat = catMatch[1];
+               if (!keysByCategory[cat]) keysByCategory[cat] = new Set();
+               keysByCategory[cat].add(key);
+            }
+          }
+
+          const listUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`;
+          for (const cat of Object.keys(keysByCategory)) {
+             try {
+                const listRes = await axios.post(listUrl, { path: `/home/${cat}`, password: "" }, { headers: { Authorization: token }});
+                if (listRes.data && listRes.data.code === 200 && listRes.data.data && listRes.data.data.content) {
+                   const items = listRes.data.data.content;
+                   for (const item of items) {
+                      const parsed = parseMediaName(item.name);
+                      const itemCacheKey = `${cat}-${parsed.cleanName.toLowerCase()}${parsed.year ? `-${parsed.year}` : ''}`;
+                      if (keysByCategory[cat].has(itemCacheKey)) {
+                         const fullPath = `/home/${cat}`;
+                         const exists = content.some((c: any) => c.name === item.name && c.parent === fullPath);
+                         if (!exists) {
+                            content.push({
+                               name: item.name,
+                               parent: fullPath,
+                               is_dir: item.is_dir,
+                               size: item.size
+                            });
+                         }
+                      }
+                   }
+                }
+             } catch (e) {
+                // silently ignore list errors
+             }
+          }
+        }
+      }
+    } catch (e) {
+       console.error("TMDB Cache search error", e);
+    }
+
     // Filter results to avoid nuisance
     const isVideo = (name) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
     const filteredContent = content.filter((item) => {
