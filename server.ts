@@ -203,6 +203,21 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// API: Openlist Proxy - Check Auth
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    let token = req.headers.authorization;
+    if (!token || token === 'guest-token') token = getOpenlistApiKey();
+    const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/me`;
+    const response = await axios.get(url, {
+      headers: { Authorization: token }
+    });
+    res.json(response.data);
+  } catch (error: any) {
+    res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to verify auth' });
+  }
+});
+
 // API: Openlist Proxy - FS List
 app.post('/api/fs/list', async (req, res) => {
   try {

@@ -46,9 +46,34 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           localStorage.setItem('guest_timeout', 'true');
         }
       }, 1000);
+    } else if (token) {
+      // Poll to check if the user is still logged into Openlist
+      interval = setInterval(async () => {
+        try {
+          const res = await axios.get('/api/auth/me', { headers: { Authorization: token } });
+          if (res.data && res.data.code === 401) {
+            logout();
+          }
+        } catch (e: any) {
+          if (e.response && e.response.status === 401) {
+            logout();
+          }
+        }
+      }, 30000);
     }
-    return () => clearInterval(interval);
-  }, [user]);
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'qs_token' && e.newValue === null) {
+        logout();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [user, token]);
 
   const login = (newUser: string, newToken: string) => {
     setUser(newUser);
