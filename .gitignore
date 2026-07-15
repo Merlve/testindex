@@ -8,3 +8,5 @@ coverage/
 !.env.example
 db.json
 config.json
+watchlists/
+bun.lock

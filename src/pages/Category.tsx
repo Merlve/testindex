@@ -1,5 +1,5 @@
 import Loader from "../components/Loader";
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -17,17 +17,57 @@ export default function Category() {
   const query = searchParams.get('q');
   
   const { token } = useAuth();
-  const [page, setPage] = useState(1);
-  const [filterLetter, setFilterLetter] = useState<string | null>(null);
-  
-        
-  
 
+  const getInitialState = () => {
+    const storageKey = `category_state_${name}_${query || ''}`;
+    const saved = sessionStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          page: parsed.page || 1,
+          filterLetter: parsed.filterLetter || null
+        };
+      } catch(e) { }
+    }
+    return { page: 1, filterLetter: null };
+  };
+
+  const initialState = useMemo(getInitialState, [name, query]);
+  const [page, setPage] = useState(initialState.page);
+  const [filterLetter, setFilterLetter] = useState<string | null>(initialState.filterLetter);
+  const scrollRestoredRef = useRef(false);
+  
   const ITEMS_PER_PAGE = 50;
 
   useEffect(() => {
-    setFilterLetter(null);
-    setPage(1);
+    const initialState = getInitialState();
+    setPage(initialState.page);
+    setFilterLetter(initialState.filterLetter);
+    scrollRestoredRef.current = false;
+  }, [name, query]);
+
+  useEffect(() => {
+    const storageKey = `category_state_${name}_${query || ''}`;
+    sessionStorage.setItem(storageKey, JSON.stringify({ page, filterLetter }));
+  }, [page, filterLetter, name, query]);
+
+  useEffect(() => {
+    const mainEl = document.querySelector('main');
+    if (!mainEl) return;
+    const handleScroll = () => {
+      sessionStorage.setItem(`scroll_${name}_${query || ''}`, mainEl.scrollTop.toString());
+    };
+    let timeoutId: any = null;
+    const scrollListener = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 100);
+    };
+    mainEl.addEventListener('scroll', scrollListener, { passive: true });
+    return () => {
+      mainEl.removeEventListener('scroll', scrollListener);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [name, query]);
 
   const fetchItems = async () => {
@@ -75,9 +115,25 @@ export default function Category() {
     return result;
   }, [items, filterLetter]);
 
-  if (isLoading) return <Loader />;
-  
   const displayedItems = filteredItems.slice(0, page * ITEMS_PER_PAGE);
+
+  useEffect(() => {
+    if (!isLoading && !scrollRestoredRef.current) {
+      const scrollKey = `scroll_${name}_${query || ''}`;
+      const savedScroll = sessionStorage.getItem(scrollKey);
+      if (savedScroll) {
+        setTimeout(() => {
+          const mainEl = document.querySelector('main');
+          if (mainEl) mainEl.scrollTo({ top: parseInt(savedScroll, 10), behavior: 'smooth' });
+          scrollRestoredRef.current = true;
+        }, 100);
+      } else {
+        scrollRestoredRef.current = true;
+      }
+    }
+  }, [isLoading, displayedItems.length, name, query]);
+
+  if (isLoading) return <Loader />;
 
   return (
     <>

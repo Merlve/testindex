@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate, Link } from 'react-router';
+import { Outlet, NavLink, useNavigate, Link, useLocation, useNavigationType } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -29,10 +29,19 @@ const SiteLogo = ({ size = 'sm' }: { size?: 'sm' | 'md' }) => {
 export default function Layout() {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const navigationType = useNavigationType();
   const [searchOpen, setSearchOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
+
+  useEffect(() => {
+    const mainEl = document.querySelector('main');
+    if (mainEl && navigationType !== 'POP') {
+      mainEl.scrollTo(0, 0);
+    }
+  }, [location.pathname, navigationType]);
 
   useEffect(() => {
     let timeout: any;

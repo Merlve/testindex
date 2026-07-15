@@ -189,8 +189,12 @@ export default function Details() {
             }
           }
         }
-      } catch (err) {
-        console.error('Error fetching file list', err);
+      } catch (err: any) {
+        if (err.response?.status === 500 && err.response?.data?.message?.includes('not a folder')) {
+          setItems([{ name, is_dir: false }]);
+        } else {
+          console.error('Error fetching file list', err);
+        }
       }
 
       try {

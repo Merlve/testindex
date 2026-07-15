@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router';
@@ -13,6 +13,30 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 export default function Dashboard() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
+  const scrollRestoredRef = useRef(false);
+
+  useEffect(() => {
+    scrollRestoredRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    const mainEl = document.querySelector('main');
+    if (!mainEl) return;
+    const handleScroll = () => {
+      sessionStorage.setItem(`scroll_dashboard`, mainEl.scrollTop.toString());
+    };
+    let timeoutId: any = null;
+    const scrollListener = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 100);
+    };
+    mainEl.addEventListener('scroll', scrollListener, { passive: true });
+    return () => {
+      mainEl.removeEventListener('scroll', scrollListener);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
 
   const fetchHome = async () => {
     // We assume /home has the categories
@@ -57,6 +81,21 @@ export default function Dashboard() {
     }, 8000);
     return () => clearInterval(interval);
   }, [featuredItems]);
+
+  useEffect(() => {
+    if (!isLoading && categories.length > 0 && !scrollRestoredRef.current) {
+      const savedScroll = sessionStorage.getItem(`scroll_dashboard`);
+      if (savedScroll) {
+        setTimeout(() => {
+          const mainEl = document.querySelector('main');
+          if (mainEl) mainEl.scrollTo({ top: parseInt(savedScroll, 10), behavior: 'smooth' });
+          scrollRestoredRef.current = true;
+        }, 100);
+      } else {
+        scrollRestoredRef.current = true;
+      }
+    }
+  }, [isLoading, categories.length]);
 
   if (isLoading) return <Loader />;
 

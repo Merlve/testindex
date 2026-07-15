@@ -48,7 +48,8 @@ const getOpenlistApiKey = () => process.env.OPENLIST_API_KEY;
 
 function parseMediaName(rawName: string) {
   let cleanName = rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
-  cleanName = cleanName.replace(/[\(\[].*?[\)\]]/g, "");
+  cleanName = cleanName.replace(/[\(\[].*?[\)\]]/g, " ");
+  
   const yearRegex = /[._\-\s](19\d{2}|20\d{2})(?=[._\-\s]|$)/g;
   let match;
   let lastMatch = null;
@@ -60,7 +61,9 @@ function parseMediaName(rawName: string) {
     year = lastMatch[1];
     cleanName = cleanName.substring(0, lastMatch.index);
   }
-  cleanName = cleanName.replace(/\./g, " ").trim();
+  
+  cleanName = cleanName.replace(/\b(720p|1080p|1080i|2160p|4k|8k|webdl|web-dl|webrip|hdrip|bluray|x264|x265|hevc|aac|dts|hdtv|remux)\b/gi, " ");
+  cleanName = cleanName.replace(/[._\-\s]+/g, " ").trim();
   return { cleanName, year };
 }
 
@@ -293,14 +296,15 @@ app.post('/api/fs/search', async (req, res) => {
     
     // NEW LOGIC: SEARCH TMDB CACHE for titles available on the app
     try {
-      const q = (keywords || '').toLowerCase().trim();
+      const cleanStr = (s: any) => String(s || '').replace(/[^a-z0-9\s]/ig, '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const q = cleanStr(keywords || '');
       if (q.length >= 2) {
         const matchingKeys = Object.keys(tmdbCache).filter(key => {
           const entry = tmdbCache[key];
           if (!entry) return false;
-          const title = (entry.title || '').toLowerCase();
-          const name = (entry.name || '').toLowerCase();
-          const orig = (entry.original_name || entry.original_title || '').toLowerCase();
+          const title = cleanStr(entry.title || '');
+          const name = cleanStr(entry.name || '');
+          const orig = cleanStr(entry.original_name || entry.original_title || '');
           return title.includes(q) || name.includes(q) || orig.includes(q);
         });
 
@@ -541,6 +545,28 @@ app.get('/api/tmdb/search', async (req, res) => {
       }
     }
     
+    if (data.results && data.results.length === 0 && year && typeof year === 'string') {
+      const prevYear = (parseInt(year) - 1).toString();
+      let urlPrevYear = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
+      urlPrevYear += searchType === 'movie' ? `&primary_release_year=${prevYear}` : `&first_air_date_year=${prevYear}`;
+      try {
+        const prevRes = await axios.get(urlPrevYear);
+        if (prevRes.data?.results?.length > 0) {
+          data = prevRes.data;
+        } else {
+          let altQuery = null;
+          if (query.includes('&')) altQuery = query.replace(/&/g, 'and');
+          else if (query.match(/\band\b/i)) altQuery = query.replace(/\band\b/ig, '&');
+          if (altQuery) {
+            let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
+            altUrl += searchType === 'movie' ? `&primary_release_year=${prevYear}` : `&first_air_date_year=${prevYear}`;
+            const altPrevRes = await axios.get(altUrl);
+            if (altPrevRes.data?.results?.length > 0) data = altPrevRes.data;
+          }
+        }
+      } catch(e) {}
+    }
+    
     if (data.results && data.results.length > 0) {
        tmdbCache[cacheKey] = data.results[0];
        saveDb();
@@ -705,6 +731,28 @@ app.post('/api/tmdb/autofetch/start', (req, res) => {
                     if (altRes.data?.results?.length > 0) data = altRes.data;
                   } catch(e) {}
                 }
+              }
+
+              if (data.results && data.results.length === 0 && year) {
+                const prevYear = (parseInt(year) - 1).toString();
+                let urlPrevYear = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanName)}`;
+                urlPrevYear += searchType === 'movie' ? `&primary_release_year=${prevYear}` : `&first_air_date_year=${prevYear}`;
+                try {
+                  const prevRes = await axios.get(urlPrevYear);
+                  if (prevRes.data?.results?.length > 0) {
+                    data = prevRes.data;
+                  } else {
+                    let altQuery = null;
+                    if (cleanName.includes('&')) altQuery = cleanName.replace(/&/g, 'and');
+                    else if (cleanName.match(/\band\b/i)) altQuery = cleanName.replace(/\band\b/ig, '&');
+                    if (altQuery) {
+                      let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
+                      altUrl += searchType === 'movie' ? `&primary_release_year=${prevYear}` : `&first_air_date_year=${prevYear}`;
+                      const altPrevRes = await axios.get(altUrl);
+                      if (altPrevRes.data?.results?.length > 0) data = altPrevRes.data;
+                    }
+                  }
+                } catch(e) {}
               }
 
               if (data.results && data.results.length > 0) {
