@@ -25,6 +25,36 @@ export default function Login() {
     }
   }, []);
 
+  const handleGuestLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const testRes = await fetch('/api/fs/list', {
+        method: 'POST',
+        headers: { 
+           'Content-Type': 'application/json',
+          'Authorization': 'guest-token' 
+         },
+        body: JSON.stringify({ reqPath: '/', password: '' })
+      });
+      const testData = await testRes.json();
+      
+      if ((testData.code === 401 || testData.code === 500) && (testData.message?.toLowerCase().includes('invalidated') || testData.message?.toLowerCase().includes('unauthorized'))) {
+        setError('Guest access is currently unavailable (Token Invalidated). Please check server configuration.');
+        setLoading(false);
+        return;
+      }
+      
+      login('guest', 'guest-token');
+      const from = location.state?.from || '/';
+      navigate(from);
+    } catch (err: any) {
+      setError('Guest access failed. Server might be offline.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -135,11 +165,7 @@ export default function Login() {
             <button 
               type="button" 
               disabled={loading}
-              onClick={() => {
-                login('guest', 'guest-token');
-                const from = location.state?.from || '/';
-                navigate(from);
-              }}
+              onClick={handleGuestLogin}
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold py-1.5 px-4 rounded-full transition-all disabled:opacity-50"
             >
               Sign in as guest

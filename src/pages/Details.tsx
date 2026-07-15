@@ -205,18 +205,23 @@ export default function Details() {
           if (isFile) {
             setItems([{ name, is_dir: false }]);
           } else {
-            // Fetch contents
             const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}` }, { headers: { Authorization: token } });
             if (res.data.code === 200) {
-              setItems(res.data.data.content || []);
+              setItems(res.data.data?.content || []);
+            } else {
+              if (res.data.message?.includes('not a folder') || res.data.message?.includes('object not found')) {
+                setItems([{ name, is_dir: false }]);
+              }
             }
           }
         }
       } catch (err: any) {
-        if (err.response?.status === 500 && err.response?.data?.message?.includes('not a folder')) {
+        const msg = err.response?.data?.message || '';
+        if (err.response?.status === 500 && (msg.includes('not a folder') || msg.includes('object not found'))) {
           setItems([{ name, is_dir: false }]);
         } else {
-          console.error('Error fetching file list', err);
+          if (err.response) {
+          }
         }
       }
 
@@ -555,7 +560,7 @@ export default function Details() {
                 {dirItems.length > 0 && (
                   <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {dirItems.map((dir, i) => (
-                       <button key={i} onClick={() => navigate(`/${fullPath}/${dir.name}`)} className="flex items-center justify-center p-4 bg-white/5 rounded-xl hover:border-purple-600/50 transition text-white text-sm font-semibold border border-white/10 overflow-hidden">
+                       <button key={i} onClick={() => navigate(`/${fullPath}/${dir.name}`.split('/').map(p => encodeURIComponent(p)).join('/'))} className="flex items-center justify-center p-4 bg-white/5 rounded-xl hover:border-purple-600/50 transition text-white text-sm font-semibold border border-white/10 overflow-hidden">
                          <span className="break-all leading-snug">📁 {dir.name}</span>
                        </button>
                     ))}

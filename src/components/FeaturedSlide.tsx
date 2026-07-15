@@ -50,10 +50,10 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides }: { f
             {overview}
           </p>
           <div className="flex items-center gap-4">
-            <Link to={`/home/${featured.category}/${featured.name}`} className="px-6 py-2 sm:px-8 sm:py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:scale-105 transition-transform text-sm sm:text-base">
+            <Link to={`/home/${encodeURIComponent(featured.category)}/${encodeURIComponent(featured.name)}`} className="px-6 py-2 sm:px-8 sm:py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:scale-105 transition-transform text-sm sm:text-base">
               <Play fill="currentColor" size={20} /> Watch Now
             </Link>
-            <Link to={`/home/${featured.category}/${featured.name}`} className="px-6 py-2 sm:px-8 sm:py-3 bg-white/10 backdrop-blur-md text-white font-bold rounded-xl border border-white/20 flex items-center gap-2 hover:bg-white/20 transition-all hidden sm:flex text-sm sm:text-base">
+            <Link to={`/home/${encodeURIComponent(featured.category)}/${encodeURIComponent(featured.name)}`} className="px-6 py-2 sm:px-8 sm:py-3 bg-white/10 backdrop-blur-md text-white font-bold rounded-xl border border-white/20 flex items-center gap-2 hover:bg-white/20 transition-all hidden sm:flex text-sm sm:text-base">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
               Download
             </Link>

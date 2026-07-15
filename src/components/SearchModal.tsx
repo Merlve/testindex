@@ -48,7 +48,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
 
   const handleSelect = (item: any) => {
     const fullPath = `${item.parent}/${item.name}`;
-    navigate(`${fullPath.startsWith('/') ? '' : '/'}${fullPath}`);
+    navigate(`${fullPath.startsWith('/') ? '' : '/'}${fullPath}`.split('/').map(p => encodeURIComponent(p)).join('/'));
     onClose();
   };
 

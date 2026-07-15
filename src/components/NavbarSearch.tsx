@@ -59,7 +59,7 @@ export default function NavbarSearch() {
   };
 
   const handleSelect = (item: any) => {
-    navigate(`${item.parent.startsWith('/') ? '' : '/'}${item.parent}/${item.name}`);
+    navigate(`${item.parent.startsWith('/') ? '' : '/'}${item.parent}/${item.name}`.split('/').map(p => encodeURIComponent(p)).join('/'));
     setIsFocused(false);
     setQuery('');
   };

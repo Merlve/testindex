@@ -231,11 +231,21 @@ app.post('/api/fs/list', async (req, res) => {
     const payload: any = { path: reqPath, password: "" };
     if (refresh) payload.refresh = true;
 
+
+
     const response = await axios.post(url, payload, {
       headers: { Authorization: token }
     });
+    
+
+
     res.json(response.data);
   } catch (error: any) {
+
+    if (error.response) {
+  
+  
+    }
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to list files' });
   }
 });

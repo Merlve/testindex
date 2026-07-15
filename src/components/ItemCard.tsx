@@ -37,7 +37,7 @@ export default function ItemCard({ item, category, parentPath, className }: { it
   const fullPath = `/${sanitizedPath}`;
 
   return (
-    <Link to={`${fullPath}`} className={`group relative flex flex-col gap-2 sm:gap-3 transition ${className || 'w-32 sm:w-48 flex-shrink-0'}`}>
+    <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={`group relative flex flex-col gap-2 sm:gap-3 transition ${className || 'w-32 sm:w-48 flex-shrink-0'}`}>
       <div className="aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#1a1a22] border border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all group-hover:scale-105">
         {tmdb?.poster_path ? (
           <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />

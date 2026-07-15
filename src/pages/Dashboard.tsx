@@ -40,31 +40,39 @@ export default function Dashboard() {
 
   const fetchHome = async () => {
     // We assume /home has the categories
-    const res = await axios.post('/api/fs/list', { reqPath: '/home' }, { headers: { Authorization: token } });
-    if (res.data.code !== 200) {
-      throw new Error('Failed to load categories');
+    try {
+      const res = await axios.post('/api/fs/list', { reqPath: '/home' }, { headers: { Authorization: token } });
+      
+      if (res.data.code !== 200) {
+        throw new Error(`Failed to load categories: ${res.data.message || 'Unknown error'}`);
+      }
+      const content = res.data.data?.content || [];
+      const dirs = content.filter((c: any) => c.is_dir).map((c: any) => c.name);
+      
+      const catData = await Promise.all(
+        dirs.map(async (dir: string) => {
+          const subRes = await axios.post('/api/fs/list', { reqPath: `/home/${dir}` }, { headers: { Authorization: token } });
+          return {
+            name: dir,
+            items: subRes.data.data?.content || []
+          };
+        })
+      );
+      return catData;
+    } catch (err: any) {
+      if (err.response) {
+      }
+      throw err;
     }
-    const content = res.data.data.content || [];
-    const dirs = content.filter((c: any) => c.is_dir).map((c: any) => c.name);
-    
-    const catData = await Promise.all(
-      dirs.map(async (dir: string) => {
-        const subRes = await axios.post('/api/fs/list', { reqPath: `/home/${dir}` }, { headers: { Authorization: token } });
-        return {
-          name: dir,
-          items: subRes.data.data?.content || []
-        };
-      })
-    );
-    return catData;
   };
 
   const [slideIndex, setSlideIndex] = useState(0);
 
-  const { data: categories = [], isLoading, isFetching, refetch } = useQuery({
+  const { data: categories = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchHome,
     enabled: !!token,
+    retry: 1, // Reduce retries so it doesn't spin too long on timeout
   });
 
   const featuredItems = useMemo(() => {
@@ -98,6 +106,20 @@ export default function Dashboard() {
   }, [isLoading, categories.length]);
 
   if (isLoading) return <Loader />;
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center px-4">
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-4 rounded-xl mb-4 max-w-lg">
+          <p className="font-bold mb-2">Error loading dashboard</p>
+          <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
+        </div>
+        <button onClick={() => refetch()} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 transition">
+          <RefreshCw size={18} /> Retry
+        </button>
+      </div>
+    );
+  }
 
   const featured = featuredItems[slideIndex];
 
