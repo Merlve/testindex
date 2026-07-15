@@ -50,14 +50,16 @@ export default function RecentlyAddedCarousel() {
           </h3>
           <Link to="/recently-added" className="text-xs text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider">View All</Link>
         </div>
-        <button 
-          onClick={() => fetchRecentlyAdded(true)}
-          disabled={isFetching}
-          className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition disabled:opacity-50"
-        >
-          <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
-          {isFetching ? "Fetching..." : "Fetch"}
-        </button>
+        {user === 'admin' && (
+          <button 
+            onClick={() => fetchRecentlyAdded(true)}
+            disabled={isFetching}
+            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
+            {isFetching ? "Fetching..." : "Fetch"}
+          </button>
+        )}
       </div>
       {items.length === 0 && !loading && !isFetching && (
         <div className="text-gray-500 text-sm italic">No recently added items found.</div>
