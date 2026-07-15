@@ -10,3 +10,5 @@ db.json
 config.json
 watchlists/
 bun.lock
+jellyfin_cache.json
+jf_override.json
