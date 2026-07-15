@@ -1,25 +1,20 @@
 import Loader from "../components/Loader";
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, useSearchParams } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import ItemCard from '../components/ItemCard';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useQuery } from '@tanstack/react-query';
 
-
 const ALPHABET = ['#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
-export default function Category() {
-  const { name } = useParams();
-  const [searchParams] = useSearchParams();
-  const query = searchParams.get('q');
-  
+export default function RecentlyAddedPage() {
   const { token } = useAuth();
+  const ITEMS_PER_PAGE = 50;
 
   const getInitialState = () => {
-    const storageKey = `category_state_${name}_${query || ''}`;
+    const storageKey = `recently_added_state`;
     const saved = sessionStorage.getItem(storageKey);
     if (saved) {
       try {
@@ -33,30 +28,21 @@ export default function Category() {
     return { page: 1, filterLetter: null };
   };
 
-  const initialState = useMemo(getInitialState, [name, query]);
+  const initialState = useMemo(getInitialState, []);
   const [page, setPage] = useState(initialState.page);
   const [filterLetter, setFilterLetter] = useState<string | null>(initialState.filterLetter);
   const [scrollRestored, setScrollRestored] = useState(false);
   
-  const ITEMS_PER_PAGE = 50;
-
   useEffect(() => {
-    const initialState = getInitialState();
-    setPage(initialState.page);
-    setFilterLetter(initialState.filterLetter);
-    setScrollRestored(false);
-  }, [name, query]);
-
-  useEffect(() => {
-    const storageKey = `category_state_${name}_${query || ''}`;
+    const storageKey = `recently_added_state`;
     sessionStorage.setItem(storageKey, JSON.stringify({ page, filterLetter }));
-  }, [page, filterLetter, name, query]);
+  }, [page, filterLetter]);
 
   useEffect(() => {
     const mainEl = document.querySelector('main');
     if (!mainEl) return;
     const handleScroll = () => {
-      sessionStorage.setItem(`scroll_${name}_${query || ''}`, mainEl.scrollTop.toString());
+      sessionStorage.setItem(`scroll_recently_added`, mainEl.scrollTop.toString());
     };
     let timeoutId: any = null;
     const scrollListener = () => {
@@ -68,45 +54,27 @@ export default function Category() {
       mainEl.removeEventListener('scroll', scrollListener);
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [name, query]);
+  }, []);
 
   const fetchItems = async () => {
     try {
-      if (query) {
-        const res = await axios.post('/api/fs/search', { keywords: query, parent: '/home' }, { headers: { Authorization: token } });
-        
-        if (res.data.code !== 200) throw new Error(`Failed to search items: ${res.data.message || 'Unknown error'}`);
-        
-        return (res.data.data?.content || []).map((i: any) => {
-           const parentParts = (i.parent || '').split('/');
-           const cat = parentParts[parentParts.length - 1] || 'UNKNOWN';
-           return { ...i, _cat: cat, _parent: i.parent };
-        });
-      } else {
-        const res = await axios.post('/api/fs/list', { reqPath: `/home/${name}` }, { headers: { Authorization: token } });
-        
-        if (res.data.code !== 200) throw new Error(`Failed to load items: ${res.data.message || 'Unknown error'}`);
-        
-        const content = res.data.data?.content || [];
-        const isVideo = (n: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(n);
-        return content.filter((item: any) => item.is_dir || isVideo(item.name));
+      const res = await axios.get('/api/jellyfin/recently-added');
+      if (res.data?.success) {
+        return res.data.data || [];
       }
+      return [];
     } catch (err: any) {
-      if (err.response) {
-      }
       throw err;
     }
   };
 
   const { data: items = [], isLoading, isError, error, isFetching, refetch } = useQuery({
-    queryKey: ['category', name, query],
+    queryKey: ['recently-added'],
     queryFn: fetchItems,
-    enabled: !!token && (!!name || !!query),
+    enabled: !!token,
     retry: 1,
   });
 
-
-  
   const filteredItems = useMemo(() => {
     let result = [...items];
     if (filterLetter) {
@@ -119,9 +87,8 @@ export default function Category() {
         return firstChar === filterLetter;
       });
     }
-    result.sort((a: any, b: any) => {
-      return a.name.localeCompare(b.name);
-    });
+    // Dont sort alphabetically by default, preserve recently added order!
+    // But if filtered by letter, maybe sort? We'll just preserve order
     return result;
   }, [items, filterLetter]);
 
@@ -129,7 +96,7 @@ export default function Category() {
 
   useEffect(() => {
     if (!isLoading && !scrollRestored) {
-      const scrollKey = `scroll_${name}_${query || ''}`;
+      const scrollKey = `scroll_recently_added`;
       const savedScroll = sessionStorage.getItem(scrollKey);
       if (savedScroll) {
         requestAnimationFrame(() => {
@@ -141,7 +108,7 @@ export default function Category() {
         setScrollRestored(true);
       }
     }
-  }, [isLoading, displayedItems.length, name, query, scrollRestored]);
+  }, [isLoading, displayedItems.length, scrollRestored]);
 
   if (isLoading) return <Loader />;
 
@@ -149,7 +116,7 @@ export default function Category() {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center px-4">
         <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-4 rounded-xl mb-4 max-w-lg">
-          <p className="font-bold mb-2">Error loading category</p>
+          <p className="font-bold mb-2">Error loading recently added</p>
           <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
         </div>
         <button onClick={() => refetch()} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 transition">
@@ -169,11 +136,11 @@ export default function Category() {
     >
       <div className="flex flex-col mb-6 sm:mb-8 gap-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white capitalize tracking-tight">
-            {query ? `Search Results: ${query}` : name}
+          <h2 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2 tracking-tight">
+            <Clock className="text-blue-500" size={28} />
+            Recently Added
           </h2>
           <div className="flex gap-2">
-            
             <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors bg-white/5 px-3 py-2 sm:px-4 sm:py-2 rounded-xl border border-white/5 hover:border-white/10 shrink-0">
               <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> <span className="hidden sm:inline">{isFetching ? 'Refreshing...' : 'Refresh'}</span>
             </button>
@@ -216,7 +183,7 @@ export default function Category() {
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5">
             {displayedItems.map((item: any, i: number) => (
-              <ItemCard key={i} item={item} category={item._cat || name} parentPath={item._parent || `/home/${item._cat || name}`} className="w-full" />
+              <ItemCard key={i} item={item} category={item._cat || 'Unknown'} parentPath={item._parent || `/home/${item._cat || 'Unknown'}`} className="w-full" />
             ))}
           </div>
           {filteredItems.length > displayedItems.length && (
@@ -227,7 +194,6 @@ export default function Category() {
         </>
       )}
     </motion.div>
-
-      </>
+    </>
   );
 }

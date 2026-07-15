@@ -6,6 +6,7 @@ import Loader from '../components/Loader';
 import { Play, RefreshCw } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import FeaturedSlide from '../components/FeaturedSlide';
+import RecentlyAddedCarousel from '../components/RecentlyAddedCarousel';
 import TrendingCarousel from '../components/TrendingCarousel';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,11 +14,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 export default function Dashboard() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
-  const scrollRestoredRef = useRef(false);
+  const [scrollRestored, setScrollRestored] = useState(false);
 
-  useEffect(() => {
-    scrollRestoredRef.current = false;
-  }, []);
 
   useEffect(() => {
     const mainEl = document.querySelector('main');
@@ -91,19 +89,19 @@ export default function Dashboard() {
   }, [featuredItems]);
 
   useEffect(() => {
-    if (!isLoading && categories.length > 0 && !scrollRestoredRef.current) {
+    if (!isLoading && categories.length > 0 && !scrollRestored) {
       const savedScroll = sessionStorage.getItem(`scroll_dashboard`);
       if (savedScroll) {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           const mainEl = document.querySelector('main');
-          if (mainEl) mainEl.scrollTo({ top: parseInt(savedScroll, 10), behavior: 'smooth' });
-          scrollRestoredRef.current = true;
-        }, 100);
+          if (mainEl) mainEl.scrollTo({ top: parseInt(savedScroll, 10), behavior: 'instant' });
+          setScrollRestored(true);
+        });
       } else {
-        scrollRestoredRef.current = true;
+        setScrollRestored(true);
       }
     }
-  }, [isLoading, categories.length]);
+  }, [isLoading, categories.length, scrollRestored]);
 
   if (isLoading) return <Loader />;
 
@@ -126,7 +124,7 @@ export default function Dashboard() {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ opacity: scrollRestored ? 1 : 0, y: scrollRestored ? 0 : 10 }}
       transition={{ duration: 0.3 }}
       className="pb-20"
     >
@@ -144,7 +142,8 @@ export default function Dashboard() {
       )}
 
       <div className="px-4 sm:px-8 flex-1 space-y-12 pb-12">
-        <TrendingCarousel categories={categories} />
+                <TrendingCarousel categories={categories} />
+        <RecentlyAddedCarousel />
         {categories.map(cat => (
           <div key={cat.name}>
             <div className="flex justify-between items-end mb-4">

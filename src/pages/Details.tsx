@@ -127,6 +127,7 @@ export default function Details() {
   const [searchTitle, setSearchTitle] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [forceType, setForceType] = useState<string>("");
   const searchTimeoutRef = useRef<any>(null);
 
   const [inWatchlist, setInWatchlist] = useState(false);
@@ -290,7 +291,7 @@ export default function Details() {
     }
   };
 
-  const handleSearchTMDB = (query: string) => {
+  const handleSearchTMDB = (query: string, typeForce: string = forceType) => {
     setSearchTitle(query);
     if (!query) {
       setSearchResults([]);
@@ -300,7 +301,8 @@ export default function Details() {
     searchTimeoutRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await axios.get(`/api/tmdb/search_all?query=${encodeURIComponent(query)}&type=${category}`);
+        const url = `/api/tmdb/search_all?query=${encodeURIComponent(query)}&type=${category}${typeForce ? `&forceType=${typeForce}` : ''}`;
+        const res = await axios.get(url);
         setSearchResults(res.data.results || []);
       } catch(e) {}
       setSearching(false);
@@ -384,7 +386,21 @@ export default function Details() {
             <h3 className="text-xl font-bold text-white mb-2">Fix Metadata</h3>
             <p className="text-xs font-mono text-gray-400 mb-4 break-words break-all">{fullPath}</p>
             <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-2">Search Title</label>
+              <label className="block text-gray-400 text-sm mb-2 flex justify-between items-center">
+                 <span>Search Title</span>
+                 <select 
+                    className="bg-[#08080a] border border-white/10 text-white rounded p-1 text-xs"
+                    value={forceType}
+                    onChange={(e) => {
+                       setForceType(e.target.value);
+                       if (searchTitle) handleSearchTMDB(searchTitle, e.target.value);
+                    }}
+                 >
+                    <option value="">Default for category</option>
+                    <option value="movie">Force Movie</option>
+                    <option value="tv">Force TV Show</option>
+                 </select>
+              </label>
               <input 
                 type="text" 
                 value={searchTitle} 

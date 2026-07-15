@@ -1,4 +1,6 @@
 import express from 'express';
+import { getRecentlyAdded } from './jellyfin';
+
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
@@ -404,7 +406,7 @@ app.post('/api/fs/search', async (req, res) => {
 
 // API: TMDB Proxy with Cache
 app.get('/api/tmdb/search_all', async (req, res) => {
-  const { query, type, year } = req.query; // type can be 'movie' or 'tv'
+  const { query, type, year, forceType } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
   const tmdbKey = process.env.TMDB_API_KEY;
@@ -414,7 +416,20 @@ app.get('/api/tmdb/search_all', async (req, res) => {
 
   try {
     const typeStr = (type as string || '').toUpperCase();
-    const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(typeStr) ? 'tv' : 'movie';
+    let searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(typeStr) ? 'tv' : 'movie';
+    if (forceType && (forceType === 'movie' || forceType === 'tv')) {
+       searchType = forceType;
+    }
+    
+    if (req.query.tmdbId) {
+        try {
+            const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${req.query.tmdbId}?api_key=${tmdbKey}`);
+            return res.json({ results: [idRes.data] });
+        } catch(e) {
+            // fallback to search if ID fetch fails
+        }
+    }
+    
     let url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
     if (year && typeof year === 'string') {
       url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
@@ -465,11 +480,23 @@ app.post('/api/tmdb/batch', async (req, res) => {
   for (const item of items) {
     const { query, type, year, originalName } = item;
     if (!query) continue;
-    const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
-    if (tmdbCache[cacheKey] !== undefined) {
-      results[originalName] = tmdbCache[cacheKey];
+    const baseQuery = query.toLowerCase().trim();
+    const baseKey = `${type}-${baseQuery}`;
+    
+    const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+    if (overriddenKey) {
+      results[originalName] = tmdbCache[overriddenKey];
     } else {
-      toFetch.push({ ...item, cacheKey });
+      const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+      if (tmdbCache[cacheKey]) {
+        results[originalName] = tmdbCache[cacheKey];
+      } else if (year && tmdbCache[baseKey]) {
+        results[originalName] = tmdbCache[baseKey];
+      } else if (tmdbCache[cacheKey] === null) {
+        results[originalName] = null;
+      } else {
+        toFetch.push({ ...item, cacheKey });
+      }
     }
   }
 
@@ -528,12 +555,27 @@ app.post('/api/tmdb/batch', async (req, res) => {
 });
 
 app.get('/api/tmdb/search', async (req, res) => {
-  const { query, type, year } = req.query; // type can be 'movie' or 'tv'
+  const { query, type, year, tmdbId } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
-  const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
+  const baseQuery = query.toLowerCase().trim();
+  const baseKey = `${type}-${baseQuery}`;
+  
+  // ALWAYS prioritize manually overridden items
+  const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+  if (overriddenKey) {
+    return res.json(tmdbCache[overriddenKey]);
+  }
+
+  const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+  
   if (tmdbCache[cacheKey]) {
     return res.json(tmdbCache[cacheKey]);
+  }
+  
+  // If we searched with a year and it was null/undefined, try to find a cached entry WITHOUT the year
+  if (year && tmdbCache[baseKey]) {
+      return res.json(tmdbCache[baseKey]);
   }
 
   const tmdbKey = process.env.TMDB_API_KEY;
@@ -544,13 +586,27 @@ app.get('/api/tmdb/search', async (req, res) => {
   try {
     const typeStr = (type as string || '').toUpperCase();
     const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(typeStr) ? 'tv' : 'movie';
-    let url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
-    if (year && typeof year === 'string') {
-      url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
+    
+    let data: any = { results: [] };
+    if (tmdbId) {
+        try {
+            const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${tmdbId}?api_key=${tmdbKey}`);
+            if (idRes.data) {
+                data = { results: [idRes.data] };
+            }
+        } catch(e) {}
     }
     
-    const response = await axios.get(url);
-    let data = response.data;
+    if (data.results.length === 0) {
+        let url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
+        if (year && typeof year === 'string') {
+          url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
+        }
+        try {
+            const response = await axios.get(url);
+            data = response.data;
+        } catch(e) {}
+    }
     
     if (data.results && data.results.length === 0) {
       let altQuery = null;
@@ -582,14 +638,20 @@ app.get('/api/tmdb/search', async (req, res) => {
         if (prevRes.data?.results?.length > 0) {
           data = prevRes.data;
         } else {
-          let altQuery = null;
-          if (query.includes('&')) altQuery = query.replace(/&/g, 'and');
-          else if (query.match(/\band\b/i)) altQuery = query.replace(/\band\b/ig, '&');
-          if (altQuery) {
-            let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
-            altUrl += searchType === 'movie' ? `&primary_release_year=${prevYear}` : `&first_air_date_year=${prevYear}`;
-            const altPrevRes = await axios.get(altUrl);
-            if (altPrevRes.data?.results?.length > 0) data = altPrevRes.data;
+          // STILL failing, try entirely WITHOUT a year!
+          let urlNoYear = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
+          const noYearRes = await axios.get(urlNoYear);
+          if (noYearRes.data?.results?.length > 0) {
+             data = noYearRes.data;
+          } else {
+              let altQuery = null;
+              if (query.includes('&')) altQuery = query.replace(/&/g, 'and');
+              else if (query.match(/\band\b/i)) altQuery = query.replace(/\band\b/ig, '&');
+              if (altQuery) {
+                let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
+                const altPrevRes = await axios.get(altUrl);
+                if (altPrevRes.data?.results?.length > 0) data = altPrevRes.data;
+              }
           }
         }
       } catch(e) {}
@@ -643,7 +705,14 @@ app.post('/api/tmdb/override', async (req, res) => {
       let data = tmdbCache[cacheKey] || {};
       data.title = customTitle;
       data.name = customTitle; // tv uses name
+      data._overridden = true;
       tmdbCache[cacheKey] = data;
+      const baseKey = `${type}-${query.toLowerCase().trim()}`;
+      for (const key of Object.keys(tmdbCache)) {
+           if (key.startsWith(baseKey)) {
+               tmdbCache[key] = data;
+           }
+      }
       saveDb();
       return res.json({ success: true, data });
     }
@@ -673,7 +742,14 @@ app.post('/api/tmdb/override', async (req, res) => {
          data.title = customTitle;
          data.name = customTitle;
        }
+       data._overridden = true;
        tmdbCache[cacheKey] = data;
+       const baseKey = `${type}-${query.toLowerCase().trim()}`;
+       for (const key of Object.keys(tmdbCache)) {
+           if (key.startsWith(baseKey)) {
+               tmdbCache[key] = data;
+           }
+       }
        saveDb();
        return res.json({ success: true, data });
     }
@@ -834,6 +910,109 @@ app.post('/api/tmdb/autofetch/stop', (req, res) => {
 });
 
 // API: Gemini Chatbot
+
+// API: Jellyfin Recently Added
+app.get('/api/jellyfin/recently-added', async (req, res) => {
+  try {
+    const force = req.query.force === 'true';
+    const items = await getRecentlyAdded(getOpenlistUrl, getOpenlistApiKey, appConfig.basePath, force);
+    
+    // Proactively fetch TMDB metadata for all recent items so they are instantly ready and cached
+    const tmdbKey = process.env.TMDB_API_KEY;
+    if (tmdbKey) {
+        (async () => {
+            let modified = false;
+            for (const item of items) {
+                try {
+                    let searchName = item.name;
+                    if (/^(s\d+|season\s*\d+)$/i.test(item.name)) {
+                        const parentParts = item._parent.split('/').filter(Boolean);
+                        if (parentParts.length > 0) {
+                            searchName = parentParts[parentParts.length - 1];
+                        }
+                    }
+                    
+                    let cleanName = searchName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
+                    const yearRegex = /(?:^|[._\-\s\(])(19\d{2}|20\d{2})(?:[._\-\s\)]|$)/g;
+                    let match;
+                    let lastMatch = null;
+                    while ((match = yearRegex.exec(cleanName)) !== null) {
+                        lastMatch = match;
+                    }
+                    let year = '';
+                    if (lastMatch) {
+                        year = lastMatch[1];
+                        cleanName = cleanName.substring(0, lastMatch.index);
+                    }
+                    cleanName = cleanName.replace(/[\(\[].*?[\)\]]/g, " ");
+                    cleanName = cleanName.replace(/\b(720p|1080p|1080i|2160p|4k|8k|webdl|web-dl|webrip|hdrip|bluray|x264|x265|hevc|aac|dts|hdtv|remux)\b/gi, " ");
+                    cleanName = cleanName.replace(/[._\-\s]+/g, " ").trim();
+                    
+                    const searchYear = item._jf?.year || year;
+                    const type = item._cat || '';
+                    
+                    const baseQuery = cleanName.toLowerCase().trim();
+                    const baseKey = `${type}-${baseQuery}`;
+                    const cacheKey = `${type}-${baseQuery}${searchYear ? `-${searchYear}` : ''}`;
+                    
+                    const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+                    if (overriddenKey || tmdbCache[cacheKey] !== undefined) {
+                        continue; // Already cached or overridden
+                    }
+                    
+                    // Fetch from TMDB
+                    const typeStr = type.toUpperCase();
+                    const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(typeStr) ? 'tv' : 'movie';
+                    
+                    let url = '';
+                    if (item._jf?.tmdbId) {
+                        url = `https://api.themoviedb.org/3/${searchType}/${item._jf.tmdbId}?api_key=${tmdbKey}`;
+                    } else {
+                        url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanName)}`;
+                        if (searchYear) {
+                            url += searchType === 'movie' ? `&primary_release_year=${searchYear}` : `&first_air_date_year=${searchYear}`;
+                        }
+                    }
+                    
+                    const response = await axios.get(url);
+                    if (item._jf?.tmdbId && response.data) {
+                        tmdbCache[cacheKey] = response.data.results ? response.data.results[0] || response.data : response.data;
+                        modified = true;
+                    } else if (response.data?.results?.length > 0) {
+                        tmdbCache[cacheKey] = response.data.results[0];
+                        modified = true;
+                    } else if (searchYear) {
+                        const noYearUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanName)}`;
+                        try {
+                            const noYearRes = await axios.get(noYearUrl);
+                            if (noYearRes.data?.results?.length > 0) {
+                                tmdbCache[cacheKey] = noYearRes.data.results[0];
+                                modified = true;
+                            } else {
+                                tmdbCache[cacheKey] = null;
+                                modified = true;
+                            }
+                        } catch(e) {
+                            tmdbCache[cacheKey] = null;
+                            modified = true;
+                        }
+                    } else {
+                        tmdbCache[cacheKey] = null;
+                        modified = true;
+                    }
+                } catch(e) {}
+            }
+            if (modified) saveDb();
+        })();
+    }
+    
+    res.json({ success: true, data: items });
+  } catch (error: any) {
+    console.error('[Jellyfin API Error]', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, history } = req.body;
@@ -874,7 +1053,34 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  
+// API: Jellyfin Override
+const jfOverrideFile = 'jf_override.json';
+let jfOverrides: Record<string, any> = {};
+if (fs.existsSync(jfOverrideFile)) {
+    try {
+        jfOverrides = JSON.parse(fs.readFileSync(jfOverrideFile, 'utf-8'));
+    } catch(e) {}
+}
+
+app.post('/api/jellyfin/override', (req, res) => {
+    let token = req.headers.authorization;
+    if (!token || token === 'guest-token') return res.status(401).json({ error: 'Unauthorized' });
+    // basic admin check or rely on front-end for now
+    
+    const { jfName, openlistPath, category, year } = req.body;
+    if (!jfName) return res.status(400).json({ error: 'Missing name' });
+    
+    jfOverrides[jfName] = { openlistPath, category, year };
+    fs.writeFileSync(jfOverrideFile, JSON.stringify(jfOverrides, null, 2));
+    
+    res.json({ success: true, overrides: jfOverrides });
+});
+
+app.get('/api/jellyfin/overrides', (req, res) => {
+    res.json(jfOverrides);
+});
+app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }

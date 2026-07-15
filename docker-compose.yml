@@ -11,7 +11,12 @@ services:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - OPENLIST_SERVER_URL=${OPENLIST_SERVER_URL}
       - OPENLIST_API_KEY=${OPENLIST_API_KEY}
+      - JELLYFIN_URL=${JELLYFIN_URL}
+      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
+      - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
     volumes:
       - ./config.json:/app/config.json
       - ./db.json:/app/db.json
+      - ./jf_override.json:/app/jf_override.json
+      - ./jellyfin_cache.json:/app/jellyfin_cache.json
       - ./watchlists:/app/watchlists

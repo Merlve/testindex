@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Category from './pages/Category';
+import RecentlyAddedPage from './pages/RecentlyAddedPage';
 import Details from './pages/Details';
 import Admin from './pages/Admin';
 import Watchlist from './pages/Watchlist';
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="category/:name" element={<Category />} />
+            <Route path="recently-added" element={<RecentlyAddedPage />} />
             <Route path="watchlist" element={<Watchlist />} />
             <Route path="admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="home/*" element={<Details />} />
