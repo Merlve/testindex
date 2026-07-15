@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useLocation } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Play, Download, Copy, ExternalLink, ChevronLeft, ChevronDown, ChevronUp, X, Edit2, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Play, Download, Copy, ExternalLink, ChevronLeft, ChevronDown, ChevronUp, X, Edit2, Bookmark, BookmarkCheck, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { parseMediaName } from '../utils/nameParser';
@@ -130,6 +130,29 @@ export default function Details() {
   const searchTimeoutRef = useRef<any>(null);
 
   const [inWatchlist, setInWatchlist] = useState(false);
+  const [refreshingFolder, setRefreshingFolder] = useState(false);
+
+  const handleRefreshFolder = async () => {
+    if (!token) return;
+    setRefreshingFolder(true);
+    try {
+      const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}`, refresh: true }, { headers: { Authorization: token } });
+      if (res.data.code === 200) {
+        setItems(res.data.data.content || []);
+        setToast('Folder refreshed');
+        setTimeout(() => setToast(''), 3000);
+      } else {
+        setToast('Failed to refresh folder');
+        setTimeout(() => setToast(''), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      setToast('Error refreshing folder');
+      setTimeout(() => setToast(''), 3000);
+    } finally {
+      setRefreshingFolder(false);
+    }
+  };
   
   
   useEffect(() => {
@@ -475,27 +498,34 @@ export default function Details() {
           <div className="bg-[#1a1a22]/95 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-white/10 shadow-2xl text-left mt-8 md:mt-12">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
               <h2 className="text-lg font-bold text-white">{category === 'MOVIES' ? 'Files' : 'Episodes / Files'}</h2>
-              {user !== 'guest' && videoItems.length > 0 && (
-                <div className="flex flex-wrap gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-3 py-2 rounded-xl hover:border-purple-600/50 transition">
-                    <input 
-                      type="checkbox"
-                      className="w-4 h-4 accent-purple-600 rounded bg-[#08080a] border-white/10"
-                      checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedItems(videoItems.map(v => v.name));
-                        else setSelectedItems([]);
-                      }}
-                    />
-                    <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">All</span>
-                  </label>
-                  {selectedItems.length > 0 && (
-                    <button onClick={handleCopyLinks} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-xl transition text-xs font-bold">
-                      <Copy size={14} /> Copy
-                    </button>
-                  )}
-                </div>
-              )}
+              <div className="flex flex-wrap gap-3 items-center">
+                {user !== 'guest' && videoItems.length > 0 && (
+                  <>
+                    <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-3 py-2 rounded-xl hover:border-purple-600/50 transition">
+                      <input 
+                        type="checkbox"
+                        className="w-4 h-4 accent-purple-600 rounded bg-[#08080a] border-white/10"
+                        checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedItems(videoItems.map(v => v.name));
+                          else setSelectedItems([]);
+                        }}
+                      />
+                      <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">All</span>
+                    </label>
+                    {selectedItems.length > 0 && (
+                      <button onClick={handleCopyLinks} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-xl transition text-xs font-bold">
+                        <Copy size={14} /> Copy
+                      </button>
+                    )}
+                  </>
+                )}
+                {user === 'admin' && (
+                  <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-2 rounded-xl transition" title="Refresh folder from openlist">
+                    <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
+                  </button>
+                )}
+              </div>
             </div>
 
             {(!user || user === 'guest') ? (

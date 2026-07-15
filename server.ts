@@ -223,12 +223,15 @@ app.post('/api/fs/list', async (req, res) => {
   try {
     let token = req.headers.authorization;
     if (!token || token === 'guest-token') token = getOpenlistApiKey();
-    let { reqPath } = req.body;
+    let { reqPath, refresh } = req.body;
     reqPath = reqPath || appConfig.basePath;
     if (!reqPath.startsWith('/')) reqPath = '/' + reqPath;
     
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`;
-    const response = await axios.post(url, { path: reqPath, password: "" }, {
+    const payload: any = { path: reqPath, password: "" };
+    if (refresh) payload.refresh = true;
+
+    const response = await axios.post(url, payload, {
       headers: { Authorization: token }
     });
     res.json(response.data);
