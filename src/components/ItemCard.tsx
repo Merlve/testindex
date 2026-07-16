@@ -5,7 +5,7 @@ import { Film, Edit3 } from 'lucide-react';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 
-export default function ItemCard({ item, category, parentPath, className }: { item: any, category: string, parentPath: string, className?: string }) {
+export default function ItemCard({ item, category, parentPath, className, viewMode = 'grid' }: { item: any, category: string, parentPath: string, className?: string, viewMode?: 'grid' | 'list' }) {
   const [tmdb, setTmdb] = useState<any>(null);
   const { user, token } = useAuth();
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -65,8 +65,8 @@ export default function ItemCard({ item, category, parentPath, className }: { it
 
   return (
     <>
-    <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={`group relative flex flex-col gap-2 sm:gap-3 transition ${className || 'w-32 sm:w-48 flex-shrink-0'}`}>
-      <div className="aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#1a1a22] border border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all group-hover:scale-105">
+    <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={`group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-white/5 hover:bg-white/10 rounded-2xl p-3 sm:p-4 border border-white/5 w-full' : `flex flex-col gap-2 sm:gap-3 ${className || 'w-32 sm:w-48 flex-shrink-0'}`}`}>
+      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#1a1a22] border border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all ${viewMode === 'grid' ? 'group-hover:scale-105' : ''} flex-shrink-0`}>
         {tmdb?.poster_path ? (
           <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
         ) : (
@@ -77,7 +77,7 @@ export default function ItemCard({ item, category, parentPath, className }: { it
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
         {tmdb?.vote_average && (
-          <div className="absolute top-2 right-2 sm:top-3 sm:right-3 px-1.5 py-0.5 bg-black/60 backdrop-blur rounded text-[10px] font-bold text-yellow-500 z-20">
+          <div className={`absolute top-2 right-2 ${viewMode === 'grid' ? 'sm:top-3 sm:right-3' : ''} px-1.5 py-0.5 bg-black/60 backdrop-blur rounded text-[10px] font-bold text-yellow-500 z-20`}>
             {Number(tmdb.vote_average).toFixed(1)}
           </div>
         )}
@@ -87,10 +87,13 @@ export default function ItemCard({ item, category, parentPath, className }: { it
            </div>
         </div>
       </div>
-      <div>
-        <h3 className="text-xs sm:text-sm font-semibold truncate text-white">{tmdb?.title || tmdb?.name || item.name}</h3>
-        <p className="text-[9px] sm:text-[11px] text-gray-400 uppercase tracking-wider font-bold mb-1">{category}</p>
-        <p className="text-[9px] sm:text-[10px] text-gray-600 truncate">{fullPath}</p>
+      <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
+        <h3 className={`font-semibold truncate text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-xs sm:text-sm'}`}>{tmdb?.title || tmdb?.name || item.name}</h3>
+        <p className={`uppercase tracking-wider font-bold mb-1 ${viewMode === 'list' ? 'text-[10px] sm:text-xs text-purple-400' : 'text-[9px] sm:text-[11px] text-gray-400'}`}>{category}</p>
+        <p className={`truncate ${viewMode === 'list' ? 'text-[10px] sm:text-xs text-gray-500' : 'text-[9px] sm:text-[10px] text-gray-600'}`}>{fullPath}</p>
+        {viewMode === 'list' && tmdb?.overview && (
+            <p className="text-xs text-gray-400 mt-2 line-clamp-2 hidden sm:-webkit-box sm:block" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{tmdb.overview}</p>
+        )}
       </div>
       {item._jf && user === 'admin' && (
          <button 
