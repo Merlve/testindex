@@ -16,3 +16,10 @@
 }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+body {
+  background-color: #fffcf9;
+}
+.dark body {
+  background-color: #08080a;
+}

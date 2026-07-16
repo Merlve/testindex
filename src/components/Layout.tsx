@@ -120,12 +120,15 @@ export default function Layout() {
   });
 
   useEffect(() => {
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (isDark) {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
+      if (themeMeta) themeMeta.setAttribute('content', '#08080a');
     } else {
       document.documentElement.classList.remove('dark');
       localStorage.setItem('theme', 'light');
+      if (themeMeta) themeMeta.setAttribute('content', '#fffcf9');
     }
   }, [isDark]);
 
