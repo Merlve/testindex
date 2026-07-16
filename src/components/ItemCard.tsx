@@ -65,7 +65,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
 
   return (
     <>
-    <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={`focus-navigable group relative transition focus:ring-2 focus:ring-purple-500 focus:outline-none rounded-xl sm:rounded-2xl ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-white/5 hover:bg-white/10 p-3 sm:p-4 border border-white/5 w-full' : `flex flex-col gap-2 sm:gap-3 ${className || 'w-32 sm:w-48 flex-shrink-0'}`}`}>
+    <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={`group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-white/5 hover:bg-white/10 rounded-2xl p-3 sm:p-4 border border-white/5 w-full' : `flex flex-col gap-2 sm:gap-3 ${className || 'w-32 sm:w-48 flex-shrink-0'}`}`}>
       <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#1a1a22] border border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all ${viewMode === 'grid' ? 'group-hover:scale-105' : ''} flex-shrink-0`}>
         {tmdb?.poster_path ? (
           <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />

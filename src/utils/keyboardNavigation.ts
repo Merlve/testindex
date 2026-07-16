@@ -1,12 +1,21 @@
 import { useEffect } from 'react';
 
+const isTVDevice = () => {
+  if (typeof window === 'undefined' || !window.navigator) return false;
+  const ua = window.navigator.userAgent.toLowerCase();
+  // Check common TV user agents
+  return /(tizen|webos|smart-tv|smarttv|bravia|netcast|viera|vidaa|hisense|shield|aft|android tv|appletv|roku|firetv|mibox|chromecast|google tv)/i.test(ua);
+};
+
 export function useKeyboardNavigation() {
   useEffect(() => {
+    if (!isTVDevice()) return;
+
     const makeNavigable = () => {
       const elements = document.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
       elements.forEach(el => {
         if (!el.classList.contains('focus-navigable')) {
-          el.classList.add('focus-navigable', 'focus:ring-2', 'focus:ring-purple-500', 'focus:outline-none');
+          el.classList.add('focus-navigable', 'focus:ring-4', 'focus:ring-purple-500/60', 'focus:outline-none', 'focus:shadow-[0_0_25px_rgba(168,85,247,0.7)]', 'focus:-translate-y-1', 'transition-all', 'duration-300');
         }
       });
     };
@@ -113,8 +122,6 @@ export function useKeyboardNavigation() {
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
              const elements = document.querySelectorAll('.focus-navigable') as NodeListOf<HTMLElement>;
              if (elements.length > 0) {
-                // Let the browser scroll if it's up/down maybe? No, let's just focus.
-                // Actually, let's only do it for Left/Right to prevent hijacking scroll.
                 if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
                   e.preventDefault();
                   elements[0].focus();
