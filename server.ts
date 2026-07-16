@@ -262,16 +262,51 @@ app.all('/api/admin/*', async (req, res) => {
 });
 
 // API: Openlist Proxy - Login
-app.post('/api/auth/login', async (req, res) => {
+// --- Activity Logs ---
+const logsFile = path.join(process.cwd(), 'activity_logs.json');
+let activityLogs: any[] = [];
+if (fs.existsSync(logsFile)) {
   try {
-    const { username, password } = req.body;
+    activityLogs = JSON.parse(fs.readFileSync(logsFile, 'utf-8'));
+  } catch(e) {}
+}
+
+function addLog(action: string, username: string, details: string) {
+  const log = { id: Date.now().toString(), timestamp: new Date().toISOString(), action, username, details };
+  activityLogs.unshift(log); // newest first
+  if (activityLogs.length > 500) activityLogs = activityLogs.slice(0, 500);
+  fs.writeFileSync(logsFile, JSON.stringify(activityLogs, null, 2));
+}
+
+app.get('/api/admin/logs', (req, res) => {
+  res.json(activityLogs);
+});
+
+app.post('/api/admin/log', (req, res) => {
+  const { action, username, details } = req.body;
+  addLog(action, username || 'System/Admin', details);
+  res.json({ success: true });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/auth/login`;
     console.log(`[LOGIN] Attempting to login via Openlist at: ${url}`);
     const response = await axios.post(url, { username, password });
+    
+    if (response.data.code === 200) {
+      addLog('Login Success', username, 'User logged in successfully.');
+    } else {
+      addLog('Login Failed', username, `Login failed: ${response.data.message || 'Invalid credentials'}`);
+    }
+    
     res.json(response.data);
   } catch (error: any) {
     const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/auth/login`;
     console.error(`[LOGIN ERROR] Target URL: ${targetUrl} | Status: ${error.response?.status} | Message: ${error.message}`);
+    
+    addLog('Login Failed', username, `Error: ${error.message}`);
     
     // Pass through the original error response from Openlist if available
     if (error.response?.data) {

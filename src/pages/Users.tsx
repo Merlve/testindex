@@ -73,6 +73,7 @@ export default function Users() {
         await axios.post('/api/users/expirations', { userId: id, expirationDate: '' }, { headers: { Authorization: token } });
       } catch (e) { console.error('Failed to delete', id); }
     }
+    await axios.post('/api/admin/log', { action: 'Batch Delete', details: `Deleted ${selectedIds.size} users.` }, { headers: { Authorization: token } });
     setSelectedIds(new Set());
     await fetchUsers();
   };
@@ -87,6 +88,7 @@ export default function Users() {
         }
       } catch (e) { console.error('Failed to disable', id); }
     }
+    await axios.post('/api/admin/log', { action: 'Batch Disable', details: `Disabled ${selectedIds.size} users.` }, { headers: { Authorization: token } });
     setSelectedIds(new Set());
     await fetchUsers();
   };
@@ -101,6 +103,7 @@ export default function Users() {
         }
       } catch (e) { console.error('Failed to enable', id); }
     }
+    await axios.post('/api/admin/log', { action: 'Batch Enable', details: `Enabled ${selectedIds.size} users.` }, { headers: { Authorization: token } });
     setSelectedIds(new Set());
     await fetchUsers();
   };
@@ -121,6 +124,7 @@ export default function Users() {
         } catch (e) { console.error('Failed to set expiration', id); }
       }
     }
+    await axios.post('/api/admin/log', { action: `Batch ${bulkAction === 'password' ? 'Password' : 'Expiration'} Update`, details: `Updated ${bulkAction} for ${selectedIds.size} users.` }, { headers: { Authorization: token } });
     setBulkAction(null);
     setBulkValue('');
     setSelectedIds(new Set());

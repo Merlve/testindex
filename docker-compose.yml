@@ -22,3 +22,4 @@ services:
       - ./jellyfin_cache.json:/app/jellyfin_cache.json
       - ./watchlists:/app/watchlists
       - ./users_expirations.json:/app/users_expirations.json
+      - ./activity_logs.json:/app/activity_logs.json

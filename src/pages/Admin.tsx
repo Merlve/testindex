@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
+import { Settings, Activity } from 'lucide-react';
 
 export default function Admin() {
   const { token } = useAuth();
+  const [activeTab, setActiveTab] = useState('settings');
   const [config, setConfig] = useState({ openlistUrl: '', basePath: '' });
   const [msg, setMsg] = useState('');
   
@@ -18,6 +20,15 @@ export default function Admin() {
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
   const [autoFetchLoading, setAutoFetchLoading] = useState(false);
   const [autoFetchFailed, setAutoFetchFailed] = useState<{name: string, path: string}[]>([]);
+
+  // Logs
+  const [logs, setLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => setLogs(res.data));
+    }
+  }, [activeTab, token]);
 
   useEffect(() => {
     axios.get('/api/config').then(res => {
@@ -81,9 +92,28 @@ export default function Admin() {
 
   return (
     <div className="p-12 max-w-4xl mx-auto space-y-12">
-      <h2 className="text-3xl font-bold text-black dark:text-white mb-8">Admin Dashboard</h2>
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="text-3xl font-bold text-black dark:text-white">Admin Dashboard</h2>
+      </div>
 
-      <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-2xl backdrop-blur-sm">
+      <div className="flex gap-4 border-b border-black/10 dark:border-white/10 pb-4">
+        <button 
+          onClick={() => setActiveTab('settings')}
+          className={`flex items-center gap-2 px-4 py-2 font-bold rounded-xl transition-all ${activeTab === 'settings' ? 'bg-purple-600/10 text-purple-400' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}
+        >
+          <Settings size={18} /> Settings
+        </button>
+        <button 
+          onClick={() => setActiveTab('logs')}
+          className={`flex items-center gap-2 px-4 py-2 font-bold rounded-xl transition-all ${activeTab === 'logs' ? 'bg-purple-600/10 text-purple-400' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}
+        >
+          <Activity size={18} /> Activity Logs
+        </button>
+      </div>
+
+      {activeTab === 'settings' && (
+        <div className="space-y-12">
+          <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-2xl backdrop-blur-sm">
         <h3 className="text-xl font-bold text-black dark:text-white mb-4 tracking-tight">Openlist Configuration</h3>
         {msg && <div className="text-green-500 mb-4 text-sm font-bold">{msg}</div>}
         <div className="space-y-4">
@@ -182,6 +212,50 @@ export default function Admin() {
           </button>
         </div>
       </div>
+      </div>
+      )}
+
+      {activeTab === 'logs' && (
+        <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-2xl backdrop-blur-sm">
+          <h3 className="text-xl font-bold text-black dark:text-white mb-4 tracking-tight flex justify-between items-center">
+            System Activity Logs
+            <button 
+              onClick={() => axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => setLogs(res.data))}
+              className="text-xs bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded-lg"
+            >
+              Refresh
+            </button>
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">Tracks logins, batch updates, and sensitive operations.</p>
+          
+          <div className="space-y-4">
+            {logs.length === 0 ? (
+              <p className="text-gray-500 text-sm">No activity logs found.</p>
+            ) : (
+              logs.map(log => (
+                <div key={log.id} className="bg-[#fffcf9]/50 dark:bg-[#08080a]/50 border border-black/5 dark:border-white/5 rounded-xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                        log.action.includes('Success') ? 'bg-green-500/20 text-green-400' :
+                        log.action.includes('Failed') ? 'bg-red-500/20 text-red-400' :
+                        'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {log.action}
+                      </span>
+                      <span className="text-sm font-semibold text-black dark:text-white">{log.username}</span>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{log.details}</p>
+                  </div>
+                  <div className="text-xs text-gray-500 whitespace-nowrap">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
