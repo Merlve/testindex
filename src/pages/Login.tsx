@@ -27,6 +27,19 @@ export default function Login() {
 
   const handleGuestLogin = async () => {
     setError('');
+
+    // Check if the guest has logged in within the last 24 hours
+    const lastLogin = localStorage.getItem('qs_guest_last_login_date');
+    if (lastLogin) {
+      const timePassed = Date.now() - parseInt(lastLogin, 10);
+      const hoursPassed = timePassed / (1000 * 60 * 60);
+      if (hoursPassed < 24) {
+        const hoursLeft = Math.ceil(24 - hoursPassed);
+        setError(`Guest access is limited to once per 24 hours. Please try again in ${hoursLeft} hours, or sign up for an account.`);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const testRes = await fetch('/api/fs/list', {

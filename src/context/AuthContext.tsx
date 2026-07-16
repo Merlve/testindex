@@ -81,7 +81,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     localStorage.setItem('qs_user', newUser);
     localStorage.setItem('qs_token', newToken);
     if (newUser === 'guest') {
-      localStorage.setItem('qs_guest_login_time', Date.now().toString());
+      const now = Date.now().toString();
+      localStorage.setItem('qs_guest_login_time', now);
+      localStorage.setItem('qs_guest_last_login_date', now);
     } else {
       localStorage.removeItem('qs_guest_login_time');
     }
