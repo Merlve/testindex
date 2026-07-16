@@ -105,6 +105,7 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
 }
 
 export default function Details() {
+  const navigate = useNavigate();
   const { '*' : paramPath } = useParams();
   const fullPath = paramPath ? `home/${paramPath}` : 'home';
   const pathParts = fullPath ? fullPath.split('/') : [];
@@ -157,6 +158,24 @@ export default function Details() {
   
   
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (playingUrl) {
+          setPlayingUrl('');
+        } else if (showMetadataModal) {
+          setShowMetadataModal(false);
+          setSearchTitle('');
+          setSearchResults([]);
+        } else {
+          navigate(-1);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playingUrl, showMetadataModal, navigate]);
+
+  useEffect(() => {
     if (user && name && pathParts.length > 0) {
       const actualParentPath = pathParts.slice(0, -1).join('/');
       axios.get(`/api/watchlist/check?name=${encodeURIComponent(name)}&parentPath=${encodeURIComponent(actualParentPath)}`, { headers: { 'x-user': user } })
@@ -188,7 +207,7 @@ export default function Details() {
   };
 
   
-  const navigate = useNavigate();
+
   const location = useLocation();
   
   // Get raw URL for playing

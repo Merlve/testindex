@@ -15,6 +15,7 @@ import Watchlist from './pages/Watchlist';
 import Layout from './components/Layout';
 import AuthProvider, { useAuth } from './context/AuthContext';
 import Bot from './components/Bot';
+import { useKeyboardNavigation } from './utils/keyboardNavigation';
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) {
   const { user, token } = useAuth();
@@ -25,6 +26,7 @@ function ProtectedRoute({ children, requireAdmin = false }: { children: React.Re
 }
 
 export default function App() {
+  useKeyboardNavigation();
   useEffect(() => {
     const faviconUrl = import.meta.env.VITE_SITE_FAVICON;
     if (faviconUrl) {

@@ -54,11 +54,11 @@ function formatSize(sizeBytes?: number): string | null {
     const units = ["B", "KB", "MB", "GB", "TB"];
     for (const unit of units) {
         if (size < 1024) {
-            return (unit === 'GB' || unit === 'TB') ? \`\${size.toFixed(2)} \${unit}\` : \`\${size.toFixed(0)} \${unit}\`;
+            return (unit === 'GB' || unit === 'TB') ? `${size.toFixed(2)} ${unit}` : `${size.toFixed(0)} ${unit}`;
         }
         size /= 1024;
     }
-    return \`\${size.toFixed(2)} PB\`;
+    return `${size.toFixed(2)} PB`;
 }
 
 async function getTmdbEnrich(providerIds: any, itemType: string) {
@@ -68,10 +68,10 @@ async function getTmdbEnrich(providerIds: any, itemType: string) {
     if (!tmdbId) return {};
     
     const path = itemType.toLowerCase() === 'movie' ? 'movie' : 'tv';
-    const link = \`https://www.themoviedb.org/\${path}/\${tmdbId}\`;
+    const link = `https://www.themoviedb.org/${path}/${tmdbId}`;
     
     try {
-        const res = await axios.get(\`https://api.themoviedb.org/3/\${path}/\${tmdbId}?api_key=\${tmdbKey}\`);
+        const res = await axios.get(`https://api.themoviedb.org/3/${path}/${tmdbId}?api_key=${tmdbKey}`);
         return { tagline: res.data.tagline, tmdb_rating: res.data.vote_average, tmdb_link: link };
     } catch (e) {
         return { tmdb_link: link };
@@ -106,14 +106,14 @@ async function sendTelegramMessage(text: string, openlistLink?: string, photoUrl
 
     try {
         if (photoUrl) {
-            const r = await axios.post(\`https://api.telegram.org/bot\${botToken}/sendPhoto\`, {
+            const r = await axios.post(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
                 ...payload,
                 photo: photoUrl,
                 caption: text
             });
             return r.data?.result?.message_id;
         } else {
-            const r = await axios.post(\`https://api.telegram.org/bot\${botToken}/sendMessage\`, {
+            const r = await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 ...payload,
                 text: text
             });
@@ -131,7 +131,7 @@ async function pinTelegramMessage(messageId: number) {
     if (!botToken || !chatId) return;
     
     try {
-        await axios.post(\`https://api.telegram.org/bot\${botToken}/pinChatMessage\`, {
+        await axios.post(`https://api.telegram.org/bot${botToken}/pinChatMessage`, {
             chat_id: chatId,
             message_id: messageId,
             disable_notification: true
@@ -166,40 +166,40 @@ export async function processJellyfinTelegram(items: any[], getOpenlistUrl: () =
             if (countries.length > 0) {
                 const cFormatted = countries.map((c: string) => {
                     const info = COUNTRY_MAP[c.toUpperCase()];
-                    return info ? \`\${info[1]} \${info[0]}\` : c.toUpperCase();
+                    return info ? `${info[1]} ${info[0]}` : c.toUpperCase();
                 });
-                countryText = \`\n<b>COUNTRY OF ORIGIN:</b> \${cFormatted.join(", ")}\`;
+                countryText = `\n<b>COUNTRY OF ORIGIN:</b> ${cFormatted.join(", ")}`;
             }
 
             let header = "";
             if (itemType.toLowerCase() === "episode") {
                 const seriesName = it.SeriesName || "";
                 let titleLine = escapeHtml(seriesName);
-                if (year) titleLine += \` (\${year})\`;
+                if (year) titleLine += ` (${year})`;
                 if (it.ParentIndexNumber !== undefined && it.IndexNumber !== undefined) {
-                    titleLine += \` — S\${String(it.ParentIndexNumber).padStart(2, '0')}E\${String(it.IndexNumber).padStart(2, '0')}\`;
+                    titleLine += ` — S${String(it.ParentIndexNumber).padStart(2, '0')}E${String(it.IndexNumber).padStart(2, '0')}`;
                 }
-                titleLine += \` — \${escapeHtml(name)}\`;
-                header = \`🆕 <b>New Episode</b>\n<b>\${titleLine}</b>\n\`;
+                titleLine += ` — ${escapeHtml(name)}`;
+                header = `🆕 <b>New Episode</b>\n<b>${titleLine}</b>\n`;
             } else if (itemType.toLowerCase() === "series") {
-                header = \`🆕 <b>New Series</b>\n<b>\${escapeHtml(name)}</b>\`;
-                if (year) header += \` (\${year})\`;
+                header = `🆕 <b>New Series</b>\n<b>${escapeHtml(name)}</b>`;
+                if (year) header += ` (${year})`;
                 header += "\\n";
             } else {
-                header = \`🆕 <b>New Movie</b>\n<b>\${escapeHtml(name)}</b>\`;
-                if (year) header += \` (\${year})\`;
+                header = `🆕 <b>New Movie</b>\n<b>${escapeHtml(name)}</b>`;
+                if (year) header += ` (${year})`;
                 header += "\\n";
             }
 
-            const genreText = genres.length > 0 ? \`\n<b>GENRE:</b> \${genres.map((g: string) => \`\${getGenreEmoji(g)} \${g}\`).join(", ")}\` : "";
+            const genreText = genres.length > 0 ? `\n<b>GENRE:</b> ${genres.map((g: string) => `${getGenreEmoji(g)} ${g}`).join(", ")}` : "";
             
             const actors = people.filter((p: any) => p.Type === "Actor").slice(0, 4);
             const actorLinks = actors.map((a: any) => {
                 const aName = escapeHtml(a.Name);
                 const aTmdb = a.ProviderIds?.Tmdb;
-                return aTmdb ? \`<a href='https://www.themoviedb.org/person/\${aTmdb}'>\${aName}</a>\` : aName;
+                return aTmdb ? `<a href='https://www.themoviedb.org/person/${aTmdb}'>${aName}</a>` : aName;
             });
-            const actorText = actors.length > 0 ? \`\n<b>ACTORS:</b> \${actorLinks.join(", ")}\` : "";
+            const actorText = actors.length > 0 ? `\n<b>ACTORS:</b> ${actorLinks.join(", ")}` : "";
 
             const rtMin = it.RunTimeTicks ? Math.floor((it.RunTimeTicks / 10000000) / 60) : null;
             
@@ -222,20 +222,20 @@ export async function processJellyfinTelegram(items: any[], getOpenlistUrl: () =
                         else if (bestStream.Height >= 1080) resolution = '1080p';
                         else if (bestStream.Height >= 720) resolution = '720p';
                         else if (bestStream.Height >= 480) resolution = '480p';
-                        else resolution = \`\${bestStream.Height}p\`;
+                        else resolution = `${bestStream.Height}p`;
                     }
                 }
             }
 
             const facts = [];
-            if (rtMin) facts.push(\`⏱ \${rtMin} min\`);
-            if (rating) facts.push(\`⭐   \${parseFloat(rating).toFixed(1)}/10\`);
-            if (resolution) facts.push(\`📺 \${resolution}\`);
-            if (size) facts.push(\`💾 \${size}\`);
+            if (rtMin) facts.push(`⏱ ${rtMin} min`);
+            if (rating) facts.push(`⭐   ${parseFloat(rating).toFixed(1)}/10`);
+            if (resolution) facts.push(`📺 ${resolution}`);
+            if (size) facts.push(`💾 ${size}`);
 
             const enrich = await getTmdbEnrich(providerIds, itemType);
             if (enrich.tmdb_rating && itemType.toLowerCase() !== "episode") {
-                facts.push(\`🎬 TMDB \${parseFloat(enrich.tmdb_rating).toFixed(1)}/10\`);
+                facts.push(`🎬 TMDB ${parseFloat(enrich.tmdb_rating).toFixed(1)}/10`);
             }
 
             const parts = [header, genreText, actorText, countryText];
@@ -243,12 +243,12 @@ export async function processJellyfinTelegram(items: any[], getOpenlistUrl: () =
                 parts.push("\\n" + facts.join(" • "));
             }
             if (enrich.tagline) {
-                parts.push(\`\\n<i>\${escapeHtml(enrich.tagline)}</i>\`);
+                parts.push(`\\n<i>${escapeHtml(enrich.tagline)}</i>`);
             }
             if (overview) {
                 let ov = overview.replace(/\s+/g, ' ').trim();
                 ov = ov.length > 400 ? ov.substring(0, 397) + "…" : ov;
-                parts.push(\`\\n\\n<blockquote>\${escapeHtml(ov)}</blockquote>\`);
+                parts.push(`\\n\\n<blockquote>${escapeHtml(ov)}</blockquote>`);
             }
 
             let text = parts.join("");
@@ -266,7 +266,7 @@ export async function processJellyfinTelegram(items: any[], getOpenlistUrl: () =
             const jfPublicUrl = (process.env.JELLYFIN_PUBLIC_URL || process.env.JELLYFIN_URL || '').replace(/\/$/, '');
             let imgUrl = undefined;
             if (process.env.SEND_POSTER !== "0" && it.Id) {
-                imgUrl = \`\${jfPublicUrl}/Items/\${it.Id}/Images/Primary?maxHeight=900&quality=90\`;
+                imgUrl = `${jfPublicUrl}/Items/${it.Id}/Images/Primary?maxHeight=900&quality=90`;
             }
 
             const messageId = await sendTelegramMessage(text, openlistLink, imgUrl);
@@ -279,7 +279,7 @@ export async function processJellyfinTelegram(items: any[], getOpenlistUrl: () =
             }
 
         } catch (e: any) {
-            console.error(\`Error processing Telegram for \${it.Id}: \${e.message}\`);
+            console.error(`Error processing Telegram for ${it.Id}: ${e.message}`);
         }
     }
 }
