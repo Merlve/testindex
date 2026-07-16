@@ -204,6 +204,10 @@ export default function Users() {
             setSelectedUser(null);
             setIsCreating(false);
           }} 
+          onCancel={() => {
+            setSelectedUser(null);
+            setIsCreating(false);
+          }}
           token={token!} 
           expirations={expirations} 
         />
@@ -354,7 +358,7 @@ export default function Users() {
   );
 }
 
-function UserEditForm({ user, isCreating, onSaved, token, expirations }: { user: any, isCreating: boolean, onSaved: () => void, token: string, expirations: Record<string, string> }) {
+function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations }: { user: any, isCreating: boolean, onSaved: () => void, onCancel: () => void, token: string, expirations: Record<string, string> }) {
   const [formData, setFormData] = useState({ ...user, password: '', expirationDate: expirations[user.id] || '' });
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -529,7 +533,13 @@ function UserEditForm({ user, isCreating, onSaved, token, expirations }: { user:
         </div>
       </div>
 
-      <div className="pt-8 flex justify-end">
+      <div className="pt-8 flex justify-end gap-4">
+        <button 
+          onClick={onCancel}
+          className="bg-black/5 dark:bg-white/5 text-black dark:text-white font-bold px-10 py-4 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-all flex items-center"
+        >
+          Back to Users
+        </button>
         <button 
           onClick={handleSave}
           disabled={saving}
