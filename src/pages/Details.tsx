@@ -254,11 +254,35 @@ export default function Details() {
         const tmdbRes = await axios.get(`/api/tmdb/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}`);
         if (tmdbRes.data) {
           setTmdb(tmdbRes.data);
+          try {
+            const actualParentPath = pathParts.slice(0, -1).join('/');
+            const recentStr = localStorage.getItem('recently_browsed') || '[]';
+            let recent = JSON.parse(recentStr);
+            const newItem = {
+              item: { name },
+              category,
+              parentPath: actualParentPath,
+              tmdbData: tmdbRes.data,
+              timestamp: Date.now()
+            };
+            recent = recent.filter((r: any) => r.item.name !== name || r.parentPath !== actualParentPath);
+            recent.unshift(newItem);
+            recent = recent.slice(0, 20); // Keep last 20
+            localStorage.setItem('recently_browsed', JSON.stringify(recent));
+          } catch(e) {}
         } else {
           setSearchTitle(cleanName);
         }
       } catch (err) {
         console.error('Error fetching TMDB metadata', err);
+        try {
+          const recentStr = localStorage.getItem('recently_browsed') || '[]';
+          const recent = JSON.parse(recentStr);
+          const cached = recent.find((r: any) => r.item.name === name);
+          if (cached && cached.tmdbData) {
+            setTmdb(cached.tmdbData);
+          }
+        } catch(e) {}
       } finally {
         setLoading(false);
       }

@@ -5,14 +5,15 @@ import { Film, Edit3 } from 'lucide-react';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 
-export default function ItemCard({ item, category, parentPath, className, viewMode = 'grid' }: { item: any, category: string, parentPath: string, className?: string, viewMode?: 'grid' | 'list' }) {
-  const [tmdb, setTmdb] = useState<any>(null);
+export default function ItemCard({ item, category, parentPath, className, viewMode = 'grid', tmdbData }: { item: any, category: string, parentPath: string, className?: string, viewMode?: 'grid' | 'list', tmdbData?: any }) {
+  const [tmdb, setTmdb] = useState<any>(tmdbData || null);
   const { user, token } = useAuth();
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overridePath, setOverridePath] = useState(`${parentPath}/${item.name}`);
   const [overrideCat, setOverrideCat] = useState(category);
 
   useEffect(() => {
+    if (tmdbData) return;
     // Only fetch for directories (shows/movies) or large files
     const fetchTmdb = async () => {
       let searchName = item.name;

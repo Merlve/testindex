@@ -181,6 +181,86 @@ app.post('/api/config', (req, res) => {
   res.json({ success: true, config: appConfig });
 });
 
+
+// --- User Expirations ---
+const expirationsFile = 'users_expirations.json';
+let userExpirations = {};
+if (fs.existsSync(expirationsFile)) {
+  try {
+    userExpirations = JSON.parse(fs.readFileSync(expirationsFile, 'utf-8'));
+  } catch(e) {}
+}
+
+app.get('/api/users/expirations', (req, res) => {
+  res.json(userExpirations);
+});
+
+app.post('/api/users/expirations', (req, res) => {
+  const { userId, expirationDate } = req.body;
+  if (!userId) return res.status(400).json({ error: 'Missing userId' });
+  
+  if (expirationDate) {
+    userExpirations[userId] = expirationDate;
+  } else {
+    delete userExpirations[userId];
+  }
+  fs.writeFileSync(expirationsFile, JSON.stringify(userExpirations, null, 2));
+  res.json({ success: true });
+});
+
+// Expiration checking job (runs every hour to disable expired users at 8 AM)
+setInterval(async () => {
+  try {
+    const now = new Date();
+    // Only process at 8 AM (server local time, assuming roughly matches expected time)
+    if (now.getHours() === 8) {
+      const todayStr = now.toISOString().split('T')[0];
+      
+      const adminToken = process.env.OPENLIST_API_KEY;
+      if (!adminToken) return;
+
+      const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`;
+      const listRes = await axios.get(targetUrl, { headers: { Authorization: adminToken } });
+      const users = listRes.data?.data?.content || [];
+
+      for (const user of users) {
+        const expDateStr = userExpirations[user.id];
+        if (expDateStr && expDateStr <= todayStr && !user.disabled) {
+          console.log(`[CRON] Disabling user ${user.username} as their expiration date ${expDateStr} has been reached.`);
+          const updateUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/update`;
+          await axios.post(updateUrl, {
+            ...user,
+            disabled: true
+          }, { headers: { Authorization: adminToken } });
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[CRON Error checking user expirations]:', e);
+  }
+}, 60 * 60 * 1000); // Check every hour
+// ------------------------
+
+// API: Openlist Proxy - Admin
+app.all('/api/admin/*', async (req, res) => {
+  try {
+    const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}${req.originalUrl}`;
+    const token = req.headers.authorization;
+    const response = await axios({
+      method: req.method as any,
+      url: targetUrl,
+      data: req.body,
+      headers: { Authorization: token || '' }
+    });
+    res.json(response.data);
+  } catch (error: any) {
+    if (error.response?.data) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    res.status(500).json({ error: 'Proxy error' });
+  }
+});
+
 // API: Openlist Proxy - Login
 app.post('/api/auth/login', async (req, res) => {
   try {

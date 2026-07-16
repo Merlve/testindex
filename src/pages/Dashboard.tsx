@@ -109,14 +109,16 @@ export default function Dashboard() {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 text-center px-4">
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-4 rounded-xl mb-4 max-w-lg">
-          <p className="font-bold mb-2">Error loading dashboard</p>
-          <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
+      <div className="pb-20">
+        <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-4 rounded-xl mb-4 max-w-lg">
+            <p className="font-bold mb-2">Error loading dashboard</p>
+            <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
+          </div>
+          <button onClick={() => refetch()} className="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 text-black dark:text-white px-5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 transition">
+            <RefreshCw size={18} /> Retry
+          </button>
         </div>
-        <button onClick={() => refetch()} className="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 text-black dark:text-white px-5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 transition">
-          <RefreshCw size={18} /> Retry
-        </button>
       </div>
     );
   }
@@ -144,7 +146,7 @@ export default function Dashboard() {
       )}
 
       <div className="px-4 sm:px-8 flex-1 space-y-12 pb-12">
-                <TrendingCarousel categories={categories} />
+        <TrendingCarousel categories={categories} />
         <RecentlyAddedCarousel />
         {categories.map(cat => (
           <div key={cat.name}>
