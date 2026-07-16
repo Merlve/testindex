@@ -72,7 +72,7 @@ export default function NavbarSearch() {
         </div>
         <input 
           type="text" 
-          className="w-full bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-xl pl-10 pr-10 py-2 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 focus:bg-[#23232d] transition-colors"
+          className="w-full bg-[#fffcf9] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-xl pl-10 pr-10 py-2 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 dark:focus:bg-[#23232d] transition-colors"
           placeholder="Search matches..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -86,7 +86,7 @@ export default function NavbarSearch() {
       </form>
 
       {isFocused && query.trim() && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-96 flex flex-col">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-[#fffcf9] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-96 flex flex-col">
           <div className="overflow-y-auto flex-1">
             {loading ? (
               <div className="p-4 flex items-center justify-center text-gray-600 dark:text-gray-400">

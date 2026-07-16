@@ -54,7 +54,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-black/80 backdrop-blur-md">
-      <div className="bg-[#fbf4eb]/95 dark:bg-[#1a1a22]/95 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 flex flex-col max-h-[80vh]">
+      <div className="bg-[#fffcf9]/95 dark:bg-[#1a1a22]/95 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 flex flex-col max-h-[80vh]">
         <form onSubmit={handleSearch} className="flex items-center px-4 sm:px-6 py-4 sm:py-5 shrink-0 border-b border-black/5 dark:border-white/5">
           <SearchIcon className="text-purple-400 mr-3 sm:mr-4 w-6 h-6 sm:w-7 sm:h-7 shrink-0" />
           <input 
