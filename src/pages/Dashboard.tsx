@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router';
-import Loader from '../components/Loader';
 import { Play, RefreshCw } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import FeaturedSlide from '../components/FeaturedSlide';
@@ -10,6 +9,40 @@ import RecentlyAddedCarousel from '../components/RecentlyAddedCarousel';
 import TrendingCarousel from '../components/TrendingCarousel';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+const DashboardSkeleton = () => (
+  <div className="animate-pulse pb-20">
+    <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
+       <div className="w-24 h-9 bg-white/5 rounded-xl"></div>
+    </div>
+    <div className="relative w-full h-[60vh] min-h-[400px] md:h-[70vh] bg-white/5 rounded-3xl mx-4 sm:mx-8 mb-8 sm:mb-12 overflow-hidden shadow-2xl">
+       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent flex flex-col justify-end p-6 sm:p-12 md:p-16">
+          <div className="w-32 h-6 bg-white/10 rounded-full mb-4"></div>
+          <div className="w-2/3 h-12 bg-white/10 rounded-xl mb-6"></div>
+          <div className="w-1/2 h-16 bg-white/10 rounded-xl mb-6"></div>
+          <div className="flex gap-4">
+            <div className="w-32 h-12 bg-white/10 rounded-xl"></div>
+            <div className="w-32 h-12 bg-white/10 rounded-xl"></div>
+          </div>
+       </div>
+    </div>
+    <div className="px-4 sm:px-8 flex-1 space-y-12 pb-12">
+      {[1, 2, 3].map((i) => (
+        <div key={i}>
+          <div className="flex justify-between items-end mb-4">
+            <div className="w-48 h-6 bg-white/10 rounded-lg"></div>
+            <div className="w-24 h-4 bg-white/10 rounded-lg"></div>
+          </div>
+          <div className="flex overflow-hidden gap-5 pb-4">
+             {[1, 2, 3, 4, 5, 6].map((j) => (
+               <div key={j} className="flex-none w-[140px] sm:w-[160px] md:w-[180px] lg:w-[200px] h-[210px] sm:h-[240px] md:h-[270px] lg:h-[300px] bg-white/5 rounded-2xl"></div>
+             ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 export default function Dashboard() {
   const { token } = useAuth();
@@ -103,7 +136,7 @@ export default function Dashboard() {
     }
   }, [isLoading, categories.length, scrollRestored]);
 
-  if (isLoading) return <Loader />;
+  if (isLoading) return <DashboardSkeleton />;
 
   if (isError) {
     return (

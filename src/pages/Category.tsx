@@ -1,4 +1,3 @@
-import Loader from "../components/Loader";
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import axios from 'axios';
@@ -10,6 +9,25 @@ import { useQuery } from '@tanstack/react-query';
 
 
 const ALPHABET = ['#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+
+const CategorySkeleton = () => (
+  <div className="animate-pulse p-4 sm:p-12 min-h-screen pb-20">
+    <div className="flex flex-col mb-6 sm:mb-8 gap-4">
+      <div className="flex justify-between items-center">
+        <div className="w-48 sm:w-64 h-8 sm:h-10 bg-white/10 rounded-xl"></div>
+        <div className="w-24 h-9 sm:h-10 bg-white/10 rounded-xl"></div>
+      </div>
+      <div className="flex gap-2 overflow-hidden">
+        {[1,2,3,4,5,6,7,8,9,10,11,12].map(i => <div key={i} className="min-w-[36px] sm:min-w-[40px] h-8 sm:h-9 bg-white/10 rounded-lg"></div>)}
+      </div>
+    </div>
+    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5">
+       {[...Array(18)].map((_, i) => (
+          <div key={i} className="w-full aspect-[2/3] bg-white/5 rounded-2xl"></div>
+       ))}
+    </div>
+  </div>
+);
 
 export default function Category() {
   const { name } = useParams();
@@ -143,7 +161,7 @@ export default function Category() {
     }
   }, [isLoading, displayedItems.length, name, query, scrollRestored]);
 
-  if (isLoading) return <Loader />;
+  if (isLoading) return <CategorySkeleton />;
 
   if (isError) {
     return (
