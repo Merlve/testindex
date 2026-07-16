@@ -183,8 +183,8 @@ app.post('/api/config', (req, res) => {
 
 
 // --- User Expirations ---
-const expirationsFile = 'users_expirations.json';
-let userExpirations = {};
+const expirationsFile = path.join(process.cwd(), 'users_expirations.json');
+let userExpirations: Record<string, string> = {};
 if (fs.existsSync(expirationsFile)) {
   try {
     userExpirations = JSON.parse(fs.readFileSync(expirationsFile, 'utf-8'));

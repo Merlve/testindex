@@ -21,3 +21,4 @@ services:
       - ./jf_override.json:/app/jf_override.json
       - ./jellyfin_cache.json:/app/jellyfin_cache.json
       - ./watchlists:/app/watchlists
+      - ./users_expirations.json:/app/users_expirations.json
