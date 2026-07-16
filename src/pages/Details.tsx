@@ -1,4 +1,4 @@
-import Loader from "../components/Loader";
+import DetailsSkeleton from "../components/DetailsSkeleton";
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useLocation } from 'react-router';
 import axios from 'axios';
@@ -42,17 +42,17 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
   }, [item.name, fullPath, token]);
 
   return (
-    <div className="flex flex-col px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:border-purple-600/50 transition-all">
+    <div className="flex flex-col px-4 py-3 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl hover:border-purple-600/50 transition-all">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <input 
             type="checkbox" 
-            className="w-4 h-4 shrink-0 accent-purple-600 rounded bg-[#08080a] border-white/10" 
+            className="w-4 h-4 shrink-0 accent-purple-600 rounded bg-[#fffcf9] dark:bg-[#08080a] border-black/10 dark:border-white/10" 
             checked={selected}
             onChange={onToggleSelect}
           />
           <div className="flex flex-col min-w-0">
-            <span className="text-xs font-semibold text-gray-200 break-all leading-snug" title={item.name}>{item.name}</span>
+            <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 break-all leading-snug" title={item.name}>{item.name}</span>
             {fileSize !== undefined && (
               <span className="text-[10px] text-gray-500 font-mono mt-0.5">{formatBytes(fileSize)}</span>
             )}
@@ -65,18 +65,18 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
               <button onClick={() => onPlay(url)} className="flex items-center gap-1 bg-white text-black hover:bg-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">
                 <Play size={14} fill="currentColor" /> Play
               </button>
-              <a href={url} download target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-white/5 border border-white/10 hover:border-purple-600/50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+              <a href={url} download target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
                 <Download size={14} />
               </a>
             </>
           ) : (
-            <span className="flex items-center gap-1 bg-gray-500/20 text-gray-400 px-3 py-1.5 rounded-lg text-xs font-bold">
+            <span className="flex items-center gap-1 bg-gray-500/20 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-lg text-xs font-bold">
               Loading...
             </span>
           )}
           <button 
             onClick={() => setExpanded(!expanded)} 
-            className="flex items-center gap-1 bg-white/5 border border-white/10 hover:border-purple-600/50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+            className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
           >
             More {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -84,16 +84,16 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
       </div>
       
       {expanded && (
-        <div className="flex gap-2 items-center mt-3 pt-3 border-t border-white/10 flex-wrap">
+        <div className="flex gap-2 items-center mt-3 pt-3 border-t border-black/10 dark:border-white/10 flex-wrap">
           {url && (
             <>
-              <a href={`vlc://${url}`} className="flex items-center gap-1 bg-white/5 border border-white/10 hover:border-purple-600/50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+              <a href={`vlc://${url}`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
                 <ExternalLink size={14} className="text-orange-500" /> VLC
               </a>
-              <a href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`} className="flex items-center gap-1 bg-white/5 border border-white/10 hover:border-purple-600/50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+              <a href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
                 <ExternalLink size={14} className="text-blue-500" /> Infuse
               </a>
-              <a href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;scheme=${url.startsWith('https') ? 'https' : 'http'};end;`} className="flex items-center gap-1 bg-white/5 border border-white/10 hover:border-purple-600/50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+              <a href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;scheme=${url.startsWith('https') ? 'https' : 'http'};end;`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
                 <ExternalLink size={14} className="text-purple-500" /> MPV
               </a>
             </>
@@ -384,7 +384,7 @@ export default function Details() {
     }
   };
 
-  if (loading) return <Loader />;
+  if (loading) return <DetailsSkeleton />;
 
   const backdrop = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` : null;
   const isVideo = (name: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
@@ -397,12 +397,12 @@ export default function Details() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="min-h-screen bg-[#08080a] pb-20 relative"
+      className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-20 relative"
     >
       {/* Video Modal */}
       {playingUrl && (
         <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center backdrop-blur-sm">
-          <button onClick={() => setPlayingUrl('')} className="absolute top-6 right-6 text-white/50 hover:text-white transition bg-white/5 p-2 rounded-full">
+          <button onClick={() => setPlayingUrl('')} className="absolute top-6 right-6 text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white transition bg-black/5 dark:bg-white/5 p-2 rounded-full">
             <X size={24} />
           </button>
           <video src={playingUrl} controls autoPlay className="w-full max-w-6xl max-h-[80vh] rounded-2xl shadow-2xl outline-none bg-black" />
@@ -412,14 +412,14 @@ export default function Details() {
       {/* Fix Metadata Modal */}
       {showMetadataModal && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm px-4">
-          <div className="bg-[#1a1a22] p-6 rounded-2xl border border-white/10 w-full max-w-md shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-2">Fix Metadata</h3>
-            <p className="text-xs font-mono text-gray-400 mb-4 break-words break-all">{fullPath}</p>
+          <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] p-6 rounded-2xl border border-black/10 dark:border-white/10 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold text-black dark:text-white mb-2">Fix Metadata</h3>
+            <p className="text-xs font-mono text-gray-600 dark:text-gray-400 mb-4 break-words break-all">{fullPath}</p>
             <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-2 flex justify-between items-center">
+              <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2 flex justify-between items-center">
                  <span>Search Title</span>
                  <select 
-                    className="bg-[#08080a] border border-white/10 text-white rounded p-1 text-xs"
+                    className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 text-black dark:text-white rounded p-1 text-xs"
                     value={forceType}
                     onChange={(e) => {
                        setForceType(e.target.value);
@@ -435,45 +435,45 @@ export default function Details() {
                 type="text" 
                 value={searchTitle} 
                 onChange={e => handleSearchTMDB(e.target.value)} 
-                className="w-full bg-[#08080a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-600/50" 
+                className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50" 
                 placeholder="Type title, or TMDB ID (e.g. 12345)" 
               />
             </div>
             
             <div className="max-h-64 overflow-y-auto mb-4 space-y-2">
               {searching ? (
-                <div className="text-gray-400 text-sm text-center py-4">Searching...</div>
+                <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Searching...</div>
               ) : searchResults.length > 0 ? (
                 searchResults.map((result: any) => (
                   <div 
                     key={result.id} 
                     onClick={() => handleSelectTMDBResult(result)}
-                    className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl cursor-pointer transition"
+                    className="flex items-center gap-3 p-2 hover:bg-black/5 dark:bg-white/5 rounded-xl cursor-pointer transition"
                   >
                     {result.poster_path ? (
                       <img src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} alt={result.title || result.name} className="w-12 h-16 object-cover rounded shadow" />
                     ) : (
-                      <div className="w-12 h-16 bg-white/5 rounded flex items-center justify-center shadow text-xs text-gray-400">No Img</div>
+                      <div className="w-12 h-16 bg-black/5 dark:bg-white/5 rounded flex items-center justify-center shadow text-xs text-gray-600 dark:text-gray-400">No Img</div>
                     )}
                     <div>
-                      <div className="text-white font-semibold text-sm">{result.title || result.name}</div>
-                      <div className="text-gray-400 text-xs">{result.release_date || result.first_air_date}</div>
+                      <div className="text-black dark:text-white font-semibold text-sm">{result.title || result.name}</div>
+                      <div className="text-gray-600 dark:text-gray-400 text-xs">{result.release_date || result.first_air_date}</div>
                     </div>
                   </div>
                 ))
               ) : searchTitle ? (
-                <div className="text-gray-400 text-sm text-center py-4">No results found</div>
+                <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">No results found</div>
               ) : (
-                <div className="text-gray-400 text-sm text-center py-4">Type a title to search</div>
+                <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Type a title to search</div>
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <div className="flex justify-end gap-3 pt-4 border-t border-black/10 dark:border-white/10">
               <button type="button" onClick={() => {
                 setShowMetadataModal(false);
                 setSearchTitle('');
                 setSearchResults([]);
-              }} className="px-4 py-2 text-gray-400 hover:text-white transition">Cancel</button>
+              }} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">Cancel</button>
             </div>
           </div>
         </div>
@@ -486,14 +486,14 @@ export default function Details() {
         </div>
       )}
 
-      <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 bg-black/50 border border-white/10 text-white p-2 rounded-full hover:bg-white/10 transition backdrop-blur">
+      <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 bg-black/50 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-full hover:bg-black/10 dark:bg-white/10 transition backdrop-blur">
         <ChevronLeft size={24} />
       </button>
 
       {backdrop && (
         <div className="absolute top-0 left-0 w-full h-[60vh] md:h-[70vh] pointer-events-none z-0">
-          <div className="absolute inset-0 bg-gradient-to-r from-[#08080a] via-[#08080a]/80 to-transparent z-10"></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-[#08080a] via-[#08080a]/50 to-transparent z-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/80 dark:via-[#08080a]/80 to-transparent z-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/50 dark:via-[#08080a]/50 to-transparent z-10"></div>
           <img src={backdrop} className="w-full h-full object-cover opacity-40 md:opacity-30 mask-image:linear-gradient(to_bottom,black,transparent)" alt="Backdrop" />
         </div>
       )}
@@ -501,11 +501,11 @@ export default function Details() {
       <div className="px-4 sm:px-12 pt-20 sm:pt-28 md:pt-32 relative z-20 flex flex-col md:flex-row gap-6 md:gap-10 mb-8">
         <div className="flex flex-row md:flex-col gap-5 md:gap-6 items-start">
           {tmdb?.poster_path && (
-            <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} className="w-32 sm:w-40 md:w-64 rounded-xl md:rounded-2xl shadow-2xl shrink-0 border border-white/5" alt="Poster" />
+            <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} className="w-32 sm:w-40 md:w-64 rounded-xl md:rounded-2xl shadow-2xl shrink-0 border border-black/5 dark:border-white/5" alt="Poster" />
           )}
           <div className="flex-1 min-w-0 md:hidden flex flex-col gap-2 pt-2">
-            <h1 className="text-2xl font-bold text-white tracking-tight leading-tight line-clamp-3">{tmdb?.title || tmdb?.name || name}</h1>
-            <p className="text-[10px] font-mono text-gray-400 break-words break-all line-clamp-2">{fullPath}</p>
+            <h1 className="text-2xl font-bold text-black dark:text-white tracking-tight leading-tight line-clamp-3">{tmdb?.title || tmdb?.name || name}</h1>
+            <p className="text-[10px] font-mono text-gray-600 dark:text-gray-400 break-words break-all line-clamp-2">{fullPath}</p>
             <button onClick={() => {
               if (user === 'guest') {
                 setToast('Sign up for the website plan to use this feature');
@@ -513,7 +513,7 @@ export default function Details() {
               } else {
                 setShowMetadataModal(true);
               }
-            }} className="bg-white/5 border border-white/10 text-gray-400 hover:text-white p-2 rounded-xl transition self-start mt-2" title="Fix Metadata">
+            }} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white p-2 rounded-xl transition self-start mt-2" title="Fix Metadata">
               <Edit2 size={16} />
             </button>
           </div>
@@ -521,7 +521,7 @@ export default function Details() {
 
         <div className="flex-1 min-w-0 text-left">
           <div className="hidden md:flex flex-row items-center gap-4 mb-2">
-            <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">{tmdb?.title || tmdb?.name || name}</h1>
+            <h1 className="text-4xl lg:text-5xl font-extrabold text-black dark:text-white tracking-tight">{tmdb?.title || tmdb?.name || name}</h1>
             <button onClick={() => {
               if (user === 'guest') {
                 setToast('Sign up for the website plan to use this feature');
@@ -529,50 +529,50 @@ export default function Details() {
               } else {
                 setShowMetadataModal(true);
               }
-            }} className="bg-white/5 border border-white/10 text-gray-400 hover:text-white p-2 rounded-xl transition shrink-0" title="Fix Metadata">
+            }} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white p-2 rounded-xl transition shrink-0" title="Fix Metadata">
               <Edit2 size={16} />
             </button>
           </div>
-          <p className="hidden md:block text-xs md:text-sm font-mono text-gray-400 mb-4 break-words break-all">{fullPath}</p>
-          <p className="text-gray-300 max-w-3xl leading-relaxed text-sm md:text-base mb-6 line-clamp-4 md:line-clamp-none">{tmdb?.overview}</p>
+          <p className="hidden md:block text-xs md:text-sm font-mono text-gray-600 dark:text-gray-400 mb-4 break-words break-all">{fullPath}</p>
+          <p className="text-gray-700 dark:text-gray-300 max-w-3xl leading-relaxed text-sm md:text-base mb-6 line-clamp-4 md:line-clamp-none">{tmdb?.overview}</p>
 
           <div className="flex gap-4 mb-4">
             <button 
               onClick={handleToggleWatchlist}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm ${inWatchlist ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-white/10 text-white hover:bg-white/20'}`}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm ${inWatchlist ? 'bg-purple-600 text-black dark:text-white shadow-lg shadow-purple-600/20' : 'bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:bg-white/20'}`}
             >
               {inWatchlist ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
               {inWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
             </button>
           </div>
           
-          <div className="bg-[#1a1a22]/95 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-white/10 shadow-2xl text-left mt-8 md:mt-12">
+          <div className="bg-[#fbf4eb]/95 dark:bg-[#1a1a22]/95 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-black/10 dark:border-white/10 shadow-2xl text-left mt-8 md:mt-12">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-              <h2 className="text-lg font-bold text-white">{category === 'MOVIES' ? 'Files' : 'Episodes / Files'}</h2>
+              <h2 className="text-lg font-bold text-black dark:text-white">{category === 'MOVIES' ? 'Files' : 'Episodes / Files'}</h2>
               <div className="flex flex-wrap gap-3 items-center">
                 {user !== 'guest' && videoItems.length > 0 && (
                   <>
-                    <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-3 py-2 rounded-xl hover:border-purple-600/50 transition">
+                    <label className="flex items-center gap-2 cursor-pointer bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-3 py-2 rounded-xl hover:border-purple-600/50 transition">
                       <input 
                         type="checkbox"
-                        className="w-4 h-4 accent-purple-600 rounded bg-[#08080a] border-white/10"
+                        className="w-4 h-4 accent-purple-600 rounded bg-[#fffcf9] dark:bg-[#08080a] border-black/10 dark:border-white/10"
                         checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedItems(videoItems.map(v => v.name));
                           else setSelectedItems([]);
                         }}
                       />
-                      <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">All</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">All</span>
                     </label>
                     {selectedItems.length > 0 && (
-                      <button onClick={handleCopyLinks} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-xl transition text-xs font-bold">
+                      <button onClick={handleCopyLinks} className="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-4 py-2 rounded-xl transition text-xs font-bold">
                         <Copy size={14} /> Copy
                       </button>
                     )}
                   </>
                 )}
                 {user === 'admin' && (
-                  <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-2 rounded-xl transition" title="Refresh folder from openlist">
+                  <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder from openlist">
                     <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
                   </button>
                 )}
@@ -581,13 +581,13 @@ export default function Details() {
 
             {(!user || user === 'guest') ? (
               <div className="text-center py-12 flex flex-col items-center gap-4">
-                <p className="text-gray-300 font-medium text-lg">
+                <p className="text-gray-700 dark:text-gray-300 font-medium text-lg">
                   Please log in to access episodes and files.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
                   <button 
                     onClick={() => navigate('/login', { state: { from: `${location.pathname}${location.search}${location.hash}` } })} 
-                    className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-2.5 rounded-xl font-bold transition shadow-lg shadow-purple-600/20"
+                    className="bg-purple-600 hover:bg-purple-500 text-black dark:text-white px-8 py-2.5 rounded-xl font-bold transition shadow-lg shadow-purple-600/20"
                   >
                     Log In
                   </button>
@@ -595,7 +595,7 @@ export default function Details() {
                     href="https://shutter.ng" 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-8 py-2.5 rounded-xl font-bold transition"
+                    className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 text-black dark:text-white border border-black/10 dark:border-white/10 px-8 py-2.5 rounded-xl font-bold transition"
                   >
                     Sign Up
                   </a>
@@ -606,7 +606,7 @@ export default function Details() {
                 {dirItems.length > 0 && (
                   <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {dirItems.map((dir, i) => (
-                       <button key={i} onClick={() => navigate(`/${fullPath}/${dir.name}`.split('/').map(p => encodeURIComponent(p)).join('/'))} className="flex items-center justify-center p-4 bg-white/5 rounded-xl hover:border-purple-600/50 transition text-white text-sm font-semibold border border-white/10 overflow-hidden">
+                       <button key={i} onClick={() => navigate(`/${fullPath}/${dir.name}`.split('/').map(p => encodeURIComponent(p)).join('/'))} className="flex items-center justify-center p-4 bg-black/5 dark:bg-white/5 rounded-xl hover:border-purple-600/50 transition text-black dark:text-white text-sm font-semibold border border-black/10 dark:border-white/10 overflow-hidden">
                          <span className="break-all leading-snug">📁 {dir.name}</span>
                        </button>
                     ))}
@@ -633,7 +633,7 @@ export default function Details() {
                       />
                     ))
                   ) : (
-                    <div className="text-gray-400">No video files found in this folder.</div>
+                    <div className="text-gray-600 dark:text-gray-400">No video files found in this folder.</div>
                   )}
                 </div>
               </>

@@ -13,16 +13,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 const DashboardSkeleton = () => (
   <div className="animate-pulse pb-20">
     <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
-       <div className="w-24 h-9 bg-white/5 rounded-xl"></div>
+       <div className="w-24 h-9 bg-black/5 dark:bg-white/5 rounded-xl"></div>
     </div>
-    <div className="relative w-full h-[60vh] min-h-[400px] md:h-[70vh] bg-white/5 rounded-3xl mx-4 sm:mx-8 mb-8 sm:mb-12 overflow-hidden shadow-2xl">
+    <div className="relative w-full h-[60vh] min-h-[400px] md:h-[70vh] bg-black/5 dark:bg-white/5 rounded-3xl mx-4 sm:mx-8 mb-8 sm:mb-12 overflow-hidden shadow-2xl">
        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent flex flex-col justify-end p-6 sm:p-12 md:p-16">
-          <div className="w-32 h-6 bg-white/10 rounded-full mb-4"></div>
-          <div className="w-2/3 h-12 bg-white/10 rounded-xl mb-6"></div>
-          <div className="w-1/2 h-16 bg-white/10 rounded-xl mb-6"></div>
+          <div className="w-32 h-6 bg-black/10 dark:bg-white/10 rounded-full mb-4"></div>
+          <div className="w-2/3 h-12 bg-black/10 dark:bg-white/10 rounded-xl mb-6"></div>
+          <div className="w-1/2 h-16 bg-black/10 dark:bg-white/10 rounded-xl mb-6"></div>
           <div className="flex gap-4">
-            <div className="w-32 h-12 bg-white/10 rounded-xl"></div>
-            <div className="w-32 h-12 bg-white/10 rounded-xl"></div>
+            <div className="w-32 h-12 bg-black/10 dark:bg-white/10 rounded-xl"></div>
+            <div className="w-32 h-12 bg-black/10 dark:bg-white/10 rounded-xl"></div>
           </div>
        </div>
     </div>
@@ -30,12 +30,12 @@ const DashboardSkeleton = () => (
       {[1, 2, 3].map((i) => (
         <div key={i}>
           <div className="flex justify-between items-end mb-4">
-            <div className="w-48 h-6 bg-white/10 rounded-lg"></div>
-            <div className="w-24 h-4 bg-white/10 rounded-lg"></div>
+            <div className="w-48 h-6 bg-black/10 dark:bg-white/10 rounded-lg"></div>
+            <div className="w-24 h-4 bg-black/10 dark:bg-white/10 rounded-lg"></div>
           </div>
           <div className="flex overflow-hidden gap-5 pb-4">
              {[1, 2, 3, 4, 5, 6].map((j) => (
-               <div key={j} className="flex-none w-[140px] sm:w-[160px] md:w-[180px] lg:w-[200px] h-[210px] sm:h-[240px] md:h-[270px] lg:h-[300px] bg-white/5 rounded-2xl"></div>
+               <div key={j} className="flex-none w-[140px] sm:w-[160px] md:w-[180px] lg:w-[200px] h-[210px] sm:h-[240px] md:h-[270px] lg:h-[300px] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
              ))}
           </div>
         </div>
@@ -47,26 +47,9 @@ const DashboardSkeleton = () => (
 export default function Dashboard() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
-  const [scrollRestored, setScrollRestored] = useState(false);
+  
 
 
-  useEffect(() => {
-    const mainEl = document.querySelector('main');
-    if (!mainEl) return;
-    const handleScroll = () => {
-      sessionStorage.setItem(`scroll_dashboard`, mainEl.scrollTop.toString());
-    };
-    let timeoutId: any = null;
-    const scrollListener = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleScroll, 100);
-    };
-    mainEl.addEventListener('scroll', scrollListener, { passive: true });
-    return () => {
-      mainEl.removeEventListener('scroll', scrollListener);
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, []);
 
 
   const fetchHome = async () => {
@@ -121,20 +104,6 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [featuredItems]);
 
-  useEffect(() => {
-    if (!isLoading && categories.length > 0 && !scrollRestored) {
-      const savedScroll = sessionStorage.getItem(`scroll_dashboard`);
-      if (savedScroll) {
-        requestAnimationFrame(() => {
-          const mainEl = document.querySelector('main');
-          if (mainEl) mainEl.scrollTo({ top: parseInt(savedScroll, 10), behavior: 'instant' });
-          setScrollRestored(true);
-        });
-      } else {
-        setScrollRestored(true);
-      }
-    }
-  }, [isLoading, categories.length, scrollRestored]);
 
   if (isLoading) return <DashboardSkeleton />;
 
@@ -145,7 +114,7 @@ export default function Dashboard() {
           <p className="font-bold mb-2">Error loading dashboard</p>
           <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
         </div>
-        <button onClick={() => refetch()} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 transition">
+        <button onClick={() => refetch()} className="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 text-black dark:text-white px-5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 transition">
           <RefreshCw size={18} /> Retry
         </button>
       </div>
@@ -157,12 +126,12 @@ export default function Dashboard() {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: scrollRestored ? 1 : 0, y: scrollRestored ? 0 : 10 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className="pb-20"
     >
       <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
-        <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-xl border border-white/5 hover:border-white/10">
+        <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors bg-black/5 dark:bg-white/5 px-4 py-2 rounded-xl border border-black/5 dark:border-white/5 hover:border-black/10 dark:border-white/10">
           <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> {isFetching ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
@@ -180,13 +149,13 @@ export default function Dashboard() {
         {categories.map(cat => (
           <div key={cat.name}>
             <div className="flex justify-between items-end mb-4">
-              <h3 className="text-lg font-bold text-white">{cat.name}</h3>
+              <h3 className="text-lg font-bold text-black dark:text-white">{cat.name}</h3>
               <div className="flex gap-2 items-center">
                 <Link to={`/category/${cat.name}`} className="text-xs text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider mr-2">View All</Link>
-                <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 cursor-pointer text-white">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                <div className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
+                  <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                 </div>
-                <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 cursor-pointer text-white">
+                <div className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
                 </div>
               </div>

@@ -74,7 +74,7 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
   return (
     <div className="mb-12">
       <div className="flex justify-between items-end mb-4">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
            <Flame className="text-orange-500" size={20} />
            Trending Now
         </h3>

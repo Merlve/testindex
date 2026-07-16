@@ -44,24 +44,24 @@ export default function Watchlist() {
     >
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-8 gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white capitalize tracking-tight flex items-center gap-3 mb-2">
+          <h2 className="text-2xl sm:text-3xl font-bold text-black dark:text-white capitalize tracking-tight flex items-center gap-3 mb-2">
             <Bookmark className="text-purple-400" /> My Watchlist
           </h2>
-          <p className="text-gray-400 text-sm">Movies and shows you have saved for later.</p>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">Movies and shows you have saved for later.</p>
         </div>
         
         {watchlist.length > 0 && (
-          <div className="flex bg-white/5 border border-white/10 rounded-xl overflow-hidden self-start sm:self-auto shrink-0">
+          <div className="flex bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl overflow-hidden self-start sm:self-auto shrink-0">
             <button 
               onClick={() => handleViewMode('grid')}
-              className={`px-3 py-2 flex items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              className={`px-3 py-2 flex items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-purple-600 text-black dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:bg-white/5'}`}
               title="Grid View"
             >
               <LayoutGrid size={18} />
             </button>
             <button 
               onClick={() => handleViewMode('list')}
-              className={`px-3 py-2 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              className={`px-3 py-2 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-purple-600 text-black dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:bg-white/5'}`}
               title="List View"
             >
               <List size={18} />
@@ -71,10 +71,10 @@ export default function Watchlist() {
       </div>
 
       {watchlist.length === 0 ? (
-        <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/5">
-          <Bookmark className="w-16 h-16 mx-auto text-gray-400 mb-4 opacity-50" />
-          <h3 className="text-xl font-bold text-white mb-2">Your watchlist is empty</h3>
-          <p className="text-gray-400 text-sm">Save items to your watchlist by clicking the bookmark button on any movie or show.</p>
+        <div className="text-center py-20 bg-black/5 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5">
+          <Bookmark className="w-16 h-16 mx-auto text-gray-600 dark:text-gray-400 mb-4 opacity-50" />
+          <h3 className="text-xl font-bold text-black dark:text-white mb-2">Your watchlist is empty</h3>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">Save items to your watchlist by clicking the bookmark button on any movie or show.</p>
         </div>
       ) : (
                 <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5'}`}>

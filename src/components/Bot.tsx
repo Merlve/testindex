@@ -18,7 +18,7 @@ export default function Bot() {
       href={`https://wa.me/${whatsappNumber}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-12 h-12 sm:w-14 sm:h-14 bg-[#25D366] rounded-full flex items-center justify-center text-white shadow-xl shadow-[#25D366]/20 hover:scale-110 transition z-40"
+      className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-12 h-12 sm:w-14 sm:h-14 bg-[#25D366] rounded-full flex items-center justify-center text-black dark:text-white shadow-xl shadow-[#25D366]/20 hover:scale-110 transition z-40"
     >
       <WhatsAppIcon size={28} />
     </a>

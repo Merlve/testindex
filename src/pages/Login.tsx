@@ -121,45 +121,45 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#08080a] flex items-center justify-center p-4">
-      <div className="bg-[#1a1a22]/80 backdrop-blur p-8 rounded-2xl shadow-2xl w-full max-w-md border border-white/5">
+    <div className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] flex items-center justify-center p-4">
+      <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 backdrop-blur p-8 rounded-2xl shadow-2xl w-full max-w-md border border-black/5 dark:border-white/5">
         <div className="flex flex-col items-center mb-8">
           {logoUrl ? (
             <img src={logoUrl} alt="Logo" className="h-16 w-auto object-contain mb-6 shrink-0 rounded-2xl" />
           ) : (
             <div className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-600/20 mb-6 shrink-0">
-               <span className="font-bold text-white text-3xl">S</span>
+               <span className="font-bold text-black dark:text-white text-3xl">S</span>
             </div>
           )}
-          <h1 className="text-3xl font-bold text-white tracking-tight">{siteName}</h1>
-          <p className="text-gray-400 mt-2 text-sm">Sign in to your <a href="https://shutter.ng" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors font-semibold">SHUTTER</a> account</p>
+          <h1 className="text-3xl font-bold text-black dark:text-white tracking-tight">{siteName}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm">Sign in to your <a href="https://shutter.ng" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors font-semibold">SHUTTER</a> account</p>
         </div>
         
         {error && <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-xl mb-6 text-sm">{error}</div>}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Username</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wider">Username</label>
             <input 
               type="text" 
               required
-              className="w-full bg-[#08080a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-600/50 transition-colors"
+              className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
               value={username} 
               onChange={e => setUsername(e.target.value)} 
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Password</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wider">Password</label>
             <div className="relative">
               <input 
                 type={showPassword ? "text" : "password"} 
-                className="w-full bg-[#08080a] border border-white/10 rounded-xl px-4 py-3 pr-12 text-white focus:outline-none focus:border-purple-600/50 transition-colors"
+                className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 pr-12 text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
                 value={password} 
                 onChange={e => setPassword(e.target.value)} 
               />
               <button
                 type="button"
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition"
                 onClick={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -179,14 +179,14 @@ export default function Login() {
               type="button" 
               disabled={loading}
               onClick={handleGuestLogin}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold py-1.5 px-4 rounded-full transition-all disabled:opacity-50"
+              className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold py-1.5 px-4 rounded-full transition-all disabled:opacity-50"
             >
               Sign in as guest
             </button>
           </div>
           
           <div className="text-center mt-6">
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
               Need a WEBSITE account? <a href="https://shutter.ng" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors font-semibold">Sign up now</a>
             </p>
           </div>
