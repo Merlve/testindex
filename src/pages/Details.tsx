@@ -301,7 +301,18 @@ export default function Details() {
     searchTimeoutRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const url = `/api/tmdb/search_all?query=${encodeURIComponent(query)}&type=${category}${typeForce ? `&forceType=${typeForce}` : ''}`;
+        let isId = /^\d+$/.test(query.trim());
+        let finalQuery = query.trim();
+        
+        if (query.toLowerCase().startsWith('id:')) {
+           isId = true;
+           finalQuery = query.substring(3).trim();
+        } else if (query.toLowerCase().startsWith('tmdb:')) {
+           isId = true;
+           finalQuery = query.substring(5).trim();
+        }
+
+        const url = `/api/tmdb/search_all?query=${encodeURIComponent(finalQuery)}&type=${category}${typeForce ? `&forceType=${typeForce}` : ''}${isId ? `&tmdbId=${finalQuery}` : ''}`;
         const res = await axios.get(url);
         setSearchResults(res.data.results || []);
       } catch(e) {}
@@ -406,7 +417,7 @@ export default function Details() {
                 value={searchTitle} 
                 onChange={e => handleSearchTMDB(e.target.value)} 
                 className="w-full bg-[#08080a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-600/50" 
-                placeholder="Type to search..." 
+                placeholder="Type title, or TMDB ID (e.g. 12345)" 
               />
             </div>
             

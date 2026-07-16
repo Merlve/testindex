@@ -406,7 +406,7 @@ app.post('/api/fs/search', async (req, res) => {
 
 // API: TMDB Proxy with Cache
 app.get('/api/tmdb/search_all', async (req, res) => {
-  const { query, type, year, forceType } = req.query; // type can be 'movie' or 'tv'
+  const { query, type, year, forceType } = req.query;
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
   const tmdbKey = process.env.TMDB_API_KEY;
@@ -421,23 +421,25 @@ app.get('/api/tmdb/search_all', async (req, res) => {
        searchType = forceType;
     }
     
+    let idResult = null;
     if (req.query.tmdbId) {
         try {
             const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${req.query.tmdbId}?api_key=${tmdbKey}`);
-            return res.json({ results: [idRes.data] });
+            idResult = idRes.data;
         } catch(e) {
-            // fallback to search if ID fetch fails
+            // fallback
         }
     }
-    
-    let url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
+
+    let url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query as string)}`;
     if (year && typeof year === 'string') {
       url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
     }
     const response = await axios.get(url);
     
-    // If no results, try alternative 'and' vs '&'
-    if (response.data && response.data.results && response.data.results.length === 0) {
+    let results = response.data.results || [];
+    
+    if (results.length === 0) {
       let altQuery = null;
       if (query.includes('&')) {
         altQuery = query.replace(/&/g, 'and');
@@ -453,16 +455,21 @@ app.get('/api/tmdb/search_all', async (req, res) => {
         try {
           const altResponse = await axios.get(altUrl);
           if (altResponse.data && altResponse.data.results && altResponse.data.results.length > 0) {
-            return res.json(altResponse.data);
+            results = altResponse.data.results;
           }
         } catch(e) {}
       }
     }
-    
-    res.json(response.data);
+
+    if (idResult) {
+       results = results.filter((r: any) => String(r.id) !== String(idResult.id));
+       results.unshift(idResult);
+    }
+
+    res.json({ ...response.data, results });
   } catch (error: any) {
     console.error('TMDB Error', error.message);
-    res.status(500).json({ error: 'TMDB fetch failed' });
+    res.json({ results: [] });
   }
 });
 
@@ -664,7 +671,7 @@ app.get('/api/tmdb/search', async (req, res) => {
     }
     res.json(null);
   } catch (error: any) {
-    res.status(500).json({ error: 'TMDB fetch failed' });
+    res.json(null);
   }
 });
 
@@ -678,7 +685,7 @@ app.get('/api/tmdb/trending', async (req, res) => {
     res.json(response.data);
   } catch (error: any) {
     console.error('TMDB Trending Error', error.message);
-    res.status(500).json({ error: 'TMDB fetch failed' });
+    res.json({ results: [] });
   }
 });
 
