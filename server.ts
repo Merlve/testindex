@@ -178,6 +178,7 @@ app.post('/api/config', (req, res) => {
   if (req.body.openlistUrl) appConfig.openlistUrl = req.body.openlistUrl;
   if (req.body.basePath) appConfig.basePath = req.body.basePath;
   saveConfig();
+  addLog('Config Updated', 'Admin', 'Updated application configuration settings.');
   res.json({ success: true, config: appConfig });
 });
 
@@ -205,6 +206,7 @@ app.post('/api/users/expirations', (req, res) => {
     delete userExpirations[userId];
   }
   fs.writeFileSync(expirationsFile, JSON.stringify(userExpirations, null, 2));
+  addLog('User Expiration Set', 'Admin', `Set expiration for user ${userId} to ${expirationDate || 'none'}`);
   res.json({ success: true });
 });
 
@@ -231,6 +233,7 @@ setInterval(async () => {
             ...user,
             disabled: true
           }, { headers: { Authorization: adminToken } });
+          addLog('cron_disable', 'System/Cron', `User ${user.username} was disabled automatically. Expired: ${expDateStr}`);
         }
       }
     }
@@ -277,6 +280,15 @@ app.all('/api/admin/*', async (req, res) => {
       data: req.body,
       headers: { Authorization: token || '' }
     });
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && response.data?.code === 200) {
+      let action = 'Admin Action';
+      let details = `Endpoint: ${req.originalUrl}`;
+      if (req.originalUrl.includes('/user/update')) action = 'User Updated';
+      else if (req.originalUrl.includes('/user/create')) action = 'User Created';
+      else if (req.originalUrl.includes('/user/delete')) action = 'User Deleted';
+      
+      addLog(action, 'Admin', details);
+    }
     res.json(response.data);
   } catch (error: any) {
     if (error.response?.data) {
@@ -811,6 +823,7 @@ app.post('/api/tmdb/correct', (req, res) => {
   const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
   tmdbCache[cacheKey] = data;
   saveDb();
+  addLog('TMDB Corrected', 'Admin', `Corrected TMDB data for query: ${query} (Type: ${type})`);
   res.json({ success: true, data });
 });
 
@@ -836,6 +849,7 @@ app.post('/api/tmdb/override', async (req, res) => {
            }
       }
       saveDb();
+      addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle})`);
       return res.json({ success: true, data });
     }
 
@@ -873,6 +887,7 @@ app.post('/api/tmdb/override', async (req, res) => {
            }
        }
        saveDb();
+       addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
        return res.json({ success: true, data });
     }
     res.status(404).json({ error: 'Not found' });
@@ -900,6 +915,7 @@ app.post('/api/tmdb/autofetch/start', (req, res) => {
   }
 
   let token = req.headers.authorization;
+  addLog("Autofetch Started", "Admin", "Started TMDB autofetch");
   if (!token || token === 'guest-token') token = getOpenlistApiKey();
 
   let { targetPath } = req.body;
@@ -1027,6 +1043,7 @@ app.post('/api/tmdb/autofetch/start', (req, res) => {
 
 app.post('/api/tmdb/autofetch/stop', (req, res) => {
   autoFetchJob.isRunning = false;
+  addLog("Autofetch Stopped", "Admin", "Stopped TMDB autofetch");
   autoFetchJob.message = 'Auto-fetch stopped.';
   res.json({ success: true, message: 'Stopped' });
 });
@@ -1195,6 +1212,7 @@ app.post('/api/jellyfin/override', (req, res) => {
     
     jfOverrides[jfName] = { openlistPath, category, year };
     fs.writeFileSync(jfOverrideFile, JSON.stringify(jfOverrides, null, 2));
+    addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
     
     res.json({ success: true, overrides: jfOverrides });
 });
