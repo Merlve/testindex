@@ -363,6 +363,11 @@ export default function Users() {
                     <span className="text-xs text-gray-500 uppercase tracking-wider font-bold">
                       {u.disabled ? 'Disabled' : 'Active'}
                     </span>
+                    {expirations[u.id] && (
+                      <span className="text-[10px] text-gray-400 font-medium ml-auto truncate" title={new Date(expirations[u.id]).toLocaleString()}>
+                        Expires: {new Date(expirations[u.id]).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
