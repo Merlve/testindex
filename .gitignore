@@ -12,3 +12,5 @@ watchlists/
 bun.lock
 jellyfin_cache.json
 jf_override.json
+activity_logs.json
+users_expirations.json
