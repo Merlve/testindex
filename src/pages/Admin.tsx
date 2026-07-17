@@ -3,10 +3,14 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
 import { Settings, Activity } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 
 export default function Admin() {
   const { token } = useAuth();
-  const [activeTab, setActiveTab] = useState('settings');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'settings';
+  const setActiveTab = (tab: string) => setSearchParams({ tab });
+
   const [config, setConfig] = useState({ openlistUrl: '', basePath: '' });
   const [msg, setMsg] = useState('');
   
@@ -229,7 +233,7 @@ export default function Admin() {
           <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">Tracks logins, batch updates, and sensitive operations.</p>
           
           <div className="space-y-4">
-            {logs.length === 0 ? (
+            {!Array.isArray(logs) || logs.length === 0 ? (
               <p className="text-gray-500 text-sm">No activity logs found.</p>
             ) : (
               logs.map(log => (

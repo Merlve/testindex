@@ -208,24 +208,23 @@ app.post('/api/users/expirations', (req, res) => {
   res.json({ success: true });
 });
 
-// Expiration checking job (runs every hour to disable expired users at 8 AM)
+// Expiration checking job (runs every minute to disable expired users)
 setInterval(async () => {
   try {
+    const adminToken = process.env.OPENLIST_API_KEY;
+    if (!adminToken) return;
+
+    const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`;
+    const listRes = await axios.get(targetUrl, { headers: { Authorization: adminToken } });
+    const users = listRes.data?.data?.content || [];
+    
     const now = new Date();
-    // Only process at 8 AM (server local time, assuming roughly matches expected time)
-    if (now.getHours() === 8) {
-      const todayStr = now.toISOString().split('T')[0];
-      
-      const adminToken = process.env.OPENLIST_API_KEY;
-      if (!adminToken) return;
 
-      const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`;
-      const listRes = await axios.get(targetUrl, { headers: { Authorization: adminToken } });
-      const users = listRes.data?.data?.content || [];
-
-      for (const user of users) {
-        const expDateStr = userExpirations[user.id];
-        if (expDateStr && expDateStr <= todayStr && !user.disabled) {
+    for (const user of users) {
+      const expDateStr = userExpirations[user.id];
+      if (expDateStr && !user.disabled) {
+        const expDate = new Date(expDateStr);
+        if (expDate <= now) {
           console.log(`[CRON] Disabling user ${user.username} as their expiration date ${expDateStr} has been reached.`);
           const updateUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/update`;
           await axios.post(updateUrl, {
@@ -238,30 +237,9 @@ setInterval(async () => {
   } catch (e) {
     console.error('[CRON Error checking user expirations]:', e);
   }
-}, 60 * 60 * 1000); // Check every hour
+}, 60 * 1000); // Check every minute
 // ------------------------
 
-// API: Openlist Proxy - Admin
-app.all('/api/admin/*', async (req, res) => {
-  try {
-    const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}${req.originalUrl}`;
-    const token = req.headers.authorization;
-    const response = await axios({
-      method: req.method as any,
-      url: targetUrl,
-      data: req.body,
-      headers: { Authorization: token || '' }
-    });
-    res.json(response.data);
-  } catch (error: any) {
-    if (error.response?.data) {
-      return res.status(error.response.status).json(error.response.data);
-    }
-    res.status(500).json({ error: 'Proxy error' });
-  }
-});
-
-// API: Openlist Proxy - Login
 // --- Activity Logs ---
 const logsFile = path.join(process.cwd(), 'activity_logs.json');
 let activityLogs: any[] = [];
@@ -287,6 +265,28 @@ app.post('/api/admin/log', (req, res) => {
   addLog(action, username || 'System/Admin', details);
   res.json({ success: true });
 });
+
+// API: Openlist Proxy - Admin
+app.all('/api/admin/*', async (req, res) => {
+  try {
+    const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}${req.originalUrl}`;
+    const token = req.headers.authorization;
+    const response = await axios({
+      method: req.method as any,
+      url: targetUrl,
+      data: req.body,
+      headers: { Authorization: token || '' }
+    });
+    res.json(response.data);
+  } catch (error: any) {
+    if (error.response?.data) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    res.status(500).json({ error: 'Proxy error' });
+  }
+});
+
+// API: Openlist Proxy - Login
 
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;

@@ -235,7 +235,7 @@ export default function Users() {
               </p>
               
               <input
-                type={bulkAction === 'password' ? 'text' : 'date'}
+                type={bulkAction === 'password' ? 'text' : 'datetime-local'}
                 value={bulkValue}
                 onChange={e => setBulkValue(e.target.value)}
                 className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors mb-6"
@@ -505,14 +505,14 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
         </div>
 
         <div className="bg-white/50 dark:bg-[#08080a]/50 p-6 rounded-2xl border border-black/5 dark:border-white/5">
-          <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-4">Expiration Date (8 AM)</label>
+          <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-4">Expiration Date & Time</label>
           <input 
-            type="date"
+            type="datetime-local"
             className="w-full bg-white dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:border-purple-500 focus:outline-none transition-colors"
             value={formData.expirationDate}
             onChange={e => setFormData({...formData, expirationDate: e.target.value})}
           />
-          <p className="text-[10px] text-gray-500 mt-2">Leave empty for no expiration. Disables automatically on set date at 8:00 AM.</p>
+          <p className="text-[10px] text-gray-500 mt-2">Leave empty for no expiration. User will be disabled automatically on the set date and time.</p>
         </div>
       </div>
 
