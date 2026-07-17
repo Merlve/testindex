@@ -595,11 +595,9 @@ export default function Details() {
                     )}
                   </>
                 )}
-                {user === 'admin' && (
-                  <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder from openlist">
-                    <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
-                  </button>
-                )}
+                <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder from openlist">
+                  <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
+                </button>
               </div>
             </div>
 
