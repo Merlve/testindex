@@ -9,6 +9,10 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 - **Smart Integration**: Supports overrides, watchlists, TMDB enrichment (for enhanced metadata, ratings, and posters), and even Telegram notifications for recently added media.
 - **PWA & Mobile Ready**: Responsive, fluid layouts utilizing Tailwind CSS and Framer Motion.
 - **Skeleton Loaders**: Modern UI skeleton screens ensure a smooth perceived performance during data fetching.
+- **Advanced User Management**: Admins can easily manage users with batch operations, import/export functionality, bulk password resets, and account expiration dates.
+- **Automated Expirations**: Built-in cron job automatically disables user accounts when they reach their set expiration date.
+- **Activity Logging**: Comprehensive admin activity logs to audit user modifications, system actions, and cron jobs.
+- **TMDB Auto-fetch**: Automate TMDB metadata fetching across media libraries with start and stop capabilities.
 
 ## Prerequisites
 
@@ -54,10 +58,10 @@ Shindex is containerized and configured via `docker-compose.yml`.
 2. **Prepare data files:**
    The `docker-compose.yml` mounts several local files so data persists across container restarts. Create these empty files/directories before starting:
    ```bash
-   touch config.json db.json jf_override.json jellyfin_cache.json
+   touch config.json db.json jf_override.json jellyfin_cache.json activity_logs.json users_expirations.json
    mkdir watchlists
    ```
-   *Note: If the application complains about invalid JSON on startup, simply add `{}` to the empty `.json` files.*
+   *Note: If the application complains about invalid JSON on startup, simply add `{}` to the empty `.json` files. The array-based ones like `activity_logs.json` should have `[]`.*
 
 3. **Configure your environment variables:**
    Ensure you have provided the necessary environment variables either by creating a `.env` file in the same directory as the `docker-compose.yml` or exporting them in your terminal.
@@ -66,13 +70,11 @@ Shindex is containerized and configured via `docker-compose.yml`.
    ```bash
    docker-compose up -d
    ```
-
    The container will build the app and start it up. It will be accessible at `http://localhost:4344` by default.
 
 ### Changing Ports
 
 If port `4344` is already in use or you prefer a different external port, you can change it in the `docker-compose.yml`:
-
 ```yaml
     ports:
       - "8080:4344" # Exposes the app on port 8080 externally
@@ -112,9 +114,10 @@ To access it, you must be logged in as a user with admin privileges (usually map
 
 - **Route:** Navigate to `/admin`
 - **Capabilities:**
-  - Modify site name, logo, description.
-  - Flush TMDB and Jellyfin caches.
-  - Edit Jellyfin search overrides to fix mismatched TMDB mapping.
+  - **User Management:** Import/export users, bulk set passwords, manage user expirations, enable/disable accounts.
+  - **Site Configuration:** Modify site name, logo, description, and base paths.
+  - **Activity Logs:** Audit log dashboard for tracking settings changes, user operations, and automatic background cron executions.
+  - **TMDB & Jellyfin Management:** Flush caches, manually override incorrectly mapped TMDB media, start/stop automated TMDB metadata fetches.
 
 ## Troubleshooting
 
