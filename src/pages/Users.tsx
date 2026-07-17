@@ -9,6 +9,7 @@ export default function Users() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const { token } = useAuth();
   const [expirations, setExpirations] = useState<Record<string, string>>({});
   
@@ -43,9 +44,11 @@ export default function Users() {
     fetchExpirations();
   }, [token]);
 
-  const filteredUsers = users.filter(u => 
-    u.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.username.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'all' ? true : (statusFilter === 'active' ? !u.disabled : u.disabled);
+    return matchesSearch && matchesStatus;
+  });
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredUsers.length) {
@@ -262,6 +265,15 @@ export default function Users() {
         )}
 
         <div className="flex items-center gap-4">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled')}
+            className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
+          >
+            <option value="all">All Users</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </select>
           <div className="relative max-w-xs w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
