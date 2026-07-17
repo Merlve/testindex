@@ -198,7 +198,7 @@ app.get('/api/users/expirations', (req, res) => {
 
 app.post('/api/users/expirations', (req, res) => {
   const { userId, expirationDate } = req.body;
-  if (!userId) return res.status(400).json({ error: 'Missing userId' });
+  if (userId === undefined || userId === null) return res.status(400).json({ error: 'Missing userId' });
   
   if (expirationDate) {
     userExpirations[userId] = expirationDate;
@@ -234,6 +234,9 @@ setInterval(async () => {
             disabled: true
           }, { headers: { Authorization: adminToken } });
           addLog('cron_disable', 'System/Cron', `User ${user.username} was disabled automatically. Expired: ${expDateStr}`);
+          
+          delete userExpirations[user.id];
+          fs.writeFileSync(expirationsFile, JSON.stringify(userExpirations, null, 2));
         }
       }
     }

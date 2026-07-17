@@ -1,0 +1,44 @@
+[
+  {
+    "id": "1784274669424",
+    "timestamp": "2026-07-17T07:51:09.424Z",
+    "action": "User Expiration Set",
+    "username": "Admin",
+    "details": "Set expiration for user 3 to none"
+  },
+  {
+    "id": "1784274664109",
+    "timestamp": "2026-07-17T07:51:04.109Z",
+    "action": "User Expiration Set",
+    "username": "Admin",
+    "details": "Set expiration for user 3 to 2024-01-01T00:00"
+  },
+  {
+    "id": "1784274655463",
+    "timestamp": "2026-07-17T07:50:55.463Z",
+    "action": "User Expiration Set",
+    "username": "Admin",
+    "details": "Set expiration for user 3 to none"
+  },
+  {
+    "id": "1784273875733",
+    "timestamp": "2026-07-17T07:37:55.733Z",
+    "action": "TMDB Overridden",
+    "username": "Admin",
+    "details": "Overrode TMDB data for query: Silo with ID: 125988"
+  },
+  {
+    "id": "1784273857322",
+    "timestamp": "2026-07-17T07:37:37.322Z",
+    "action": "TMDB Overridden",
+    "username": "Admin",
+    "details": "Overrode TMDB data for query: Sugar with ID: 203744"
+  },
+  {
+    "id": "1784272228652",
+    "timestamp": "2026-07-17T07:10:28.652Z",
+    "action": "Login Success",
+    "username": "admin",
+    "details": "User logged in successfully."
+  }
+]
