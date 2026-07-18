@@ -414,7 +414,7 @@ export default function Details() {
     }
   };
 
-  if (loading) return <DetailsSkeleton />;
+  if (loading) return <DetailsSkeleton onRefresh={handleRefreshFolder} refreshingFolder={refreshingFolder} />;
 
   const backdrop = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` : null;
   const isVideo = (name: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
