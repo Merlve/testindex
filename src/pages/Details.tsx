@@ -93,8 +93,14 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
               <a href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
                 <ExternalLink size={14} className="text-blue-500" /> Infuse
               </a>
-              <a href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;scheme=${url.startsWith('https') ? 'https' : 'http'};end;`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+              <a href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
                 <ExternalLink size={14} className="text-purple-500" /> MPV
+              </a>
+              <a href={`potplayer://${url}`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+                <ExternalLink size={14} className="text-yellow-500" /> PotPlayer
+              </a>
+              <a href={`iina://weblink?url=${encodeURIComponent(url)}`} className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+                <ExternalLink size={14} className="text-indigo-500" /> IINA
               </a>
             </>
           )}
