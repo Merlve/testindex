@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 interface AuthContextType {
   user: string | null;
@@ -13,8 +13,54 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<string | null>(localStorage.getItem('qs_user'));
   const [token, setToken] = useState<string | null>(localStorage.getItem('qs_token'));
+  const [inactivityTimeoutMinutes, setInactivityTimeoutMinutes] = useState<number>(0);
 
   
+
+  useEffect(() => {
+    if (token) {
+       axios.get('/api/config').then(res => {
+         if (res.data && res.data.inactivityTimeout !== undefined) {
+            setInactivityTimeoutMinutes(res.data.inactivityTimeout);
+         }
+       }).catch(console.error);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || inactivityTimeoutMinutes <= 0) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        logout();
+        
+      }, inactivityTimeoutMinutes * 60 * 1000);
+    };
+
+    resetTimer();
+
+    // Throttle the activity handler to avoid excessive clearTimeout/setTimeout
+    let throttled = false;
+    const handleActivity = () => {
+      if (!throttled) {
+        resetTimer();
+        throttled = true;
+        setTimeout(() => { throttled = false; }, 1000);
+      }
+    };
+
+    const events = ['mousemove', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach(e => window.addEventListener(e, handleActivity));
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(e => window.removeEventListener(e, handleActivity));
+    };
+  }, [token, inactivityTimeoutMinutes]);
+
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       response => {

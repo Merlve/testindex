@@ -1,4 +1,7 @@
+const fs = require('fs');
+let code = fs.readFileSync('src/components/Bot.tsx', 'utf8');
 
+const botComponent = `
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -50,7 +53,7 @@ export default function Bot() {
     <AnimatePresence>
       {isVisible && (
         <motion.a 
-          href={`https://wa.me/${whatsappNumber}`}
+          href={\`https://wa.me/\${whatsappNumber}\`}
           target="_blank"
           rel="noopener noreferrer"
           initial={{ opacity: 0, scale: 0.8, y: 20 }}
@@ -65,3 +68,6 @@ export default function Bot() {
     </AnimatePresence>
   );
 }
+`
+
+fs.writeFileSync('src/components/Bot.tsx', botComponent);

@@ -25,7 +25,8 @@ app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended:
 const configPath = path.join(process.cwd(), 'config.json');
 let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
-  basePath: '/home'
+  basePath: '/home',
+  inactivityTimeout: 0 // minutes, 0 means disabled
 };
 try {
   if (fs.existsSync(configPath)) {
@@ -180,12 +181,14 @@ app.get('/api/watchlist/check', (req, res) => {
 app.get('/api/config', (req, res) => {
   res.json({
     openlistUrl: getOpenlistUrl(),
-    basePath: appConfig.basePath
+    basePath: appConfig.basePath,
+    inactivityTimeout: appConfig.inactivityTimeout || 0
   });
 });
 app.post('/api/config', (req, res) => {
-  if (req.body.openlistUrl) appConfig.openlistUrl = req.body.openlistUrl;
-  if (req.body.basePath) appConfig.basePath = req.body.basePath;
+  if (req.body.openlistUrl !== undefined) appConfig.openlistUrl = req.body.openlistUrl;
+  if (req.body.basePath !== undefined) appConfig.basePath = req.body.basePath;
+  if (req.body.inactivityTimeout !== undefined) appConfig.inactivityTimeout = Number(req.body.inactivityTimeout) || 0;
   saveConfig();
   addLog('Config Updated', 'Admin', 'Updated application configuration settings.');
   res.json({ success: true, config: appConfig });
@@ -814,6 +817,38 @@ app.get('/api/tmdb/search', async (req, res) => {
   }
 });
 
+app.get('/api/tmdb/collections', (req, res) => {
+  const collections: Record<number, any> = {};
+  for (const key in tmdbCache) {
+    const item = tmdbCache[key];
+    if (item && item.belongs_to_collection) {
+      const cId = item.belongs_to_collection.id;
+      if (!collections[cId]) {
+        collections[cId] = {
+           id: cId,
+           name: item.belongs_to_collection.name,
+           poster_path: item.belongs_to_collection.poster_path,
+           backdrop_path: item.belongs_to_collection.backdrop_path,
+           queries: new Set<string>()
+        };
+      }
+      const match = key.match(/^[A-Z]+-(.+?)(?:-\d{4})?$/);
+      if (match) {
+          collections[cId].queries.add(match[1]);
+      } else {
+          collections[cId].queries.add(key.replace(/^[A-Z]+-/, ''));
+      }
+    }
+  }
+  
+  const result = Object.values(collections).map(c => ({
+    ...c,
+    queries: Array.from(c.queries)
+  }));
+  
+  res.json({ success: true, collections: result });
+});
+
 app.get('/api/tmdb/trending', async (req, res) => {
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return res.json({ results: [] });
@@ -907,6 +942,77 @@ app.post('/api/tmdb/override', async (req, res) => {
     console.error('TMDB Override Error', error.message);
     res.status(500).json({ error: 'TMDB fetch failed' });
   }
+});
+
+
+let collectionScanJob = {
+  isRunning: false,
+  message: '',
+  count: 0,
+  total: 0
+};
+
+app.get('/api/tmdb/scan_collections/status', (req, res) => {
+  res.json(collectionScanJob);
+});
+
+app.post('/api/tmdb/scan_collections/start', (req, res) => {
+  if (collectionScanJob.isRunning) {
+    return res.json({ success: false, message: 'Already running' });
+  }
+
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.status(500).json({ error: 'TMDB key missing' });
+
+  collectionScanJob.isRunning = true;
+  collectionScanJob.message = 'Starting collection scan...';
+  collectionScanJob.count = 0;
+  
+  (async () => {
+    try {
+      const keys = Object.keys(tmdbCache).filter(k => k.startsWith('movie-') || (tmdbCache[k] && tmdbCache[k].title));
+      collectionScanJob.total = keys.length;
+      
+      let modified = false;
+      for (const key of keys) {
+        if (!collectionScanJob.isRunning) break;
+        
+        const item = tmdbCache[key];
+        if (item && item.id && item.belongs_to_collection === undefined && !item._collection_checked) {
+          try {
+            const movieRes = await axios.get(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${tmdbKey}`);
+            if (movieRes.data) {
+              const fullMovie = movieRes.data;
+              fullMovie._collection_checked = true;
+              tmdbCache[key] = { ...item, ...fullMovie };
+              modified = true;
+            }
+          } catch(e) {
+            tmdbCache[key]._collection_checked = true;
+            modified = true;
+          }
+          await new Promise(r => setTimeout(r, 100)); // 10 req/s, well within 50/s
+        }
+        collectionScanJob.count++;
+        collectionScanJob.message = `Scanning collections... ${collectionScanJob.count} / ${collectionScanJob.total}`;
+      }
+      
+      if (modified) saveDb();
+      collectionScanJob.message = `Finished collection scan. Processed ${collectionScanJob.count} items.`;
+    } catch(e) {
+      collectionScanJob.message = `Error: ${e.message}`;
+    } finally {
+      collectionScanJob.isRunning = false;
+    }
+  })();
+  
+  res.json({ success: true });
+});
+
+app.post('/api/tmdb/scan_collections/stop', (req, res) => {
+  collectionScanJob.isRunning = false;
+  collectionScanJob.message = 'Scan stopped.';
+  res.json({ success: true, message: 'Stopped' });
 });
 
 let autoFetchJob = {

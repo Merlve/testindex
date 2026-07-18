@@ -139,10 +139,13 @@ export default function Dashboard() {
       </div>
       {featured && (
         <FeaturedSlide 
-        featured={featured} 
-        slideIndex={slideIndex} 
-        totalSlides={featuredItems.length} 
-      />
+         featured={featured} 
+         slideIndex={slideIndex} 
+         totalSlides={featuredItems.length} 
+         onNext={() => setSlideIndex(prev => (prev + 1) % featuredItems.length)}
+         onPrev={() => setSlideIndex(prev => (prev - 1 + featuredItems.length) % featuredItems.length)}
+         onSetSlide={(idx) => setSlideIndex(idx)}
+       />
       )}
 
       <div className="px-4 sm:px-8 flex-1 space-y-12 pb-12">

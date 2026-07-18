@@ -11,7 +11,7 @@ export default function Admin() {
   const activeTab = searchParams.get('tab') || 'settings';
   const setActiveTab = (tab: string) => setSearchParams({ tab });
 
-  const [config, setConfig] = useState({ openlistUrl: '', basePath: '' });
+  const [config, setConfig] = useState({ openlistUrl: '', basePath: '', inactivityTimeout: 0 });
   const [msg, setMsg] = useState('');
   
   // TMDB Correction State
@@ -136,6 +136,16 @@ export default function Admin() {
               className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
               value={config.basePath}
               onChange={e => setConfig({ ...config, basePath: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-gray-600 dark:text-gray-400 mb-2 text-xs font-bold uppercase tracking-wider">Inactivity Logout Timer (Minutes, 0 to disable)</label>
+            <input 
+              type="number"
+              min="0"
+              className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
+              value={config.inactivityTimeout}
+              onChange={e => setConfig({ ...config, inactivityTimeout: parseInt(e.target.value) || 0 })}
             />
           </div>
           <button onClick={handleConfigSave} className="bg-purple-600 text-black px-6 py-2 rounded-xl font-bold hover:bg-purple-400 shadow-lg shadow-purple-600/20 transition-all">Save Configuration</button>
