@@ -4,7 +4,7 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 
 ## Features
 
-- **Dashboard**: A stunning, modern UI with an interactive hero slider for featured content (supports touch/mouse swiping), trending carousels, and category-based grids.
+- **Dashboard**: A stunning, modern UI with an interactive hero slider for featured content (supports touch/mouse swiping, smooth liquid glass navigation arrows), trending carousels, and category-based grids.
 - **Unified Media View**: Seamlessly fetch and display media from Jellyfin and Openlist.
 - **Smart Integration**: Supports overrides, watchlists, TMDB enrichment (for enhanced metadata, ratings, and posters), and even Telegram notifications for recently added media.
 - **PWA & Mobile Ready**: Responsive, fluid layouts utilizing Tailwind CSS and Framer Motion.

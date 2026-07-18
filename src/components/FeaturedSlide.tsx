@@ -1,13 +1,27 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router';
-import { Play } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { parseMediaName } from '../utils/nameParser';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNext, onPrev, onSetSlide }: { featured: any, slideIndex: number, totalSlides: number, onNext?: () => void, onPrev?: () => void, onSetSlide?: (idx: number) => void }) {
   const [tmdb, setTmdb] = useState<any>(null);
   
+  const [prevIndex, setPrevIndex] = useState(slideIndex);
+  const [direction, setDirection] = useState(0);
+
+  useEffect(() => {
+    if (slideIndex > prevIndex) setDirection(1);
+    else if (slideIndex < prevIndex) setDirection(-1);
+    
+    // Handle wrap around
+    if (slideIndex === 0 && prevIndex === totalSlides - 1) setDirection(1);
+    if (slideIndex === totalSlides - 1 && prevIndex === 0) setDirection(-1);
+    
+    setPrevIndex(slideIndex);
+  }, [slideIndex, prevIndex, totalSlides]);
+
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const minSwipeDistance = 50;
@@ -94,10 +108,10 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
         <AnimatePresence mode="popLayout">
           <motion.div 
             key={slideIndex}
-            initial={{ opacity: 0.5, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0.5, scale: 1.02 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0, x: direction > 0 ? 100 : -100, filter: 'blur(8px)' }}
+            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: direction > 0 ? -100 : 100, filter: 'blur(8px)' }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 pointer-events-none"
           >
             {backdrop && (
@@ -106,6 +120,22 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
           </motion.div>
         </AnimatePresence>
         <div className="absolute inset-0 bg-gradient-to-r from-[#fffcf9] dark:from-[#08080a]/90 via-[#fffcf9]/60 dark:via-[#08080a]/60 to-transparent z-10 pointer-events-none"></div>
+
+        {/* Left Arrow */}
+        <button 
+          onClick={(e) => { e.stopPropagation(); onPrev && onPrev(); }} 
+          className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white hover:bg-white/30 dark:hover:bg-white/20 hover:scale-110 transition-all opacity-100 pointer-events-auto shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] flex"
+        >
+          <ChevronLeft size={24} />
+        </button>
+
+        {/* Right Arrow */}
+        <button 
+          onClick={(e) => { e.stopPropagation(); onNext && onNext(); }} 
+          className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white hover:bg-white/30 dark:hover:bg-white/20 hover:scale-110 transition-all opacity-100 pointer-events-auto shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] flex"
+        >
+          <ChevronRight size={24} />
+        </button>
         
         <div className="relative z-20 h-full flex flex-col justify-center px-6 sm:px-12">
           <span className="inline-block px-3 py-1 bg-purple-300 dark:bg-purple-600 text-black dark:text-white text-[10px] font-bold rounded-full mb-4 w-fit tracking-wider pointer-events-none">FEATURED</span>
