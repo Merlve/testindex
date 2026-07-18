@@ -4,7 +4,7 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 
 ## Features
 
-- **Dashboard**: A stunning, modern UI with a hero slide for featured content, trending carousels, and category-based grids.
+- **Dashboard**: A stunning, modern UI with an interactive hero slider for featured content (supports touch/mouse swiping), trending carousels, and category-based grids.
 - **Unified Media View**: Seamlessly fetch and display media from Jellyfin and Openlist.
 - **Smart Integration**: Supports overrides, watchlists, TMDB enrichment (for enhanced metadata, ratings, and posters), and even Telegram notifications for recently added media.
 - **PWA & Mobile Ready**: Responsive, fluid layouts utilizing Tailwind CSS and Framer Motion.
@@ -115,7 +115,7 @@ To access it, you must be logged in as a user with admin privileges (usually map
 - **Route:** Navigate to `/admin`
 - **Capabilities:**
   - **User Management:** Import/export users, bulk set passwords, manage user expirations, enable/disable accounts.
-  - **Site Configuration:** Modify site name, logo, description, and base paths.
+  - **Site Configuration:** Modify site name, logo, description, base paths, and configure an automatic inactivity logout timer.
   - **Activity Logs:** Audit log dashboard for tracking settings changes, user operations, and automatic background cron executions.
   - **TMDB & Jellyfin Management:** Flush caches, manually override incorrectly mapped TMDB media, start/stop automated TMDB metadata fetches.
 

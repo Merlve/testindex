@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "shindex",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Shindex - A sleek, unified frontend dashboard for your media infrastructure.",
   "type": "module",
   "scripts": {
     "dev": "TZ=Africa/Lagos tsx server.ts",
