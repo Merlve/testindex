@@ -1,5 +1,6 @@
 export function parseMediaName(rawName: string) {
-  let cleanName = rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
+  const baseName = rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
+  let cleanName = baseName;
   
   // Extract year FIRST
   const yearRegex = /(?:^|[._\-\s\(])(19\d{2}|20\d{2})(?:[._\-\s\)]|$)/g;
@@ -18,6 +19,13 @@ export function parseMediaName(rawName: string) {
   cleanName = cleanName.replace(/[\(\[].*?[\)\]]/g, " ");
   cleanName = cleanName.replace(/\b(720p|1080p|1080i|2160p|4k|8k|webdl|web-dl|webrip|hdrip|bluray|x264|x265|hevc|aac|dts|hdtv|remux)\b/gi, " ");
   cleanName = cleanName.replace(/[._\-\s]+/g, " ").trim();
+  
+  if (!cleanName) {
+      cleanName = baseName.trim();
+  }
+  if (!cleanName) {
+      cleanName = "Unknown";
+  }
   
   return { cleanName, year };
 }

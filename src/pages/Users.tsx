@@ -225,7 +225,10 @@ export default function Users() {
   return (
     <div className="p-4 md:p-8 lg:p-12 max-w-6xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-3xl font-bold text-black dark:text-white">User Management</h2>
+        <div>
+          <h2 className="text-3xl font-bold text-black dark:text-white">User Management</h2>
+          <p className="text-sm text-gray-500 mt-1">{users.filter(u => !u.disabled).length} active users</p>
+        </div>
         
         {bulkAction && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
