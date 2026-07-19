@@ -13,7 +13,7 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
     const fetchTrending = async () => {
       try {
         setLoading(true);
-        const res = await axios.get('/api/tmdb/trending');
+        const res = await axios.get('/api/meta/trending');
         const results = res.data?.results || [];
         
         const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name })));

@@ -31,12 +31,13 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
       let searchName = featured.name;
       const { cleanName, year } = parseMediaName(searchName);
       try {
-        const res = await axios.get(`/api/tmdb/search?query=${encodeURIComponent(cleanName)}&type=${featured.category}${year ? `&year=${year}` : ''}`);
+        console.log("Fetching TMDB for featured:", { cleanName, category: featured.category, year });
+        const res = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${featured.category}${year ? `&year=${year}` : ''}`);
         if (res.data) {
           setTmdb(res.data);
         }
-      } catch (err) {
-        console.error("TMDB fetch error for featured", err);
+      } catch (err: any) {
+        console.error("TMDB fetch error for featured details:", { message: err.message, status: err.response?.status, data: err.response?.data, config: err.config });
       }
     };
     if (featured) {

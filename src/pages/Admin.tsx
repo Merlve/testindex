@@ -42,7 +42,7 @@ export default function Admin() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await axios.get('/api/tmdb/autofetch/status');
+        const res = await axios.get('/api/meta/autofetch/status');
         setAutoFetchLoading(res.data.isRunning);
         if (res.data.message) {
           setAutoFetchMsg(res.data.message);
@@ -69,7 +69,7 @@ export default function Admin() {
     try {
       const parsed = JSON.parse(tmdbData);
       const { cleanName, year } = parseMediaName(tmdbQuery);
-      await axios.post('/api/tmdb/correct', { query: cleanName, type: tmdbType, year, data: parsed });
+      await axios.post('/api/meta/correct', { query: cleanName, type: tmdbType, year, data: parsed });
       alert('TMDB Metadata corrected!');
     } catch (e) {
       alert('Invalid JSON or server error');
@@ -79,7 +79,7 @@ export default function Admin() {
   const handleAutoFetch = async () => {
     if (autoFetchLoading) {
       // Stop it
-      await axios.post('/api/tmdb/autofetch/stop');
+      await axios.post('/api/meta/autofetch/stop');
       setAutoFetchLoading(false);
       return;
     }
@@ -87,7 +87,7 @@ export default function Admin() {
     setAutoFetchMsg('Starting auto-fetch...');
     try {
       const targetPath = autoFetchPath || config.basePath || '/home';
-      await axios.post('/api/tmdb/autofetch/start', { targetPath }, { headers: { Authorization: token } });
+      await axios.post('/api/meta/autofetch/start', { targetPath }, { headers: { Authorization: token } });
     } catch (e: any) {
       setAutoFetchMsg(`Error during auto-fetch: ${e.message}`);
       setAutoFetchLoading(false);

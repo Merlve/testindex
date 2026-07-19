@@ -555,7 +555,7 @@ app.post('/api/fs/search', async (req, res) => {
 });
 
 // API: TMDB Proxy with Cache
-app.get('/api/tmdb/search_all', async (req, res) => {
+app.get('/api/meta/search_all', async (req, res) => {
   const { query, type, year, forceType } = req.query;
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
@@ -624,7 +624,7 @@ app.get('/api/tmdb/search_all', async (req, res) => {
 });
 
 
-app.post('/api/tmdb/batch', async (req, res) => {
+app.post('/api/meta/batch', async (req, res) => {
   const { items } = req.body;
   if (!Array.isArray(items)) return res.status(400).json({ error: 'Array required' });
 
@@ -711,7 +711,7 @@ app.post('/api/tmdb/batch', async (req, res) => {
   res.json(results);
 });
 
-app.get('/api/tmdb/search', async (req, res) => {
+app.get('/api/meta/search', async (req, res) => {
   const { query, type, year, tmdbId } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
@@ -825,7 +825,7 @@ app.get('/api/tmdb/search', async (req, res) => {
   }
 });
 
-app.get('/api/tmdb/collections', (req, res) => {
+app.get('/api/meta/collections', (req, res) => {
   const collections: Record<number, any> = {};
   for (const key in tmdbCache) {
     const item = tmdbCache[key];
@@ -857,7 +857,7 @@ app.get('/api/tmdb/collections', (req, res) => {
   res.json({ success: true, collections: result });
 });
 
-app.get('/api/tmdb/trending', async (req, res) => {
+app.get('/api/meta/trending', async (req, res) => {
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return res.json({ results: [] });
   
@@ -872,7 +872,7 @@ app.get('/api/tmdb/trending', async (req, res) => {
 });
 
 // Admin correction for TMDB
-app.post('/api/tmdb/correct', (req, res) => {
+app.post('/api/meta/correct', (req, res) => {
   const { query, type, year, data } = req.body;
   if (!query || !data) return res.status(400).json({ error: 'Invalid data' });
   const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
@@ -883,7 +883,7 @@ app.post('/api/tmdb/correct', (req, res) => {
 });
 
 // Admin override for TMDB by ID
-app.post('/api/tmdb/override', async (req, res) => {
+app.post('/api/meta/override', async (req, res) => {
   const { query, type, year, tmdbId, customTitle } = req.body;
   if (!query || (!tmdbId && !customTitle)) return res.status(400).json({ error: 'Invalid data' });
   
@@ -960,11 +960,11 @@ let collectionScanJob = {
   total: 0
 };
 
-app.get('/api/tmdb/scan_collections/status', (req, res) => {
+app.get('/api/meta/scan_collections/status', (req, res) => {
   res.json(collectionScanJob);
 });
 
-app.post('/api/tmdb/scan_collections/start', (req, res) => {
+app.post('/api/meta/scan_collections/start', (req, res) => {
   if (collectionScanJob.isRunning) {
     return res.json({ success: false, message: 'Already running' });
   }
@@ -1017,7 +1017,7 @@ app.post('/api/tmdb/scan_collections/start', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/tmdb/scan_collections/stop', (req, res) => {
+app.post('/api/meta/scan_collections/stop', (req, res) => {
   collectionScanJob.isRunning = false;
   collectionScanJob.message = 'Scan stopped.';
   res.json({ success: true, message: 'Stopped' });
@@ -1031,11 +1031,11 @@ let autoFetchJob = {
   failedItems: [] as { name: string, path: string }[]
 };
 
-app.get('/api/tmdb/autofetch/status', (req, res) => {
+app.get('/api/meta/autofetch/status', (req, res) => {
   res.json(autoFetchJob);
 });
 
-app.post('/api/tmdb/autofetch/start', (req, res) => {
+app.post('/api/meta/autofetch/start', (req, res) => {
   if (autoFetchJob.isRunning) {
     return res.json({ success: false, message: 'Already running' });
   }
@@ -1167,7 +1167,7 @@ app.post('/api/tmdb/autofetch/start', (req, res) => {
   res.json({ success: true, message: 'Started' });
 });
 
-app.post('/api/tmdb/autofetch/stop', (req, res) => {
+app.post('/api/meta/autofetch/stop', (req, res) => {
   autoFetchJob.isRunning = false;
   addLog("Autofetch Stopped", "Admin", "Stopped TMDB autofetch");
   autoFetchJob.message = 'Auto-fetch stopped.';

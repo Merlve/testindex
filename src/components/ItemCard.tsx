@@ -33,7 +33,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       const searchYear = jfYear || year;
       
       try {
-        let url = `/api/tmdb/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}`;
+        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}`;
         if (item._jf && item._jf.tmdbId) {
             url += `&tmdbId=${item._jf.tmdbId}`;
         }
@@ -45,7 +45,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
           setTmdb(res.data);
         } else if (item._jf && item._jf.tmdbId) {
           // Fallback to fetch by ID if search failed
-          const fallbackRes = await axios.get(`/api/tmdb/search_all?query=fallback&type=${category}&tmdbId=${item._jf.tmdbId}`);
+          const fallbackRes = await axios.get(`/api/meta/search_all?query=fallback&type=${category}&tmdbId=${item._jf.tmdbId}`);
           if (fallbackRes.data?.results?.[0]) {
              setTmdb(fallbackRes.data.results[0]);
           } else if (fallbackRes.data && fallbackRes.data.poster_path) {

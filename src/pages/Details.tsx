@@ -257,7 +257,7 @@ export default function Details() {
           searchName = pathParts[pathParts.length - 2];
         }
         const { cleanName, year } = parseMediaName(searchName);
-        const tmdbRes = await axios.get(`/api/tmdb/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}`);
+        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}`);
         if (tmdbRes.data) {
           setTmdb(tmdbRes.data);
           try {
@@ -361,7 +361,7 @@ export default function Details() {
            finalQuery = query.substring(5).trim();
         }
 
-        const url = `/api/tmdb/search_all?query=${encodeURIComponent(finalQuery)}&type=${category}${typeForce ? `&forceType=${typeForce}` : ''}${isId ? `&tmdbId=${finalQuery}` : ''}`;
+        const url = `/api/meta/search_all?query=${encodeURIComponent(finalQuery)}&type=${category}${typeForce ? `&forceType=${typeForce}` : ''}${isId ? `&tmdbId=${finalQuery}` : ''}`;
         const res = await axios.get(url);
         setSearchResults(res.data.results || []);
       } catch(e) {}
@@ -377,7 +377,7 @@ export default function Details() {
       }
       const { cleanName, year } = parseMediaName(searchName);
       
-      const res = await axios.post('/api/tmdb/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' });
       if (res.data.success) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
@@ -400,7 +400,7 @@ export default function Details() {
         searchName = pathParts[pathParts.length - 2];
       }
       const { cleanName, year } = parseMediaName(searchName);
-      const res = await axios.post('/api/tmdb/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle });
       if (res.data.success) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);

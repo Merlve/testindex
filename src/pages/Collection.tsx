@@ -40,7 +40,7 @@ export default function Collection() {
         const allItems = catData.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name })));
         
         // Fetch collections
-        const colRes = await axios.get('/api/tmdb/collections');
+        const colRes = await axios.get('/api/meta/collections');
         const tmdbCollections = colRes.data?.collections || [];
         const targetCol = tmdbCollections.find((c: any) => c.id.toString() === id);
         
