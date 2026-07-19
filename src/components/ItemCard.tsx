@@ -67,7 +67,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
   return (
     <>
     <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={`group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-2 sm:gap-3 ${className || 'w-32 sm:w-48 flex-shrink-0'}`}`}>
-      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all ${viewMode === 'grid' ? 'group-hover:scale-105' : ''} flex-shrink-0`}>
+      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all duration-300 ${viewMode === 'grid' ? 'group-hover:-translate-y-2 group-hover:scale-[1.02] group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)]' : ''} flex-shrink-0`}>
         {tmdb?.poster_path ? (
           <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
         ) : (
@@ -82,11 +82,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
             {Number(tmdb.vote_average).toFixed(1)}
           </div>
         )}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
-           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-purple-600/40">
-             <PlayIcon />
-           </div>
-        </div>
+
       </div>
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
         <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-xs sm:text-sm'}`}>{tmdb?.title || tmdb?.name || item.name}</h3>
@@ -154,8 +150,4 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
   );
 }
 
-function PlayIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-  );
-}
+
