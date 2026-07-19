@@ -37,7 +37,7 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
           setTmdb(res.data);
         }
       } catch (err: any) {
-        console.error("TMDB fetch error for featured details:", { message: err.message, status: err.response?.status, data: err.response?.data, config: err.config });
+        console.log("TMDB fetch error for featured details:", err.message);
       }
     };
     if (featured) {

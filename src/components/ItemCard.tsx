@@ -54,7 +54,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
         }
       } catch (err: any) {
         if (err.message !== 'Network Error' && !err.response) {
-            console.error("TMDB fetch error", err.message || err);
+            console.log("TMDB fetch error", err.message || err);
         }
       }
     };

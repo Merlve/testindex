@@ -3,10 +3,11 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useLocation } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Play, Download, Copy, ExternalLink, ChevronLeft, ChevronDown, ChevronUp, X, Edit2, Bookmark, BookmarkCheck, RefreshCw } from 'lucide-react';
+import { Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Edit2, Bookmark, BookmarkCheck, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { parseMediaName } from '../utils/nameParser';
+import { getGenreNames } from '../utils/genres';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return '0 Bytes';
@@ -118,12 +119,35 @@ export default function Details() {
   const name = pathParts[pathParts.length - 1] || '';
   const category = pathParts[1] || '';
   const isCurrentFile = /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
-  const fileRowPath = isCurrentFile ? pathParts.slice(0, -1).join('/') : fullPath;
+  const originalFileRowPath = isCurrentFile ? pathParts.slice(0, -1).join('/') : fullPath;
 
 
   const { token, user } = useAuth();
+  const [currentBrowsePath, setCurrentBrowsePath] = useState(fullPath);
+  useEffect(() => {
+    setCurrentBrowsePath(fullPath);
+  }, [fullPath]);
+  
+  const currentBrowseName = currentBrowsePath?.split('/').pop() || '';
+  const isBrowseFile = /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(currentBrowseName);
+  const browseFileRowPath = isBrowseFile ? currentBrowsePath.split('/').slice(0, -1).join('/') : currentBrowsePath;
+
   const [items, setItems] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
   const [loading, setLoading] = useState(true);
+  const [loadingFiles, setLoadingFiles] = useState(true);
+  const [initialLoadState, setInitialLoadState] = useState({ path: fullPath, isLoading: true });
+  
+  if (initialLoadState.path !== fullPath) {
+      setInitialLoadState({ path: fullPath, isLoading: true });
+  }
+
+  useEffect(() => {
+    if (!loading && !loadingFiles && currentBrowsePath === fullPath && initialLoadState.path === fullPath) {
+      setInitialLoadState(prev => prev.isLoading ? { ...prev, isLoading: false } : prev);
+    }
+  }, [loading, loadingFiles, currentBrowsePath, fullPath, initialLoadState.path]);
   const [tmdb, setTmdb] = useState<any>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [toast, setToast] = useState('');
@@ -147,6 +171,7 @@ export default function Details() {
       const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}`, refresh: true }, { headers: { Authorization: token } });
       if (res.data.code === 200) {
         setItems(res.data.data.content || []);
+        setCurrentPage(1);
         setToast('Folder refreshed');
         setTimeout(() => setToast(''), 3000);
       } else {
@@ -223,34 +248,59 @@ export default function Details() {
     axios.get('/api/config').then(res => setConfig(res.data));
   }, []);
 
+  // Effect 1: Fetch File List (depends on currentBrowsePath)
   useEffect(() => {
-    const fetchContent = async () => {
+    let isMounted = true;
+    const fetchFileList = async () => {
+      if (!token && user && user !== 'guest') {
+        return; // wait for token
+      }
+      setLoadingFiles(true);
       try {
         if (token) {
-          const isFile = /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
+          const browseName = currentBrowsePath.split('/').pop() || '';
+          const isFile = /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(browseName);
           if (isFile) {
-            setItems([{ name, is_dir: false }]);
+            setItems([{ name: browseName, is_dir: false }]);
+            setCurrentPage(1);
           } else {
-            const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}` }, { headers: { Authorization: token } });
-            if (res.data.code === 200) {
-              setItems(res.data.data?.content || []);
-            } else {
-              if (res.data.message?.includes('not a folder') || res.data.message?.includes('object not found')) {
-                setItems([{ name, is_dir: false }]);
+            const res = await axios.post('/api/fs/list', { reqPath: `/${currentBrowsePath}` }, { headers: { Authorization: token } });
+            if (isMounted) {
+              if (res.data.code === 200) {
+                setItems(res.data.data?.content || []);
+                setCurrentPage(1);
+              } else {
+                if (res.data.message?.includes('not a folder') || res.data.message?.includes('object not found')) {
+                  setItems([{ name: browseName, is_dir: false }]);
+                  setCurrentPage(1);
+                }
               }
             }
           }
         }
       } catch (err: any) {
-        const msg = err.response?.data?.message || '';
-        if (err.response?.status === 500 && (msg.includes('not a folder') || msg.includes('object not found'))) {
-          setItems([{ name, is_dir: false }]);
-        } else {
-          if (err.response) {
+        if (isMounted) {
+          const msg = err.response?.data?.message || '';
+          if (err.response?.status === 500 && (msg.includes('not a folder') || msg.includes('object not found'))) {
+            const browseName = currentBrowsePath.split('/').pop() || '';
+            setItems([{ name: browseName, is_dir: false }]);
+            setCurrentPage(1);
           }
         }
+      } finally {
+        if (isMounted) {
+          setLoadingFiles(false);
+        }
       }
+    };
+    if (currentBrowsePath) fetchFileList();
+    return () => { isMounted = false; };
+  }, [currentBrowsePath, token, user]);
 
+  // Effect 2: Fetch Metadata (depends on fullPath)
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      setLoading(true);
       try {
         let searchName = name;
         if (/^(s\d+|season\s*\d+)$/i.test(name) && pathParts.length > 2) {
@@ -280,7 +330,7 @@ export default function Details() {
           setSearchTitle(cleanName);
         }
       } catch (err) {
-        console.error('Error fetching TMDB metadata', err);
+        console.log('Error fetching TMDB metadata', err.message || err);
         try {
           const recentStr = localStorage.getItem('recently_browsed') || '[]';
           const recent = JSON.parse(recentStr);
@@ -293,19 +343,19 @@ export default function Details() {
         setLoading(false);
       }
     };
-    if (fullPath) fetchContent();
-  }, [fullPath, token, name, category]);
+    if (fullPath) fetchMetadata();
+  }, [fullPath, name, category]);
 
   const getSignedUrl = async (fileName: string) => {
     try {
-      const res = await axios.post('/api/fs/get', { reqPath: `${fileRowPath}/${fileName}` }, { headers: { Authorization: token } });
+      const res = await axios.post('/api/fs/get', { reqPath: `${browseFileRowPath}/${fileName}` }, { headers: { Authorization: token } });
       if (res.data?.data?.raw_url) {
         return res.data.data.raw_url;
       }
     } catch (e) {
       console.error(e);
     }
-    return `${config.openlistUrl}/d/${fileRowPath}/${fileName}`; // Fallback
+    return `${config.openlistUrl}/d/${browseFileRowPath}/${fileName}`; // Fallback
   };
 
   const handleCopyLinks = async () => {
@@ -414,13 +464,16 @@ export default function Details() {
     }
   };
 
-  if (loading) return <DetailsSkeleton onRefresh={handleRefreshFolder} refreshingFolder={refreshingFolder} />;
+  if (initialLoadState.isLoading) return <DetailsSkeleton onRefresh={handleRefreshFolder} refreshingFolder={refreshingFolder} />;
 
   const backdrop = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` : null;
+  const displayGenres = tmdb?.genres ? tmdb.genres.map((g: any) => g.name) : getGenreNames(tmdb?.genre_ids);
   const isVideo = (name: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
   const videoItems = items.filter(i => !i.is_dir && isVideo(i.name));
-
   const dirItems = items.filter(i => i.is_dir);
+  
+  const totalPages = Math.ceil(videoItems.length / itemsPerPage);
+  const paginatedVideoItems = videoItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   
   return (
     <motion.div 
@@ -564,6 +617,15 @@ export default function Details() {
             </button>
           </div>
           <p className="hidden md:block text-xs md:text-sm font-mono text-gray-600 dark:text-gray-400 mb-4 break-words break-all">{fullPath}</p>
+          {displayGenres && displayGenres.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {displayGenres.map((g, i) => (
+                <span key={i} className="px-3 py-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-full text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  {g}
+                </span>
+              ))}
+            </div>
+          )}
           <p className="text-gray-700 dark:text-gray-300 max-w-3xl leading-relaxed text-sm md:text-base mb-6 line-clamp-4 md:line-clamp-none">{tmdb?.overview}</p>
 
           <div className="flex gap-4 mb-4">
@@ -633,23 +695,56 @@ export default function Details() {
               </div>
             ) : (
               <>
-                {dirItems.length > 0 && (
+                {loadingFiles ? (
                   <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="flex items-center justify-center p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 animate-pulse h-14">
+                        <div className="h-4 bg-gray-300/30 dark:bg-gray-700/30 rounded w-2/3"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (dirItems.length > 0 || currentBrowsePath !== fullPath) ? (
+                  <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {currentBrowsePath !== fullPath && (
+                      <button onClick={() => {
+                        const parts = currentBrowsePath.split('/');
+                        parts.pop();
+                        setCurrentBrowsePath(parts.join('/'));
+                      }} className="flex items-center justify-center p-4 bg-black/5 dark:bg-white/5 rounded-xl hover:border-purple-600/50 transition text-black dark:text-white text-sm font-semibold border border-black/10 dark:border-white/10 overflow-hidden">
+                        <span className="break-all leading-snug">🔙 Go Back</span>
+                      </button>
+                    )}
                     {dirItems.map((dir, i) => (
-                       <button key={i} onClick={() => navigate(`/${fullPath}/${dir.name}`.split('/').map(p => encodeURIComponent(p)).join('/'))} className="flex items-center justify-center p-4 bg-black/5 dark:bg-white/5 rounded-xl hover:border-purple-600/50 transition text-black dark:text-white text-sm font-semibold border border-black/10 dark:border-white/10 overflow-hidden">
+                       <button key={i} onClick={() => setCurrentBrowsePath(`${currentBrowsePath}/${dir.name}`)} className="flex items-center justify-center p-4 bg-black/5 dark:bg-white/5 rounded-xl hover:border-purple-600/50 transition text-black dark:text-white text-sm font-semibold border border-black/10 dark:border-white/10 overflow-hidden">
                          <span className="break-all leading-snug">📁 {dir.name}</span>
                        </button>
                     ))}
                   </div>
-                )}
+                ) : null}
 
-                <div className="space-y-3">
-                  {videoItems.length > 0 ? (
-                    videoItems.map((item, i) => (
+                {loadingFiles ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl p-3 sm:p-4 animate-pulse">
+                        <div className="flex items-center gap-4">
+                          <div className="w-5 h-5 bg-gray-300/30 dark:bg-gray-700/30 rounded"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 w-3/4 bg-gray-300/30 dark:bg-gray-700/30 rounded-md"></div>
+                            <div className="h-3 w-1/4 bg-gray-300/30 dark:bg-gray-700/30 rounded-md"></div>
+                          </div>
+                          <div className="h-8 w-16 bg-gray-300/30 dark:bg-gray-700/30 rounded-lg hidden sm:block"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {videoItems.length > 0 ? (
+                    paginatedVideoItems.map((item, i) => (
                       <FileRow 
                         key={i}
                         item={item}
-                        fullPath={fileRowPath || ''}
+                        fullPath={browseFileRowPath || ''}
                         token={token}
                         selected={selectedItems.includes(item.name)}
                         onPlay={(url) => setPlayingUrl(url)}
@@ -666,6 +761,28 @@ export default function Details() {
                     <div className="text-gray-600 dark:text-gray-400">No video files found in this folder.</div>
                   )}
                 </div>
+                )}
+                {!loadingFiles && totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 mt-8">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
