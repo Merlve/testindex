@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import ItemCard from '../components/ItemCard';
-import { RefreshCw, LayoutGrid, List } from 'lucide-react';
+import { RefreshCw, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -138,7 +138,8 @@ export default function Category() {
     return result;
   }, [items, filterLetter, query, searchType]);
 
-  const displayedItems = filteredItems;
+  const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const displayedItems = filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
 
   if (isLoading) return <CategorySkeleton />;
@@ -258,6 +259,27 @@ export default function Category() {
               <ItemCard key={i} item={item} category={item._cat || name} parentPath={item._parent || `/home/${item._cat || name}`} className={viewMode === 'grid' ? "w-full" : ""} viewMode={viewMode} />
             ))}
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-8 pb-4">
+              <button
+                onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                disabled={page === 1}
+                className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={page === totalPages}
+                className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
           
         </>
       )}

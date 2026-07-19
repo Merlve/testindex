@@ -4,12 +4,14 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import ItemCard from '../components/ItemCard';
 import { motion } from 'motion/react';
-import { Bookmark, LayoutGrid, List } from 'lucide-react';
+import { Bookmark, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function Watchlist() {
   const { user } = useAuth();
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('qs_watchlist_view') as 'grid' | 'list') || 'grid';
   });
@@ -34,6 +36,8 @@ export default function Watchlist() {
   }, [user]);
 
   if (loading) return <Loader />;
+  const totalPages = Math.ceil(watchlist.length / ITEMS_PER_PAGE);
+  const paginatedWatchlist = watchlist.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   return (
     <motion.div 
@@ -77,18 +81,41 @@ export default function Watchlist() {
           <p className="text-gray-600 dark:text-gray-400 text-sm">Save items to your watchlist by clicking the bookmark button on any movie or show.</p>
         </div>
       ) : (
-                <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5'}`}>
-          {watchlist.map((entry, index) => (
-            <ItemCard 
-              key={index}
-              item={entry.item || entry}
-              category={entry.category || entry._cat || ''}
-              parentPath={entry.parentPath || (entry.item && entry.item.parent) || entry.parent || entry._parent || ''}
-              viewMode={viewMode}
-              className={viewMode === 'grid' ? 'w-full' : ''}
-            />
-          ))}
-        </div>
+                <>
+          <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5'}`}>
+            {paginatedWatchlist.map((entry, index) => (
+              <ItemCard 
+                key={index}
+                item={entry.item || entry}
+                category={entry.category || entry._cat || ''}
+                parentPath={entry.parentPath || (entry.item && entry.item.parent) || entry.parent || entry._parent || ''}
+                viewMode={viewMode}
+                className={viewMode === 'grid' ? 'w-full' : ''}
+              />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-8 pb-4">
+              <button
+                onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                disabled={page === 1}
+                className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={page === totalPages}
+                className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </motion.div>
   );
