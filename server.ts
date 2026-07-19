@@ -426,7 +426,7 @@ app.post('/api/fs/search', async (req, res) => {
       keywords: keywords,
       scope: 0, // 0 = all, 1 = folder, 2 = file
       page: 1,
-      per_page: 100,
+      per_page: 10000,
       password: "" 
     };
     
@@ -525,12 +525,20 @@ app.post('/api/fs/search', async (req, res) => {
     }
 
     // Filter results to avoid nuisance
-    const isVideo = (name) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
-    const filteredContent = content.filter((item) => {
+    const isVideo = (name: any) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(String(name));
+    const filteredContent = content.filter((item: any) => {
       if (item.is_dir) return true; // Keep all folders
       if (!isVideo(item.name)) return false; // Ignore non-video files
       
       const parentParts = (item.parent || '').split('/').filter(Boolean);
+      
+      if (parentParts.length >= 2 && parentParts[0].toLowerCase() === 'home') {
+          const cat = parentParts[1].toUpperCase();
+          if (['KDRAMA', 'ANIME', 'SERIES'].includes(cat)) {
+              return false; // No files for series/shows
+          }
+      }
+      
       if (parentParts.length > 2) return false;
       
       return true;

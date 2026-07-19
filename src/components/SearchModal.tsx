@@ -22,7 +22,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
         const res = await axios.post('/api/fs/search', { keywords: query, parent: '/home' }, { headers: { Authorization: token } });
         if (res.data.code === 200) {
           const content = res.data.data.content || [];
-          setSuggestions(content.slice(0, 8));
+          setSuggestions(content);
         }
       } catch (err) {
         console.error("Search failed", err);

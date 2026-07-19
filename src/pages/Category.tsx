@@ -124,7 +124,7 @@ export default function Category() {
     return result;
   }, [items, filterLetter]);
 
-  const displayedItems = filteredItems.slice(0, page * ITEMS_PER_PAGE);
+  const displayedItems = filteredItems;
 
 
   if (isLoading) return <CategorySkeleton />;
@@ -203,11 +203,7 @@ export default function Category() {
               <ItemCard key={i} item={item} category={item._cat || name} parentPath={item._parent || `/home/${item._cat || name}`} className="w-full" />
             ))}
           </div>
-          {filteredItems.length > displayedItems.length && (
-            <div className="flex justify-center mt-8">
-              <button onClick={() => setPage(p => p + 1)} className="px-6 py-2 bg-purple-600 rounded-full text-black dark:text-white font-semibold hover:bg-purple-500 transition">View More</button>
-            </div>
-          )}
+          
         </>
       )}
     </motion.div>

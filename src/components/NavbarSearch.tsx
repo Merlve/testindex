@@ -34,7 +34,7 @@ export default function NavbarSearch() {
         const res = await axios.post('/api/fs/search', { keywords: query, parent: '/home' }, { headers: { Authorization: token } });
         if (res.data.code === 200) {
           const content = res.data.data.content || [];
-          setSuggestions(content.slice(0, 8)); // Top 8 suggestions
+          setSuggestions(content); // Top 8 suggestions
         }
       } catch (err) {
         console.error("Search failed", err);
