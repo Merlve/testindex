@@ -564,7 +564,7 @@ export default function Details() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white text-black px-6 py-3 rounded-full shadow-2xl font-bold text-sm transition-all animate-bounce">
+        <div className="fixed bottom-24 lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-white text-black px-6 py-3 rounded-full shadow-2xl font-bold text-sm transition-all animate-bounce">
           {toast}
         </div>
       )}
@@ -758,7 +758,7 @@ export default function Details() {
                       />
                     ))
                   ) : (
-                    <div className="text-gray-600 dark:text-gray-400">No video files found in this folder.</div>
+                    <div className="text-gray-600 dark:text-gray-400">Browse a folder</div>
                   )}
                 </div>
                 )}
