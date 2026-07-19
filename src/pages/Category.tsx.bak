@@ -223,7 +223,6 @@ export default function Category() {
               {letter}
             </button>
           ))}
-        </div>
 
         {query && (
           <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide w-full max-w-full">
