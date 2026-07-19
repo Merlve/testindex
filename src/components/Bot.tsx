@@ -1,6 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '../context/AuthContext';
+import { useLocation } from 'react-router';
 
 function WhatsAppIcon({ size = 24, className = '' }: { size?: number, className?: string }) {
   return (
@@ -13,34 +14,25 @@ function WhatsAppIcon({ size = 24, className = '' }: { size?: number, className?
 export default function Bot() {
   const whatsappNumber = import.meta.env.VITE_WHATSAPP_NUMBER;
   const [isVisible, setIsVisible] = useState(false);
+  const location = useLocation();
+  const { token } = useAuth();
   
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
-
-    const resetTimer = () => {
+    if (token && sessionStorage.getItem('showWhatsApp') === 'true') {
       setIsVisible(true);
-      clearTimeout(timeout);
-      timeout = setTimeout(() => setIsVisible(false), 3000);
-    };
+      sessionStorage.removeItem('showWhatsApp');
+    }
+  }, [token]);
 
-    // Initial timer
-    resetTimer();
-
-    window.addEventListener('mousemove', resetTimer);
-    window.addEventListener('mousedown', resetTimer);
-    window.addEventListener('keydown', resetTimer);
-    window.addEventListener('scroll', resetTimer);
-    window.addEventListener('touchstart', resetTimer);
-
-    return () => {
-      clearTimeout(timeout);
-      window.removeEventListener('mousemove', resetTimer);
-      window.removeEventListener('mousedown', resetTimer);
-      window.removeEventListener('keydown', resetTimer);
-      window.removeEventListener('scroll', resetTimer);
-      window.removeEventListener('touchstart', resetTimer);
-    };
-  }, []);
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (isVisible) {
+      timeout = setTimeout(() => {
+        setIsVisible(false);
+      }, 5000);
+    }
+    return () => clearTimeout(timeout);
+  }, [isVisible]);
 
   if (!whatsappNumber) {
     return null;
@@ -57,7 +49,7 @@ export default function Bot() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.8, y: 20 }}
           transition={{ duration: 0.2 }}
-          className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-12 h-12 sm:w-14 sm:h-14 bg-[#25D366] rounded-full flex items-center justify-center text-black dark:text-white shadow-xl shadow-[#25D366]/20 hover:scale-110 z-40"
+          className="fixed bottom-[100px] lg:bottom-6 right-6 sm:bottom-[100px] sm:right-8 lg:right-8 w-12 h-12 sm:w-14 sm:h-14 bg-[#25D366] rounded-full flex items-center justify-center text-black dark:text-white shadow-xl shadow-[#25D366]/20 hover:scale-110 z-40"
         >
           <WhatsAppIcon size={28} />
         </motion.a>

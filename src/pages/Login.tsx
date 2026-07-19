@@ -60,6 +60,7 @@ export default function Login() {
       
       login('guest', 'guest-token');
       sessionStorage.setItem('justLoggedIn', 'true');
+        sessionStorage.setItem('showWhatsApp', 'true');
       const from = location.state?.from || '/';
       navigate(from);
     } catch (err: any) {
@@ -102,6 +103,7 @@ export default function Login() {
 
         login(username, token);
         sessionStorage.setItem('justLoggedIn', 'true');
+        sessionStorage.setItem('showWhatsApp', 'true');
         const from = location.state?.from || '/';
         navigate(from);
       } else {

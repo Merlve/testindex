@@ -221,7 +221,7 @@ export default function Layout() {
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        <div className={`flex items-center mb-8 px-2 shrink-0 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+        <div className={`flex ${isCollapsed ? 'flex-col items-center gap-6 px-0' : 'items-center justify-between px-2'} mb-8 shrink-0`}>
             <Link to="/">
               {!isCollapsed && (
                 <h1 className="text-xl font-bold text-black dark:text-white flex items-center gap-3 tracking-tight">
@@ -234,17 +234,21 @@ export default function Layout() {
               )}
             </Link>
             <button 
-              className="hidden md:flex text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+              className={`${isCollapsed ? 'flex' : 'hidden md:flex'} text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors`}
               onClick={() => setIsCollapsed(!isCollapsed)}
+              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
             </button>
-            <button 
-              className="md:hidden text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
-              onClick={() => setMobileOpen(false)}
-            >
-              <X size={24} />
-            </button>
+            {!isCollapsed && (
+              <button 
+                className="md:hidden text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+                onClick={() => setMobileOpen(false)}
+                title="Close sidebar"
+              >
+                <X size={24} />
+              </button>
+            )}
           </div>
           
         <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -335,6 +339,47 @@ export default function Layout() {
         </AnimatePresence>
       </main>
 
+      {/* Floating Bottom Nav for Mobile/Tablet */}
+      <div className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] transition-transform duration-500 ${isIdle && !mobileOpen ? 'translate-y-[200%]' : 'translate-y-0'}`}>
+        <NavLink to="/" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
+          {({isActive}) => (
+            <>
+              <Home size={24} />
+              <AnimatePresence>
+                {isActive && !searchOpen && (
+                  <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+                    Home
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </NavLink>
+        <button onClick={() => { setSearchOpen(!searchOpen); setMobileOpen(false); }} className={`flex items-center gap-2 transition-all duration-300 ${searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
+          <Search size={24} />
+          <AnimatePresence>
+            {searchOpen && (
+              <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+                Search
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+        <NavLink to="/watchlist" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
+          {({isActive}) => (
+            <>
+              <Bookmark size={24} />
+              <AnimatePresence>
+                {isActive && !searchOpen && (
+                  <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+                    Watchlist
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </NavLink>
+      </div>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
     </div>
   );
