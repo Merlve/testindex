@@ -96,7 +96,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
          <button 
             onClick={(e) => { e.preventDefault(); setShowOverrideModal(true); }}
             className="absolute top-2 left-2 bg-black/60 p-1 rounded hover:bg-black/80 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white z-30 transition opacity-0 group-hover:opacity-100"
-            title="Fix Jellyfin Link"
+            title="Fix Metadata"
          >
             <Edit3 size={14} />
          </button>

@@ -592,7 +592,9 @@ export default function Details() {
                           else setSelectedItems([]);
                         }}
                       />
-                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">All</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        {selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'All'}
+                      </span>
                     </label>
                     {selectedItems.length > 0 && (
                       <button onClick={handleCopyLinks} className="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-4 py-2 rounded-xl transition text-xs font-bold">
@@ -601,7 +603,7 @@ export default function Details() {
                     )}
                   </>
                 )}
-                <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder from openlist">
+                <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder">
                   <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
                 </button>
               </div>

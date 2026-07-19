@@ -120,6 +120,16 @@ export default function Layout() {
   });
 
   useEffect(() => {
+    if (sessionStorage.getItem('justLoggedIn') === 'true') {
+      const timer = setTimeout(() => {
+        setIsCollapsed(true);
+      }, 3000);
+      sessionStorage.removeItem('justLoggedIn');
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  useEffect(() => {
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (isDark) {
       document.documentElement.classList.add('dark');
