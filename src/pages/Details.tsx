@@ -148,6 +148,7 @@ export default function Details() {
       setInitialLoadState(prev => prev.isLoading ? { ...prev, isLoading: false } : prev);
     }
   }, [loading, loadingFiles, currentBrowsePath, fullPath, initialLoadState.path]);
+
   const [tmdb, setTmdb] = useState<any>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [toast, setToast] = useState('');
@@ -164,7 +165,7 @@ export default function Details() {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [refreshingFolder, setRefreshingFolder] = useState(false);
 
-  const handleRefreshFolder = async () => {
+  const handleRefreshFolder = async (silent = false) => {
     if (!token) return;
     setRefreshingFolder(true);
     try {
@@ -172,21 +173,38 @@ export default function Details() {
       if (res.data.code === 200) {
         setItems(res.data.data.content || []);
         setCurrentPage(1);
-        setToast('Folder refreshed');
-        setTimeout(() => setToast(''), 3000);
+        if (!silent) {
+          setToast('Folder refreshed');
+          setTimeout(() => setToast(''), 3000);
+        }
       } else {
-        setToast('Failed to refresh folder');
-        setTimeout(() => setToast(''), 3000);
+        if (!silent) {
+          setToast('Failed to refresh folder');
+          setTimeout(() => setToast(''), 3000);
+        }
       }
     } catch (err) {
       console.error(err);
-      setToast('Error refreshing folder');
-      setTimeout(() => setToast(''), 3000);
+      if (!silent) {
+        setToast('Error refreshing folder');
+        setTimeout(() => setToast(''), 3000);
+      }
     } finally {
       setRefreshingFolder(false);
     }
   };
   
+  useEffect(() => {
+    let timeout: any;
+    if (initialLoadState.isLoading && token) {
+      timeout = setTimeout(() => {
+        handleRefreshFolder(true);
+      }, 3000);
+    }
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [initialLoadState.isLoading, token, fullPath]); // eslint-disable-line react-hooks/exhaustive-deps
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -464,7 +482,7 @@ export default function Details() {
     }
   };
 
-  if (initialLoadState.isLoading) return <DetailsSkeleton onRefresh={handleRefreshFolder} refreshingFolder={refreshingFolder} />;
+  if (initialLoadState.isLoading) return <DetailsSkeleton onRefresh={() => handleRefreshFolder(false)} refreshingFolder={refreshingFolder} />;
 
   const backdrop = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` : null;
   const displayGenres = tmdb?.genres ? tmdb.genres.map((g: any) => g.name) : getGenreNames(tmdb?.genre_ids);
@@ -665,7 +683,7 @@ export default function Details() {
                     )}
                   </>
                 )}
-                <button onClick={handleRefreshFolder} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder">
+                <button onClick={() => handleRefreshFolder(false)} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder">
                   <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
                 </button>
               </div>
