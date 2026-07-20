@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
-import { Film, Edit3 } from 'lucide-react';
+import { Film, Edit3, Bookmark, BookmarkCheck } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +12,42 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overridePath, setOverridePath] = useState(`${parentPath}/${item.name}`);
   const [overrideCat, setOverrideCat] = useState(category);
+
+  const queryClient = useQueryClient();
+  
+  const { data: watchlistData } = useQuery({
+    queryKey: ['watchlist'],
+    queryFn: async () => {
+      if (!user || user === 'guest') return [];
+      const res = await axios.get('/api/watchlist', { headers: { 'x-user': user } });
+      return res.data;
+    },
+    enabled: !!user && user !== 'guest',
+  });
+
+  const inWatchlist = watchlistData?.some((i: any) => i.item.name === item.name && i.parentPath === parentPath) || false;
+
+  const handleToggleWatchlist = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (user === 'guest') {
+      alert('Sign up for the website plan to use this feature');
+      return;
+    }
+    try {
+      await axios.post('/api/watchlist/toggle', {
+        item: { name: item.name, is_dir: item.is_dir, parent: parentPath },
+        category,
+        parentPath,
+        tmdbData: tmdb
+      }, { headers: { 'x-user': user } });
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update watchlist');
+    }
+  };
+
 
   useEffect(() => {
     if (tmdbData) return;
@@ -64,9 +101,8 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
   const sanitizedPath = `${parentPath}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
   const fullPath = `/${sanitizedPath}`;
 
-  return (
+    const innerContent = (
     <>
-    <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={`group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-2 sm:gap-3 ${className || 'w-32 sm:w-48 flex-shrink-0'}`}`}>
       <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all duration-300 ${viewMode === 'grid' ? 'group-hover:-translate-y-2 group-hover:scale-[1.02] group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)]' : ''} flex-shrink-0`}>
         {tmdb?.poster_path ? (
           <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
@@ -82,27 +118,53 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
             {Number(tmdb.vote_average).toFixed(1)}
           </div>
         )}
+        <button
+          onClick={handleToggleWatchlist}
+          className={`absolute top-2 left-2 ${viewMode === 'grid' ? 'sm:top-3 sm:left-3' : ''} p-1.5 rounded-full bg-black/60 backdrop-blur z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+          title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+        >
+          {inWatchlist ? <BookmarkCheck size={14} className="sm:w-4 sm:h-4" /> : <Bookmark size={14} className="sm:w-4 sm:h-4" />}
+        </button>
 
       </div>
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
-        <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-xs sm:text-sm'}`}>{tmdb?.title || tmdb?.name || item.name}</h3>
+        <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-xs sm:text-sm'}`}>
+            {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle">REC</span>}
+            {tmdb?.title || tmdb?.name || item.name}
+        </h3>
         <p className={`uppercase tracking-wider font-bold mb-1 ${viewMode === 'list' ? 'text-[10px] sm:text-xs text-purple-400' : 'text-[9px] sm:text-[11px] text-gray-600 dark:text-gray-400'}`}>{category}</p>
-        <p className={`truncate ${viewMode === 'list' ? 'text-[10px] sm:text-xs text-gray-500' : 'text-[9px] sm:text-[10px] text-gray-600'}`}>{fullPath}</p>
+        <p className={`truncate ${viewMode === 'list' ? 'text-[10px] sm:text-xs text-gray-500' : 'text-[9px] sm:text-[10px] text-gray-600'}`}>{item._rec ? 'Not in library' : fullPath}</p>
         {viewMode === 'list' && tmdb?.overview && (
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-2 hidden sm:-webkit-box sm:block" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{tmdb.overview}</p>
         )}
       </div>
       {item._jf && user === 'admin' && (
-         <button 
+         <button
             onClick={(e) => { e.preventDefault(); setShowOverrideModal(true); }}
-            className="absolute top-2 left-2 bg-black/60 p-1 rounded hover:bg-black/80 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white z-30 transition opacity-0 group-hover:opacity-100"
+            className="absolute bottom-2 right-2 bg-black/60 p-1 rounded hover:bg-black/80 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white z-30 transition opacity-100"
             title="Fix Metadata"
          >
             <Edit3 size={14} />
          </button>
       )}
-    </Link>
-    {showOverrideModal && (
+    </>
+  );
+
+  const cardClasses = `group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-2 sm:gap-3 ${className || 'w-32 sm:w-48 flex-shrink-0'}`}`;
+
+  return (
+    <>
+      {item._rec ? (
+          <a href={`https://www.themoviedb.org/${tmdb?.media_type || (category === 'SERIES' || category === 'ANIME' ? 'tv' : 'movie')}/${tmdb?.id || item._jf?.tmdbId || item.id || ''}`} target="_blank" rel="noopener noreferrer" className={cardClasses}>
+              {innerContent}
+          </a>
+      ) : (
+          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses}>
+              {innerContent}
+          </Link>
+      )}
+
+      {showOverrideModal && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowOverrideModal(false)}>
             <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-bold text-black dark:text-white mb-4">Override Jellyfin Link</h3>
@@ -127,8 +189,8 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
                 </div>
                 <div className="flex gap-3 justify-end">
                     <button onClick={() => setShowOverrideModal(false)} className="px-4 py-2 text-black dark:text-white bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:bg-white/20 rounded-lg">Cancel</button>
-                    <button 
-                       onClick={async () => {
+                    <button
+                        onClick={async () => {
                            try {
                                await axios.post('/api/jellyfin/override', {
                                    jfName: item._jf_name || item.name,
@@ -145,9 +207,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
                 </div>
             </div>
         </div>
-    )}
+      )}
     </>
   );
 }
-
-

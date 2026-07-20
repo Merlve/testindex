@@ -44,6 +44,8 @@ function getSearchKeywords(s: string): string {
 }
 
 
+export function getLocalItems() { return recentlyAddedCache; }
+
 export async function getRecentlyAdded(getOpenlistUrl: () => string, getOpenlistApiKey: () => string | undefined, basePath: string, force: boolean = false) {
   const now = Date.now();
   if ((force || now - lastFetchTime > 10 * 60 * 1000) && !isFetching) {

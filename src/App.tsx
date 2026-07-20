@@ -9,7 +9,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Category from './pages/Category';
 import RecentlyAddedPage from './pages/RecentlyAddedPage';
-import Offline from "./pages/Offline";
+import Recommendations from "./pages/Recommendations";
 import Details from './pages/Details';
 import Admin from './pages/Admin';
 import Users from './pages/Users';
@@ -68,7 +68,7 @@ export default function App() {
             <Route path="collections" element={<CollectionsPage />} />
             <Route path="recently-added" element={<RecentlyAddedPage />} />
             <Route path="watchlist" element={<Watchlist />} />
-            <Route path="offline" element={<Offline />} />
+            <Route path="recommendations" element={<Recommendations />} />
             <Route path="admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
             <Route path="home/*" element={<Details />} />

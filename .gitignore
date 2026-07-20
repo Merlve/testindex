@@ -9,6 +9,7 @@ coverage/
 db.json
 config.json
 watchlists/
+recommendations/
 bun.lock
 jellyfin_cache.json
 jf_override.json

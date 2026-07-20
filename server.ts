@@ -1,5 +1,5 @@
 import express from 'express';
-import { getRecentlyAdded } from './jellyfin';
+import { getRecentlyAdded, getLocalItems } from './jellyfin';
 
 import cors from 'cors';
 import fs from 'fs';
@@ -105,6 +105,36 @@ function saveDb() {
 }
 
 
+// Recommendations storage
+const recommendationsDir = path.join(process.cwd(), 'recommendations');
+if (!fs.existsSync(recommendationsDir)) {
+  try {
+    fs.mkdirSync(recommendationsDir, { recursive: true });
+  } catch (e) {}
+}
+
+function getUserRecommendationsPath(user) {
+  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(recommendationsDir, `${safeUser}.json`);
+}
+
+function loadUserRecommendations(user) {
+  const filePath = getUserRecommendationsPath(user);
+  try {
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveUserRecommendations(user, list) {
+  const filePath = getUserRecommendationsPath(user);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(list, null, 2));
+  } catch (e) {}
+}
+
 // Watchlists storage
 const watchlistsDir = path.join(process.cwd(), 'watchlists');
 if (!fs.existsSync(watchlistsDir)) {
@@ -175,6 +205,162 @@ app.get('/api/watchlist/check', (req, res) => {
   const list = loadUserWatchlist(user);
   const exists = list.some(i => i.item.name === name && i.parentPath === parentPath);
   res.json({ inWatchlist: exists });
+});
+
+app.get('/api/recommendations', async (req, res) => {
+  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const refresh = req.query.refresh === 'true';
+  const existingRecs = loadUserRecommendations(user);
+  
+  if (!refresh && existingRecs && existingRecs.length > 0) {
+      return res.json({ results: existingRecs });
+  }
+  
+  const watchlist = loadUserWatchlist(user);
+  if (watchlist.length < 5) {
+      return res.json({ results: [], message: 'ADD_MORE', count: watchlist.length });
+  }
+  
+  const allRecs = [];
+  for (const w of watchlist) {
+      let tmdbId = w.tmdbData?.id;
+      let type = w.category === 'SERIES' || w.category === 'ANIME' || w.category === 'KDRAMA' || w.category === 'ADRAMA' ? 'tv' : 'movie';
+      if (!tmdbId) {
+          const { cleanName, year } = parseMediaName(w.item.name);
+          const cacheKey = `${w.category}-${cleanName.toLowerCase()}${year ? `-${year}` : ''}`;
+          const baseKey = `${w.category}-${cleanName.toLowerCase()}`;
+          let cached = tmdbCache[cacheKey] || tmdbCache[baseKey];
+          if (!cached) {
+               const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+               if (overriddenKey) cached = tmdbCache[overriddenKey];
+          }
+          if (cached && cached.id) {
+              tmdbId = cached.id;
+          }
+      }
+      if (!tmdbId) continue;
+      try {
+          const recsUrl = `https://api.themoviedb.org/3/${type}/${tmdbId}/recommendations?api_key=${process.env.TMDB_API_KEY}`;
+          const res = await axios.get(recsUrl);
+          if (res.data && res.data.results) {
+              allRecs.push(...res.data.results.slice(0, 5));
+          }
+      } catch (e) {
+          console.error("Failed to get recs for", w.tmdbData?.id, e.message);
+      }
+  }
+  
+  const uniqueRecs = Array.from(new Map(allRecs.map(r => [r.id, r])).values());
+  uniqueRecs.sort(() => Math.random() - 0.5);
+  
+  const openlistUrlTarget = getOpenlistUrl().replace(/\/$/, '');
+  const adminToken = getOpenlistApiKey();
+  const localItems = getLocalItems();
+  
+  const searchPromises = uniqueRecs.map(async (rec) => {
+      let foundPath = null;
+      let foundName = null;
+      let foundCat = null;
+      let foundIsDir = true;
+      let hasLocal = false;
+      
+      const recTitle = rec.title || rec.name || rec.original_name || '';
+      const title = (rec.title || rec.name || '').toLowerCase();
+      const origTitle = (rec.original_title || rec.original_name || '').toLowerCase();
+      const releaseDate = rec.release_date || rec.first_air_date || '';
+      const tmdbYear = releaseDate ? releaseDate.substring(0, 4) : '';
+
+      const existingLocalItem = localItems.find(i => {
+          if (i._jf && String(i._jf.tmdbId) === String(rec.id)) return true;
+          let searchName = i._jf_name || i.name;
+          if (/^(s\d+|season\s*\d+)$/i.test(i.name)) {
+              const parentParts = (i.parent || i._parent || "").split('/').filter(Boolean);
+              if (parentParts.length > 0) searchName = parentParts[parentParts.length - 1];
+          }
+          
+          const { cleanName, year: myYear } = parseMediaName(searchName);
+          const myTitle = cleanName.toLowerCase();
+          
+          if (!title && !origTitle) return false;
+          
+          if (myTitle === title || myTitle === origTitle || myTitle.includes(title) || title.includes(myTitle)) {
+             const finalYear = (i._jf && i._jf.year) ? String(i._jf.year) : myYear;
+             if (tmdbYear && finalYear && tmdbYear !== finalYear) {
+                 return false;
+             }
+             return true;
+          }
+          return false;
+      });
+      
+      if (existingLocalItem) {
+          foundName = existingLocalItem.name;
+          foundPath = existingLocalItem.parent || existingLocalItem._parent;
+          foundCat = existingLocalItem._cat || (rec.media_type === 'tv' ? 'SERIES' : 'MOVIES');
+          foundIsDir = existingLocalItem.is_dir;
+          hasLocal = true;
+      } else {
+          try {
+              const res = await axios.post(`${openlistUrlTarget}/api/fs/search`, {
+                  parent: appConfig.basePath,
+                  keywords: recTitle,
+                  scope: 1, 
+                  page: 1,
+                  per_page: 5,
+                  password: ""
+              }, { headers: { Authorization: adminToken } });
+              
+              if (res.data?.data?.content?.length > 0) {
+                  for (const item of res.data.data.content) {
+                      const { cleanName: myTitleRaw, year: myYear } = parseMediaName(item.name);
+                      const myTitle = myTitleRaw.toLowerCase();
+                      
+                      if (myTitle === title || myTitle === origTitle || myTitle.includes(title) || title.includes(myTitle)) {
+                          if (tmdbYear && myYear && tmdbYear !== myYear) {
+                              continue;
+                          }
+                          foundName = item.name;
+                          foundPath = item.parent;
+                          foundIsDir = item.is_dir;
+                          foundCat = rec.media_type === 'tv' ? 'SERIES' : 'MOVIES';
+                          if (foundPath.toUpperCase().includes('ANIME')) foundCat = 'ANIME';
+                          else if (foundPath.toUpperCase().includes('KDRAMA')) foundCat = 'KDRAMA';
+                          else if (foundPath.toUpperCase().includes('ADRAMA')) foundCat = 'ADRAMA';
+                          
+                          hasLocal = true;
+                          break;
+                      }
+                  }
+              }
+          } catch(e) {}
+      }
+      
+      return { rec, foundName, foundPath, foundCat, foundIsDir, hasLocal };
+  });
+  
+  const searchResults = await Promise.all(searchPromises);
+  
+  const formattedRecs = searchResults.filter(result => result.hasLocal).map(result => {
+      const { rec, foundName, foundPath, foundCat, foundIsDir, hasLocal } = result;
+      
+      let name = foundName || rec.title || rec.name || rec.original_name || 'Unknown';
+      let parentPath = foundPath || `${appConfig.basePath === '/' ? '' : appConfig.basePath}/${rec.media_type === 'tv' ? 'SERIES' : 'MOVIES'}`;
+      let category = foundCat || (rec.media_type === 'tv' ? 'SERIES' : 'MOVIES');
+      let is_dir = hasLocal ? foundIsDir : true;
+      
+      return {
+          item: { name, is_dir, _rec: !hasLocal },
+          category,
+          parentPath,
+          tmdbData: rec
+      };
+  });
+  
+  saveUserRecommendations(user, formattedRecs);
+  
+  res.json({ results: formattedRecs });
 });
 
 // API: Config

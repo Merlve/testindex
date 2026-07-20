@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Outlet, NavLink, useNavigate, Link, useLocation, useNavigationType, useOutlet } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity } from 'lucide-react';
+import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles } from 'lucide-react';
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import SearchModal from './SearchModal';
 import NavbarSearch from './NavbarSearch';
@@ -265,8 +265,8 @@ export default function Layout() {
             <NavLink to="/watchlist" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
               <Bookmark size={20} /> {!isCollapsed && <span>Watchlist</span>}
             </NavLink>
-            <NavLink to="/offline" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-              <WifiOff size={20} /> {!isCollapsed && <span>Offline</span>}
+            <NavLink to="/recommendations" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Sparkles size={20} /> {!isCollapsed && <span>For You</span>}
             </NavLink>
             
             {!isCollapsed && <div className="text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-8 uppercase tracking-widest">Categories</div>}
@@ -373,6 +373,20 @@ export default function Layout() {
                 {isActive && !searchOpen && (
                   <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
                     Watchlist
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </NavLink>
+        <NavLink to="/recommendations" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
+          {({isActive}) => (
+            <>
+              <Sparkles size={24} />
+              <AnimatePresence>
+                {isActive && !searchOpen && (
+                  <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+                    For You
                   </motion.span>
                 )}
               </AnimatePresence>

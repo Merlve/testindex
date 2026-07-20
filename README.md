@@ -5,6 +5,9 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 ## Features
 
 - **Dashboard**: A stunning, modern UI with an interactive hero slider for featured content (supports touch/mouse swiping, smooth liquid glass navigation arrows), trending carousels, and category-based grids.
+- **Personalized 'For You' Recommendations**: A dedicated recommendations page suggesting new content based on user watchlists, automatically filtered to only display items that are actually available in your local library.
+- **Watchlist Functionality**: Users can easily save items to their personal watchlist for later viewing.
+- **Mobile-responsive Bottom Navigation**: A sleek, floating bottom navigation bar that ensures a native-app-like experience on mobile and tablet devices.
 - **Unified Media View**: Seamlessly fetch and display media from Jellyfin and Openlist.
 - **Smart Integration**: Supports overrides, watchlists, TMDB enrichment (for enhanced metadata, ratings, and posters), and even Telegram notifications for recently added media.
 - **PWA & Mobile Ready**: Responsive, fluid layouts utilizing Tailwind CSS and Framer Motion.
