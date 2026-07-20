@@ -542,7 +542,16 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
           {permissionsList.map(p => {
             const isChecked = (formData.permission & p.bit) === p.bit;
             return (
-              <label key={p.bit} className="flex items-center space-x-3 cursor-pointer group">
+              <label 
+                key={p.bit} 
+                className="flex items-center space-x-3 cursor-pointer group"
+                onClick={() => {
+                  const newPermission = isChecked 
+                    ? formData.permission & ~p.bit 
+                    : formData.permission | p.bit;
+                  setFormData({...formData, permission: newPermission});
+                }}
+              >
                 <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isChecked ? 'bg-purple-600 border-purple-600' : 'bg-transparent border-gray-400 group-hover:border-purple-500'}`}>
                   {isChecked && (
                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
