@@ -62,7 +62,7 @@ Shindex is containerized and configured via `docker-compose.yml`.
    The `docker-compose.yml` mounts several local files so data persists across container restarts. Create these empty files/directories before starting:
    ```bash
    touch config.json db.json jf_override.json jellyfin_cache.json activity_logs.json users_expirations.json
-   mkdir watchlists
+   mkdir -p watchlists recommendations
    ```
    *Note: If the application complains about invalid JSON on startup, simply add `{}` to the empty `.json` files. The array-based ones like `activity_logs.json` should have `[]`.*
 
