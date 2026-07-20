@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { parseMediaName } from '../utils/nameParser';
 import { getGenreNames } from '../utils/genres';
+import { clearRecommendationsCache } from './Recommendations';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return '0 Bytes';
@@ -451,6 +452,7 @@ export default function Details() {
         setShowMetadataModal(false);
         setSearchTitle('');
         setSearchResults([]);
+        clearRecommendationsCache();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }
@@ -474,6 +476,7 @@ export default function Details() {
         setShowMetadataModal(false);
         setNewTmdbId('');
         setCustomTitle('');
+        clearRecommendationsCache();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }

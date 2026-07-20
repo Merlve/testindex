@@ -8,6 +8,16 @@ import Loader from '../components/Loader';
 
 const recommendationsCache: Record<string, { recs: any[], message: string, fetched: boolean }> = {};
 
+export const clearRecommendationsCache = (user?: string) => {
+  if (user) {
+    delete recommendationsCache[user];
+  } else {
+    for (const key in recommendationsCache) {
+      delete recommendationsCache[key];
+    }
+  }
+};
+
 export default function RecommendationsPage() {
   const { user } = useAuth();
   const [recommendations, setRecommendations] = useState<any[]>(() => {
