@@ -50,7 +50,11 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
 
 
   useEffect(() => {
-    if (tmdbData) return;
+    if (tmdbData) {
+      setTmdb(tmdbData);
+      return;
+    }
+    setTmdb(null);
     // Only fetch for directories (shows/movies) or large files
     const fetchTmdb = async () => {
       let searchName = item.name;
@@ -96,7 +100,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       }
     };
     fetchTmdb();
-  }, [item.name, category, item._jf]);
+  }, [item.name, category, item._jf, tmdbData]);
 
   const sanitizedPath = `${parentPath}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
   const fullPath = `/${sanitizedPath}`;

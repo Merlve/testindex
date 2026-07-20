@@ -261,7 +261,7 @@ export default function RecommendationsPage() {
         <>
           <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5'}`}>
             {paginatedRecs.map((r, i) => (
-              <ItemCard key={`rec-${i}`} item={r.item} category={r.category} parentPath={r.parentPath} tmdbData={r.tmdbData} className={viewMode === 'grid' ? 'w-full' : ''} viewMode={viewMode} />
+              <ItemCard key={`rec-${r.item.name}-${i}`} item={r.item} category={r.category} parentPath={r.parentPath} tmdbData={r.tmdbData} className={viewMode === 'grid' ? 'w-full' : ''} viewMode={viewMode} />
             ))}
           </div>
           
