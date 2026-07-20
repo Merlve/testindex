@@ -6,19 +6,51 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, LayoutGrid, List, ChevronLeft, ChevronRight, ArrowUp, Film, Tv, RefreshCw } from 'lucide-react';
 import Loader from '../components/Loader';
 
+const recommendationsCache: Record<string, { recs: any[], message: string, fetched: boolean }> = {};
+
 export default function RecommendationsPage() {
   const { user } = useAuth();
-  const [recommendations, setRecommendations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [recommendations, setRecommendations] = useState<any[]>(() => {
+    return (user && recommendationsCache[user]?.recs) || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    return !(user && recommendationsCache[user]);
+  });
+  const [message, setMessage] = useState(() => {
+    return (user && recommendationsCache[user]?.message) || '';
+  });
   
-  const [page, setPage] = useState(1);
+  const getInitialState = () => {
+    const storageKey = 'recs_state';
+    const saved = sessionStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          page: parsed.page || 1,
+          typeFilter: parsed.typeFilter || 'all',
+          viewMode: parsed.viewMode || localStorage.getItem('qs_recs_view') || 'grid'
+        };
+      } catch (e) {}
+    }
+    return {
+      page: 1,
+      typeFilter: 'all',
+      viewMode: localStorage.getItem('qs_recs_view') || 'grid'
+    };
+  };
+
+  const initialState = getInitialState();
+
+  const [page, setPage] = useState(initialState.page);
   const ITEMS_PER_PAGE = 50;
   
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
-    return (localStorage.getItem('qs_recs_view') as 'grid' | 'list') || 'grid';
-  });
-  const [typeFilter, setTypeFilter] = useState<'all' | 'movie' | 'tv'>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(initialState.viewMode as 'grid' | 'list');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'movie' | 'tv'>(initialState.typeFilter as 'all' | 'movie' | 'tv');
+
+  useEffect(() => {
+    sessionStorage.setItem('recs_state', JSON.stringify({ page, typeFilter, viewMode }));
+  }, [page, typeFilter, viewMode]);
   const [showTopBtn, setShowTopBtn] = useState(false);
 
   useEffect(() => {
@@ -42,11 +74,23 @@ export default function RecommendationsPage() {
     localStorage.setItem('qs_recs_view', mode);
   };
 
-  const [fetched, setFetched] = useState(false);
+  const [fetched, setFetched] = useState(() => {
+    return (user && recommendationsCache[user]?.fetched) || false;
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
+    if (user) {
+      recommendationsCache[user] = { recs: recommendations, message, fetched };
+    }
+  }, [recommendations, message, fetched, user]);
+
+  useEffect(() => {
     const fetchInitial = async () => {
+      if (user && recommendationsCache[user]) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         const res = await axios.get('/api/recommendations', { headers: { 'x-user': user } });
