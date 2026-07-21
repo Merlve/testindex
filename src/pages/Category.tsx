@@ -21,7 +21,7 @@ const CategorySkeleton = () => (
         {[1,2,3,4,5,6,7,8,9,10,11,12].map(i => <div key={i} className="min-w-[36px] sm:min-w-[40px] h-8 sm:h-9 bg-black/10 dark:bg-white/10 rounded-lg"></div>)}
       </div>
     </div>
-    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
        {[...Array(18)].map((_, i) => (
           <div key={i} className="w-full aspect-[2/3] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
        ))}
@@ -254,7 +254,7 @@ export default function Category() {
         <div className="text-gray-600 dark:text-gray-400 text-center py-20 text-sm">No items found.</div>
       ) : (
         <>
-          <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5" : "flex flex-col gap-3"}>
+          <div className={viewMode === 'grid' ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5" : "flex flex-col gap-3"}>
             {displayedItems.map((item: any, i: number) => (
               <ItemCard key={i} item={item} category={item._cat || name} parentPath={item._parent || `/home/${item._cat || name}`} className={viewMode === 'grid' ? "w-full" : ""} viewMode={viewMode} />
             ))}

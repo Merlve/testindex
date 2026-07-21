@@ -39,7 +39,7 @@ export default function GenresList() {
     return (
       <div className="animate-pulse p-4 sm:p-12 min-h-screen pb-20 pt-24 bg-[#fffcf9] dark:bg-[#08080a]">
         <div className="w-48 sm:w-64 h-10 bg-black/10 dark:bg-white/10 rounded-xl mb-8"></div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-6">
            {[...Array(18)].map((_, i) => (
               <div key={i} className="w-full aspect-video bg-black/5 dark:bg-white/5 rounded-2xl"></div>
            ))}
@@ -66,7 +66,7 @@ export default function GenresList() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-6">
         {genres.map(genre => (
           <button
             key={genre.id}

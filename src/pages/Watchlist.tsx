@@ -82,9 +82,9 @@ export default function Watchlist() {
         </div>
       ) : (
                 <>
-          <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5'}`}>
+          <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5'}`}>
             {paginatedWatchlist.map((entry, index) => (
-              <ItemCard 
+              <ItemCard className={viewMode === "grid" ? "w-full" : ""} 
                 key={index}
                 item={entry.item || entry}
                 category={entry.category || entry._cat || ''}

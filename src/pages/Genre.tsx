@@ -16,7 +16,7 @@ const CategorySkeleton = () => (
         <div className="w-24 h-9 sm:h-10 bg-black/10 dark:bg-white/10 rounded-xl"></div>
       </div>
     </div>
-    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
        {[...Array(18)].map((_, i) => (
           <div key={i} className="w-full aspect-[2/3] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
        ))}
@@ -153,7 +153,7 @@ export default function Genre() {
       ) : (
         <>
           <div className={viewMode === 'grid' 
-            ? "grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5" 
+            ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5" 
             : "flex flex-col gap-3"
           }>
             {displayedItems.map((item, i) => (

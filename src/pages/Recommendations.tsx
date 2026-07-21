@@ -242,7 +242,7 @@ export default function RecommendationsPage() {
         </div>
       ) : (
         <>
-          <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5'}`}>
+          <div className={`${viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5'}`}>
             {paginatedRecs.map((r, i) => (
               <ItemCard key={`rec-${r.item.name}-${i}`} item={r.item} category={r.category} parentPath={r.parentPath} tmdbData={r.tmdbData} className={viewMode === 'grid' ? 'w-full' : ''} viewMode={viewMode} />
             ))}
