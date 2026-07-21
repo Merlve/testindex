@@ -1043,27 +1043,45 @@ app.get('/api/meta/collections', (req, res) => {
   res.json({ success: true, collections: result });
 });
 
-app.get('/api/meta/genre/:genreId', (req, res) => {
+app.post('/api/meta/genre/:genreId', (req, res) => {
   const genreId = parseInt(req.params.genreId, 10);
-  const queries = new Set<string>();
-
-  for (const key in tmdbCache) {
-    const item = tmdbCache[key];
-    if (item) {
-      const hasGenre = (item.genres && item.genres.some((g: any) => g.id === genreId)) ||
-                       (item.genre_ids && item.genre_ids.includes(genreId));
-      if (hasGenre) {
-        const match = key.match(/^[a-zA-Z]+-(.+?)(?:-\d{4})?$/);
-        if (match) {
-            queries.add(match[1].toLowerCase());
-        } else {
-            queries.add(key.replace(/^[a-zA-Z]+-/, '').toLowerCase());
-        }
-      }
-    }
+  const { items } = req.body;
+  
+  if (!items || !Array.isArray(items)) {
+     return res.status(400).json({ error: 'Items array required' });
   }
 
-  res.json({ success: true, genreId, queries: Array.from(queries) });
+  const matchedItems = items.filter((item: any) => {
+     if (!item.cleanName || !item.category) return false;
+     
+     const type = item.category;
+     const baseQuery = item.cleanName.toLowerCase().trim();
+     const year = item.year;
+     const baseKey = `${type}-${baseQuery}`;
+     
+     let cached = null;
+     
+     const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+     if (overriddenKey) {
+        cached = tmdbCache[overriddenKey];
+     } else {
+        const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+        if (tmdbCache[cacheKey]) {
+           cached = tmdbCache[cacheKey];
+        } else if (year && tmdbCache[baseKey]) {
+           cached = tmdbCache[baseKey];
+        }
+     }
+     
+     if (cached) {
+        const hasGenre = (cached.genres && cached.genres.some((g: any) => g.id === genreId)) ||
+                         (cached.genre_ids && cached.genre_ids.includes(genreId));
+        return hasGenre;
+     }
+     return false;
+  });
+
+  res.json({ success: true, genreId, items: matchedItems });
 });
 
 app.get('/api/meta/trending', async (req, res) => {

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
+import { useQuery } from '@tanstack/react-query';
 
 const CategorySkeleton = () => (
   <div className="animate-pulse p-4 sm:p-12 min-h-screen pb-20">
@@ -48,8 +49,6 @@ export default function Genre() {
 
   const initialState = useMemo(getInitialState, [id]);
   
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid'|'list'>(initialState.viewMode);
   const [activeTab, setActiveTab] = useState<'Movies'|'Shows'>(initialState.activeTab);
   const [page, setPage] = useState(initialState.page);
@@ -66,53 +65,42 @@ export default function Genre() {
     sessionStorage.setItem(storageKey, JSON.stringify({ page, viewMode, activeTab }));
   }, [page, viewMode, activeTab, id]);
 
-  useEffect(() => {
-    const fetchGenreItems = async () => {
-      try {
-        setLoading(true);
-        // Fetch categories (Movies, Shows, etc)
-        const res = await axios.post('/api/fs/list', { reqPath: '/home' }, { headers: { Authorization: token } });
-        if (res.data.code !== 200) throw new Error();
-        const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
-        
-        const catData = await Promise.all(
-          dirs.map(async (dir: string) => {
-            const subRes = await axios.post('/api/fs/list', { reqPath: `/home/${dir}` }, { headers: { Authorization: token } });
-            return {
-              name: dir,
-              items: subRes.data.data?.content || []
-            };
-          })
-        );
-        const allItems = catData.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name })));
-        
-        // Fetch genre matched queries
-        const genreRes = await axios.get(`/api/meta/genre/${id}`);
-        const queries = genreRes.data?.queries || [];
-        
-        const matchedItems = [];
-        for (const myItem of allItems) {
-          const { cleanName } = parseMediaName(myItem.name);
-          const myTitle = cleanName.toLowerCase();
-          const hasMatch = queries.some((q: string) => myTitle === q);
-          if (hasMatch) {
-            matchedItems.push(myItem);
-          }
-        }
-        
-        const uniqueItems = Array.from(new Map(matchedItems.map((item: any) => [item.name, item])).values());
-        setItems(uniqueItems);
-      } catch (err) {
-        console.error('Failed to load genre data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchGenreItems = async (): Promise<any[]> => {
+    const res = await axios.post('/api/fs/list', { reqPath: '/home' }, { headers: { Authorization: token } });
+    if (res.data.code !== 200) throw new Error();
+    const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
     
-    if (token) {
-      fetchGenreItems();
-    }
-  }, [id, token]);
+    const catData = await Promise.all(
+      dirs.map(async (dir: string) => {
+        const subRes = await axios.post('/api/fs/list', { reqPath: `/home/${dir}` }, { headers: { Authorization: token } });
+        return {
+          name: dir,
+          items: subRes.data.data?.content || []
+        };
+      })
+    );
+    const allItems = catData.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name })));
+    
+    const payloadItems = allItems.map(item => {
+       const { cleanName, year } = parseMediaName(item.name);
+       return { ...item, cleanName, year };
+    });
+
+    // Fetch genre matched items
+    const genreRes = await axios.post(`/api/meta/genre/${id}`, { items: payloadItems });
+    const matchedItems = genreRes.data?.items || [];
+    
+    const uniqueItems = Array.from(new Map(matchedItems.map((item: any) => [item.name, item])).values());
+    return uniqueItems;
+  };
+
+  const { data: items = [], isLoading: loading } = useQuery({
+    queryKey: ['genre', id],
+    queryFn: fetchGenreItems,
+    enabled: !!token && !!id,
+    retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
