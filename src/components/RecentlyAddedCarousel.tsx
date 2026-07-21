@@ -12,20 +12,26 @@ export default function RecentlyAddedCarousel() {
   const [isFetching, setIsFetching] = useState(false);
   const { user } = useAuth();
 
-  const fetchRecentlyAdded = async (force: boolean = false) => {
+  const fetchRecentlyAdded = async (force: boolean = false, retryCount: number = 0) => {
     try {
       if (force) setIsFetching(true);
-      else setLoading(true);
+      else if (retryCount === 0) setLoading(true);
       
       const res = await axios.get(`/api/jellyfin/recently-added${force ? '?force=true' : ''}`);
       if (res.data?.success) {
         setItems(res.data.data || []);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch recently added', err);
+      if (err.message === 'Network Error' && retryCount < 3) {
+         setTimeout(() => fetchRecentlyAdded(force, retryCount + 1), 2000);
+         return;
+      }
     } finally {
-      setLoading(false);
-      setIsFetching(false);
+      if (retryCount >= 3 || !isFetching) {
+         setLoading(false);
+         setIsFetching(false);
+      }
     }
   };
 

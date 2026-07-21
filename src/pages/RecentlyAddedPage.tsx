@@ -72,7 +72,7 @@ export default function RecentlyAddedPage() {
     queryKey: ['recently-added'],
     queryFn: fetchItems,
     enabled: !!token,
-    retry: 1,
+    retry: 3,
   });
 
   const filteredItems = useMemo(() => {
