@@ -60,12 +60,9 @@ Shindex is containerized and configured via `docker-compose.yml`.
    ```
 
 2. **Prepare data files:**
-   The `docker-compose.yml` mounts several local files so data persists across container restarts. Create these empty files/directories before starting:
-   ```bash
-   touch config.json db.json jf_override.json jellyfin_cache.json activity_logs.json users_expirations.json library_index.json genre_backdrops_cache.json
-   mkdir -p watchlists recommendations
-   ```
-   *Note: If the application complains about invalid JSON on startup, simply add `{}` to the empty `.json` files. The array-based ones like `activity_logs.json` should have `[]`.*
+   The `docker-compose.yml` mounts the `data` directory so data persists across container restarts. Ensure this directory exists or let Docker create it.
+
+All JSON files have been seamlessly migrated to a high-performance local SQLite database (`data/shindex.db`), significantly improving concurrent access and data integrity.
 
 3. **Configure your environment variables:**
    Ensure you have provided the necessary environment variables either by creating a `.env` file in the same directory as the `docker-compose.yml` or exporting them in your terminal.

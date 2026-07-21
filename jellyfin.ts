@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { readSQLiteJSON, writeSQLiteJSON } from './sqlite_db';
 import fs from 'fs';
 
 
@@ -6,26 +7,17 @@ let recentlyAddedCache: any[] = [];
 let lastFetchTime = 0;
 let isFetching = false;
 const openlistSearchCache = new Map<string, any>();
-const JELLYFIN_CACHE_FILE = 'jellyfin_cache.json';
 
-function saveJellyfinCache() {
-    try {
-        const data = {
-            recentlyAddedCache,
-            lastFetchTime
-            // not serializing map for now
-        };
-        fs.writeFileSync(JELLYFIN_CACHE_FILE, JSON.stringify(data));
-    } catch(e) {}
+async function saveJellyfinCache() {
+  await writeSQLiteJSON('jellyfin_cache', { recentlyAddedCache, lastFetchTime });
 }
 
-if (fs.existsSync(JELLYFIN_CACHE_FILE)) {
-    try {
-        const data = JSON.parse(fs.readFileSync(JELLYFIN_CACHE_FILE, 'utf-8'));
-        if (data.recentlyAddedCache) recentlyAddedCache = data.recentlyAddedCache;
-        if (data.lastFetchTime) lastFetchTime = data.lastFetchTime;
-    } catch(e) {}
-}
+readSQLiteJSON('jellyfin_cache').then(loadedCache => {
+  if (loadedCache) {
+    if (loadedCache.recentlyAddedCache) recentlyAddedCache = loadedCache.recentlyAddedCache;
+    if (loadedCache.lastFetchTime) lastFetchTime = loadedCache.lastFetchTime;
+  }
+});
 
 
 function stripAccents(s: string): string {
@@ -296,7 +288,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
 
     recentlyAddedCache = matchedItems;
     lastFetchTime = Date.now();
-    saveJellyfinCache();
+    await saveJellyfinCache();
     console.log(`[Jellyfin] Cached ${matchedItems.length} recently added items.`);
   } finally {
     isFetching = false;

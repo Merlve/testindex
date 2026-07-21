@@ -9,22 +9,12 @@ import axios from 'axios';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { createRequire } from 'module';
+import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB } from './sqlite_db';
 
 const _require = typeof require !== 'undefined' ? require : createRequire(import.meta.url);
 const _filename = typeof __filename !== 'undefined' ? __filename : fileURLToPath(import.meta.url);
 const _dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(_filename);
 
-function safeReadJSON(filePath: string) {
-  try {
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      const raw = fs.readFileSync(filePath, 'utf8').trim();
-      if (raw) return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error(`[STARTUP ERROR] Failed to read ${filePath}: `, e.message);
-  }
-  return null;
-}
 
 
 
@@ -35,27 +25,12 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Simple file-based config storage
-const configPath = path.join(process.cwd(), 'config.json');
 let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home',
-  inactivityTimeout: 0 // minutes, 0 means disabled
+  inactivityTimeout: 0
 };
-try {
-  if (fs.existsSync(configPath)) {
-    if (fs.statSync(configPath).isFile()) {
-      const loaded = safeReadJSON(configPath);
-      appConfig = { ...appConfig, ...loaded };
-      console.log(`[STARTUP] Successfully loaded config from ${configPath}`);
-    } else {
-      console.warn(`[STARTUP] Warning: ${configPath} exists but is not a file.`);
-    }
-  } else {
-    console.log(`[STARTUP] No config file found at ${configPath}, using defaults.`);
-  }
-} catch (e) {
-  console.error(`[STARTUP ERROR] Failed to read or parse config from ${configPath}:`, e);
-}
+
 
 // Ensure env variables take precedence over saved config if provided
 const getOpenlistUrl = () => process.env.OPENLIST_SERVER_URL || appConfig.openlistUrl;
@@ -92,56 +67,27 @@ function parseMediaName(rawName: string) {
   return { cleanName, year };
 }
 
-function saveConfig() {
-  fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+async function saveConfig() {
+  await writeSQLiteJSON('config', appConfig);
 }
 
 // Simple JSON DB for TMDB corrections
-const dbPath = path.join(process.cwd(), 'db.json');
 let tmdbCache: Record<string, any> = {};
-try {
-  if (fs.existsSync(dbPath)) {
-    if (fs.statSync(dbPath).isFile()) {
-      tmdbCache = (safeReadJSON(dbPath) || {});
-      console.log(`[STARTUP] Successfully loaded TMDB cache from ${dbPath}`);
-    } else {
-      console.warn(`[STARTUP] Warning: ${dbPath} exists but is not a file.`);
-    }
-  } else {
-    console.log(`[STARTUP] No TMDB cache DB found at ${dbPath}, starting fresh.`);
-  }
-} catch (e) {
-  console.error(`[STARTUP ERROR] Failed to read or parse DB from ${dbPath}:`, e);
-}
-function saveDb() {
-  try { fs.writeFileSync(dbPath, JSON.stringify(tmdbCache, null, 2)); } catch (e) { console.error("Db write error", e); }
+async function saveDb() {
+  await writeSQLiteJSON('db', tmdbCache);
 }
 
 
 // Library Index Cache for fast genre searching
-const libraryIndexPath = path.join(process.cwd(), 'library_index.json');
 let libraryIndex: any[] = [];
 let libraryIndexLastUpdated = 0;
 
-try {
-  if (fs.existsSync(libraryIndexPath)) {
-    if (fs.statSync(libraryIndexPath).isFile()) {
-      const data = (safeReadJSON(libraryIndexPath) || { items: [], lastUpdated: 0 });
-      libraryIndex = data.items || [];
-      libraryIndexLastUpdated = data.lastUpdated || 0;
-      console.log(`[STARTUP] Successfully loaded Library Index from ${libraryIndexPath}`);
-    }
-  }
-} catch (e) {
-  console.error(`[STARTUP ERROR] Failed to read Library Index from ${libraryIndexPath}:`, e);
-}
 
-function saveLibraryIndex() {
-  try {
-    fs.writeFileSync(libraryIndexPath, JSON.stringify({ items: libraryIndex, lastUpdated: libraryIndexLastUpdated }, null, 2));
-  } catch (e) { console.error("Library index write error", e); }
-}
+async function saveLibraryIndex() {
+  await writeSQLiteJSON('library_index', { items: libraryIndex, lastUpdated: libraryIndexLastUpdated });
 
+
+}
 let isFetchingLibrary = false;
 let libraryFetchPromise = null;
 
@@ -197,85 +143,35 @@ async function getLibraryIndex(token: string, forceRefresh = false) {
 
 
 // Recommendations storage
-const recommendationsDir = path.join(process.cwd(), 'recommendations');
-if (!fs.existsSync(recommendationsDir)) {
-  try {
-    fs.mkdirSync(recommendationsDir, { recursive: true });
-  } catch (e) {}
+
+async function loadUserRecommendations(user: string) {
+  return (await readSQLiteJSON(`recommendations_${user}`)) || [];
 }
 
-function getUserRecommendationsPath(user) {
-  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return path.join(recommendationsDir, `${safeUser}.json`);
-}
-
-function loadUserRecommendations(user) {
-  const filePath = getUserRecommendationsPath(user);
-  try {
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      return (safeReadJSON(filePath) || []);
-    }
-  } catch (e) {}
-  return null;
-}
-
-function saveUserRecommendations(user, list) {
-  const filePath = getUserRecommendationsPath(user);
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(list, null, 2));
-  } catch (e) {}
+async function saveUserRecommendations(user: string, list: any[]) {
+  await writeSQLiteJSON(`recommendations_${user}`, list);
 }
 
 // Watchlists storage
-const watchlistsDir = path.join(process.cwd(), 'watchlists');
-if (!fs.existsSync(watchlistsDir)) {
-  try {
-    fs.mkdirSync(watchlistsDir, { recursive: true });
-    console.log(`[STARTUP] Created watchlists directory at ${watchlistsDir}`);
-  } catch (e) {
-    console.error(`[STARTUP ERROR] Failed to create watchlists directory:`, e);
-  }
+async function loadUserWatchlist(user: string) {
+  return (await readSQLiteJSON(`watchlist_${user}`)) || [];
+}
+async function saveUserWatchlist(user: string, list: any[]) {
+  await writeSQLiteJSON(`watchlist_${user}`, list);
 }
 
-function getUserWatchlistPath(user: string) {
-  // Sanitize username to prevent path traversal
-  const safeUser = user.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return path.join(watchlistsDir, `${safeUser}.json`);
-}
-
-function loadUserWatchlist(user: string): any[] {
-  const filePath = getUserWatchlistPath(user);
-  try {
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      return (safeReadJSON(filePath) || []);
-    }
-  } catch (e) {
-    console.error(`Error loading watchlist for user ${user}:`, e);
-  }
-  return [];
-}
-
-function saveUserWatchlist(user: string, list: any[]) {
-  const filePath = getUserWatchlistPath(user);
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(list, null, 2));
-  } catch (e) {
-    console.error(`Error saving watchlist for user ${user}:`, e);
-  }
-}
-
-app.get('/api/watchlist', (req, res) => {
+app.get('/api/watchlist', async (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  res.json(loadUserWatchlist(user));
+  res.json(await loadUserWatchlist(user));
 });
 
-app.post('/api/watchlist/toggle', (req, res) => {
+app.post('/api/watchlist/toggle', async (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { item, category, parentPath } = req.body;
-  const list = loadUserWatchlist(user);
+  const list = await loadUserWatchlist(user);
   
   const existingIndex = list.findIndex(i => i.item.name === item.name && i.parentPath === parentPath);
   
@@ -285,15 +181,15 @@ app.post('/api/watchlist/toggle', (req, res) => {
     list.push({ item, category, parentPath });
   }
   
-  saveUserWatchlist(user, list);
+  await saveUserWatchlist(user, list);
   res.json({ success: true, watchlist: list, added: existingIndex < 0 });
 });
 
-app.get('/api/watchlist/check', (req, res) => {
+app.get('/api/watchlist/check', async (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   const { name, parentPath } = req.query;
   if (!user || !name || !parentPath) return res.json({ inWatchlist: false });
-  const list = loadUserWatchlist(user);
+  const list = await loadUserWatchlist(user);
   const exists = list.some(i => i.item.name === name && i.parentPath === parentPath);
   res.json({ inWatchlist: exists });
 });
@@ -303,13 +199,13 @@ app.get('/api/recommendations', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const refresh = req.query.refresh === 'true';
-  const existingRecs = loadUserRecommendations(user);
+  const existingRecs = await loadUserRecommendations(user);
   
   if (!refresh && existingRecs && existingRecs.length > 0) {
       return res.json({ results: existingRecs });
   }
   
-  const watchlist = loadUserWatchlist(user);
+  const watchlist = await loadUserWatchlist(user);
   if (watchlist.length < 5) {
       return res.json({ results: [], message: 'ADD_MORE', count: watchlist.length });
   }
@@ -449,7 +345,7 @@ app.get('/api/recommendations', async (req, res) => {
       };
   });
   
-  saveUserRecommendations(user, formattedRecs);
+  await saveUserRecommendations(user, formattedRecs);
   
   res.json({ results: formattedRecs });
 });
@@ -473,19 +369,13 @@ app.post('/api/config', (req, res) => {
 
 
 // --- User Expirations ---
-const expirationsFile = path.join(process.cwd(), 'users_expirations.json');
 let userExpirations: Record<string, string> = {};
-if (fs.existsSync(expirationsFile)) {
-  try {
-    userExpirations = (safeReadJSON(expirationsFile) || {});
-  } catch(e) {}
-}
 
 app.get('/api/users/expirations', (req, res) => {
   res.json(userExpirations);
 });
 
-app.post('/api/users/expirations', (req, res) => {
+app.post('/api/users/expirations', async (req, res) => {
   const { userId, expirationDate } = req.body;
   if (userId === undefined || userId === null) return res.status(400).json({ error: 'Missing userId' });
   
@@ -494,7 +384,7 @@ app.post('/api/users/expirations', (req, res) => {
   } else {
     delete userExpirations[userId];
   }
-  fs.writeFileSync(expirationsFile, JSON.stringify(userExpirations, null, 2));
+  await writeSQLiteJSON('users_expirations', userExpirations);
   addLog('User Expiration Set', 'Admin', `Set expiration for user ${userId} to ${expirationDate || 'none'}`);
   res.json({ success: true });
 });
@@ -525,7 +415,7 @@ setInterval(async () => {
           addLog('cron_disable', 'System/Cron', `User ${user.username} was disabled automatically. Expired: ${expDateStr}`);
           
           delete userExpirations[user.id];
-          fs.writeFileSync(expirationsFile, JSON.stringify(userExpirations, null, 2));
+          await writeSQLiteJSON('users_expirations', userExpirations);
         }
       }
     }
@@ -536,26 +426,20 @@ setInterval(async () => {
 // ------------------------
 
 // --- Activity Logs ---
-const logsFile = path.join(process.cwd(), 'activity_logs.json');
 let activityLogs: any[] = [];
-if (fs.existsSync(logsFile)) {
-  try {
-    activityLogs = (safeReadJSON(logsFile) || []);
-  } catch(e) {}
-}
 
-function addLog(action: string, username: string, details: string) {
+async function addLog(action: string, username: string, details: string) {
   const log = { id: Date.now().toString(), timestamp: new Date().toISOString(), action, username, details };
-  activityLogs.unshift(log); // newest first
+  activityLogs.unshift(log);
   if (activityLogs.length > 500) activityLogs = activityLogs.slice(0, 500);
-  fs.writeFileSync(logsFile, JSON.stringify(activityLogs, null, 2));
+  await writeSQLiteJSON('activity_logs', activityLogs);
 }
 
 app.get('/api/admin/logs', (req, res) => {
   res.json(activityLogs);
 });
 
-app.post('/api/admin/log', (req, res) => {
+app.post('/api/admin/log', async (req, res) => {
   const { action, username, details } = req.body;
   addLog(action, username || 'System/Admin', details);
   res.json({ success: true });
@@ -1135,13 +1019,7 @@ app.get('/api/meta/collections', (req, res) => {
 });
 
 // Genre Backdrops Cache
-const genreBackdropsCachePath = path.join(process.cwd(), 'genre_backdrops_cache.json');
 let genreBackdropsCache: { time: number, data: any[] } | null = null;
-try {
-  if (fs.existsSync(genreBackdropsCachePath)) {
-    genreBackdropsCache = safeReadJSON(genreBackdropsCachePath);
-  }
-} catch (e) {}
 
 app.get('/api/meta/genres/backdrops', async (req, res) => {
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
@@ -1212,7 +1090,7 @@ app.get('/api/meta/genres/backdrops', async (req, res) => {
 
   genreBackdropsCache = { time: Date.now(), data: genreBackdrops };
   try {
-     fs.writeFileSync(genreBackdropsCachePath, JSON.stringify(genreBackdropsCache));
+     await writeSQLiteJSON('genre_backdrops_cache', genreBackdropsCache);
   } catch (e) {}
 
   res.json({ success: true, genres: genreBackdrops });
@@ -1708,7 +1586,27 @@ app.post('/api/chat', async (req, res) => {
 });
 
 
+let jfOverrides: Record<string, any> = {};
+
+async function initSQLiteState() {
+  await initSQLiteDB();
+  const loadedConfig = await readSQLiteJSON('config');
+  if (loadedConfig) appConfig = { ...appConfig, ...loadedConfig };
+  tmdbCache = (await readSQLiteJSON('db')) || {};
+  const loadedLibrary = await readSQLiteJSON('library_index');
+  if (loadedLibrary) {
+    libraryIndex = loadedLibrary.items || [];
+    libraryIndexLastUpdated = loadedLibrary.lastUpdated || 0;
+  }
+  userExpirations = (await readSQLiteJSON('users_expirations')) || {};
+  activityLogs = (await readSQLiteJSON('activity_logs')) || [];
+  genreBackdropsCache = (await readSQLiteJSON('genre_backdrops_cache')) || null;
+  jfOverrides = (await readSQLiteJSON('jf_override')) || {};
+}
+
 async function startServer() {
+  await initSQLiteState();
+
   const isProd = process.env.NODE_ENV === "production" || _filename.endsWith('.cjs');
   if (!isProd) {
     const vite = await createViteServer({
@@ -1726,15 +1624,8 @@ async function startServer() {
 
   
 // API: Jellyfin Override
-const jfOverrideFile = 'jf_override.json';
-let jfOverrides: Record<string, any> = {};
-if (fs.existsSync(jfOverrideFile)) {
-    try {
-        jfOverrides = (safeReadJSON(jfOverrideFile) || {});
-    } catch(e) {}
-}
 
-app.post('/api/jellyfin/override', (req, res) => {
+app.post('/api/jellyfin/override', async (req, res) => {
     let token = req.headers.authorization;
     if (!token || token === 'guest-token') return res.status(401).json({ error: 'Unauthorized' });
     // basic admin check or rely on front-end for now
@@ -1743,7 +1634,7 @@ app.post('/api/jellyfin/override', (req, res) => {
     if (!jfName) return res.status(400).json({ error: 'Missing name' });
     
     jfOverrides[jfName] = { openlistPath, category, year };
-    fs.writeFileSync(jfOverrideFile, JSON.stringify(jfOverrides, null, 2));
+    await writeSQLiteJSON('jf_override', jfOverrides);
     addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
     
     res.json({ success: true, overrides: jfOverrides });
