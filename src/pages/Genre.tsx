@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router';
 import { motion } from 'motion/react';
 import ItemCard from '../components/ItemCard';
 import { ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
@@ -29,6 +29,7 @@ export default function Genre() {
   const [searchParams] = useSearchParams();
   const genreName = searchParams.get('name') || 'Genre';
   const navigate = useNavigate();
+  const location = useLocation();
   const { token } = useAuth();
   
   const getInitialState = () => {
@@ -66,28 +67,8 @@ export default function Genre() {
   }, [page, viewMode, activeTab, id]);
 
   const fetchGenreItems = async (): Promise<any[]> => {
-    const res = await axios.post('/api/fs/list', { reqPath: '/home' }, { headers: { Authorization: token } });
-    if (res.data.code !== 200) throw new Error();
-    const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
-    
-    const catData = await Promise.all(
-      dirs.map(async (dir: string) => {
-        const subRes = await axios.post('/api/fs/list', { reqPath: `/home/${dir}` }, { headers: { Authorization: token } });
-        return {
-          name: dir,
-          items: subRes.data.data?.content || []
-        };
-      })
-    );
-    const allItems = catData.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name })));
-    
-    const payloadItems = allItems.map(item => {
-       const { cleanName, year } = parseMediaName(item.name);
-       return { ...item, cleanName, year };
-    });
-
-    // Fetch genre matched items
-    const genreRes = await axios.post(`/api/meta/genre/${id}`, { items: payloadItems });
+    // Fetch genre matched items directly from the backend
+    const genreRes = await axios.get(`/api/meta/genre/${id}`, { headers: { Authorization: token } });
     const matchedItems = genreRes.data?.items || [];
     
     const uniqueItems = Array.from(new Map(matchedItems.map((item: any) => [item.name, item])).values());
@@ -124,7 +105,7 @@ export default function Genre() {
     >
       <div className="flex flex-col gap-6 mb-8">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
+          <button onClick={() => location.state?.from ? navigate(location.state.from) : navigate(-1)} className="p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-black dark:text-white tracking-tight">{genreName}</h1>

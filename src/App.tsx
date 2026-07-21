@@ -17,6 +17,7 @@ import Watchlist from './pages/Watchlist';
 import Collection from './pages/Collection';
 import CollectionsPage from './pages/CollectionsPage';
 import Genre from './pages/Genre';
+import GenresList from './pages/GenresList';
 import Layout from './components/Layout';
 import AuthProvider, { useAuth } from './context/AuthContext';
 import Bot from './components/Bot';
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="category/:name" element={<Category />} />
             <Route path="collection/:id" element={<Collection />} />
             <Route path="genre/:id" element={<Genre />} />
+            <Route path="genres" element={<GenresList />} />
             <Route path="collections" element={<CollectionsPage />} />
             <Route path="recently-added" element={<RecentlyAddedPage />} />
             <Route path="watchlist" element={<Watchlist />} />

@@ -105,6 +105,71 @@ function saveDb() {
 }
 
 
+// Library Index Cache for fast genre searching
+const libraryIndexPath = path.join(process.cwd(), 'library_index.json');
+let libraryIndex: any[] = [];
+let libraryIndexLastUpdated = 0;
+
+try {
+  if (fs.existsSync(libraryIndexPath)) {
+    if (fs.statSync(libraryIndexPath).isFile()) {
+      const data = JSON.parse(fs.readFileSync(libraryIndexPath, 'utf8'));
+      libraryIndex = data.items || [];
+      libraryIndexLastUpdated = data.lastUpdated || 0;
+      console.log(`[STARTUP] Successfully loaded Library Index from ${libraryIndexPath}`);
+    }
+  }
+} catch (e) {
+  console.error(`[STARTUP ERROR] Failed to read Library Index from ${libraryIndexPath}:`, e);
+}
+
+function saveLibraryIndex() {
+  try {
+    fs.writeFileSync(libraryIndexPath, JSON.stringify({ items: libraryIndex, lastUpdated: libraryIndexLastUpdated }, null, 2));
+  } catch (e) { console.error("Library index write error", e); }
+}
+
+async function getLibraryIndex(token: string, forceRefresh = false) {
+   if (!forceRefresh && libraryIndex.length > 0 && (Date.now() - libraryIndexLastUpdated < 15 * 60 * 1000)) {
+       return libraryIndex;
+   }
+   try {
+        const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
+        const res = await axios.post(`${openlistUrl}/api/fs/list`, { path: appConfig.basePath, password: "" }, { headers: { Authorization: token } });
+        if (res.data.code !== 200) return libraryIndex;
+        const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
+        
+        const catData = await Promise.all(dirs.map(async (dir: string) => {
+            try {
+                const subRes = await axios.post(`${openlistUrl}/api/fs/list`, { path: `${appConfig.basePath}/${dir}`, password: "" }, { headers: { Authorization: token } });
+                return {
+                    name: dir,
+                    items: subRes.data?.data?.content || []
+                };
+            } catch (e) {
+                return { name: dir, items: [] };
+            }
+        }));
+        
+        let allItems: any[] = [];
+        for (const c of catData) {
+            for (const item of c.items) {
+                const { cleanName, year } = parseMediaName(item.name);
+                allItems.push({ ...item, category: c.name, cleanName, year });
+            }
+        }
+        
+        if (allItems.length > 0) {
+            libraryIndex = allItems;
+            libraryIndexLastUpdated = Date.now();
+            saveLibraryIndex();
+        }
+   } catch(e) {
+       console.error("Failed to refresh library index", e);
+   }
+   return libraryIndex;
+}
+
 // Recommendations storage
 const recommendationsDir = path.join(process.cwd(), 'recommendations');
 if (!fs.existsSync(recommendationsDir)) {
@@ -1043,13 +1108,82 @@ app.get('/api/meta/collections', (req, res) => {
   res.json({ success: true, collections: result });
 });
 
-app.post('/api/meta/genre/:genreId', (req, res) => {
-  const genreId = parseInt(req.params.genreId, 10);
-  const { items } = req.body;
+app.get('/api/meta/genres/backdrops', async (req, res) => {
+  const genres: Record<number, string> = {
+    28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+    99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
+    27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
+    10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western", 10759: "Action & Adventure",
+    10762: "Kids", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy", 10766: "Soap",
+    10767: "Talk", 10768: "War & Politics"
+  };
+
+  let token = req.headers.authorization;
+  if (!token || token === 'guest-token') token = getOpenlistApiKey();
   
-  if (!items || !Array.isArray(items)) {
-     return res.status(400).json({ error: 'Items array required' });
+  if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  const items = await getLibraryIndex(token);
+  const genreBackdrops: any[] = [];
+  
+  Object.keys(genres).forEach(idStr => {
+     const genreId = parseInt(idStr, 10);
+     const matched = items.filter((item: any) => {
+         const type = item.category;
+         const baseQuery = (item.cleanName || '').toLowerCase().trim();
+         const year = item.year;
+         const baseKey = `${type}-${baseQuery}`;
+         
+         let cached = null;
+         const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+         if (overriddenKey) {
+            cached = tmdbCache[overriddenKey];
+         } else {
+            const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+            if (tmdbCache[cacheKey]) {
+               cached = tmdbCache[cacheKey];
+            } else if (year && tmdbCache[baseKey]) {
+               cached = tmdbCache[baseKey];
+            }
+         }
+         
+         if (cached) {
+            const hasGenre = (cached.genres && cached.genres.some((g: any) => g.id === genreId)) || 
+                             (cached.genre_ids && cached.genre_ids.includes(genreId));
+            if (hasGenre && cached.backdrop_path) {
+                item._cached = cached;
+                return true;
+            }
+         }
+         return false;
+     });
+     
+     if (matched.length > 0) {
+        const randomItem = matched[Math.floor(Math.random() * matched.length)];
+        genreBackdrops.push({
+            id: genreId,
+            name: genres[genreId as keyof typeof genres],
+            backdrop_path: randomItem._cached.backdrop_path
+        });
+     }
+  });
+
+  res.json({ success: true, genres: genreBackdrops });
+});
+
+app.get('/api/meta/genre/:genreId', async (req, res) => {
+  const genreId = parseInt(req.params.genreId, 10);
+  
+  let token = req.headers.authorization;
+  if (!token || token === 'guest-token') token = getOpenlistApiKey();
+  
+  if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const items = await getLibraryIndex(token);
 
   const matchedItems = items.filter((item: any) => {
      if (!item.cleanName || !item.category) return false;

@@ -660,7 +660,7 @@ export default function Details() {
               {displayGenres.map((g: any, i: number) => (
                 <button 
                   key={i} 
-                  onClick={() => navigate(`/genre/${g.id}?name=${encodeURIComponent(g.name)}`)}
+                  onClick={() => navigate(`/genre/${g.id}?name=${encodeURIComponent(g.name)}`, { state: { from: location.pathname + location.search + location.hash } })}
                   className="px-3 py-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-full text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                 >
                   {g.name}

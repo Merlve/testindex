@@ -7,6 +7,7 @@ import ItemCard from '../components/ItemCard';
 import FeaturedSlide from '../components/FeaturedSlide';
 import RecentlyAddedCarousel from '../components/RecentlyAddedCarousel';
 import TrendingCarousel from '../components/TrendingCarousel';
+import GenresCarousel from '../components/GenresCarousel';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -172,6 +173,7 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+        <GenresCarousel />
       </div>
     </motion.div>
   );
