@@ -10,6 +10,11 @@ export const sqliteDb = createClient({ url: 'file:' + path.join(dbDir, 'shindex.
 export async function initSQLiteDB() {
   await sqliteDb.execute('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)');
 
+  const migrationFlag = await readSQLiteJSON('_migration_complete');
+  if (migrationFlag) {
+    return; // Already migrated
+  }
+
   const migrations = [
     { key: 'config', oldPath: 'config.json' },
     { key: 'db', oldPath: 'db.json' },
@@ -23,58 +28,61 @@ export async function initSQLiteDB() {
 
   for (const m of migrations) {
     const p = path.join(process.cwd(), m.oldPath);
-    if (fs.existsSync(p) && !fs.existsSync(p + '.bak')) {
-       try {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
          const raw = fs.readFileSync(p, 'utf8').trim();
          if (raw) {
            const data = JSON.parse(raw);
            await writeSQLiteJSON(m.key, data);
+           console.log(`Migrated ${m.oldPath} to SQLite`);
          }
-         fs.renameSync(p, p + '.bak');
-         console.log(`Migrated ${m.oldPath} to SQLite`);
-       } catch (e) {
-         console.error(`Failed to migrate ${m.oldPath}:`, e);
-       }
+      }
+    } catch (e) {
+      console.error(`Failed to migrate ${m.oldPath}:`, e);
     }
   }
 
   const watchlistsDir = path.join(process.cwd(), 'watchlists');
-  if (fs.existsSync(watchlistsDir) && !fs.existsSync(watchlistsDir + '.bak')) {
-    try {
+  try {
+    if (fs.existsSync(watchlistsDir) && fs.statSync(watchlistsDir).isDirectory()) {
       const files = fs.readdirSync(watchlistsDir);
       for (const f of files) {
         if (f.endsWith('.json')) {
           const userId = f.replace('.json', '');
           const p = path.join(watchlistsDir, f);
-          const data = JSON.parse(fs.readFileSync(p, 'utf8').trim() || '[]');
-          await writeSQLiteJSON(`watchlist_${userId}`, data);
+          if (fs.statSync(p).isFile()) {
+            const data = JSON.parse(fs.readFileSync(p, 'utf8').trim() || '[]');
+            await writeSQLiteJSON(`watchlist_${userId}`, data);
+          }
         }
       }
-      fs.renameSync(watchlistsDir, watchlistsDir + '.bak');
       console.log(`Migrated watchlists to SQLite`);
-    } catch(e) {
-      console.error(`Failed to migrate watchlists:`, e);
     }
+  } catch(e) {
+    console.error(`Failed to migrate watchlists:`, e);
   }
 
   const recommendationsDir = path.join(process.cwd(), 'recommendations');
-  if (fs.existsSync(recommendationsDir) && !fs.existsSync(recommendationsDir + '.bak')) {
-    try {
+  try {
+    if (fs.existsSync(recommendationsDir) && fs.statSync(recommendationsDir).isDirectory()) {
       const files = fs.readdirSync(recommendationsDir);
       for (const f of files) {
         if (f.endsWith('.json')) {
           const userId = f.replace('.json', '');
           const p = path.join(recommendationsDir, f);
-          const data = JSON.parse(fs.readFileSync(p, 'utf8').trim() || '[]');
-          await writeSQLiteJSON(`recommendations_${userId}`, data);
+          if (fs.statSync(p).isFile()) {
+             const data = JSON.parse(fs.readFileSync(p, 'utf8').trim() || '[]');
+             await writeSQLiteJSON(`recommendations_${userId}`, data);
+          }
         }
       }
-      fs.renameSync(recommendationsDir, recommendationsDir + '.bak');
       console.log(`Migrated recommendations to SQLite`);
-    } catch(e) {
-      console.error(`Failed to migrate recommendations:`, e);
     }
+  } catch(e) {
+    console.error(`Failed to migrate recommendations:`, e);
   }
+
+  await writeSQLiteJSON('_migration_complete', true);
 }
 
 export async function readSQLiteJSON(key: string) {
