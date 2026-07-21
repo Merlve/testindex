@@ -5,6 +5,7 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 ## Features
 
 - **Dashboard**: A stunning, modern UI with an interactive hero slider for featured content (supports touch/mouse swiping, smooth liquid glass navigation arrows), trending carousels, and category-based grids.
+- **Dynamic Genres List**: A beautiful all-genres page with intelligent backdrop image caching (caches the best backdrop from a genre for 7 days) mapped precisely to TMDB.
 - **Personalized 'For You' Recommendations**: A dedicated recommendations page suggesting new content based on user watchlists, automatically filtered to only display items that are actually available in your local library.
 - **Watchlist Functionality**: Users can easily save items to their personal watchlist for later viewing.
 - **Mobile-responsive Bottom Navigation**: A sleek, floating bottom navigation bar that ensures a native-app-like experience on mobile and tablet devices.
@@ -61,7 +62,7 @@ Shindex is containerized and configured via `docker-compose.yml`.
 2. **Prepare data files:**
    The `docker-compose.yml` mounts several local files so data persists across container restarts. Create these empty files/directories before starting:
    ```bash
-   touch config.json db.json jf_override.json jellyfin_cache.json activity_logs.json users_expirations.json
+   touch config.json db.json jf_override.json jellyfin_cache.json activity_logs.json users_expirations.json library_index.json genre_backdrops_cache.json
    mkdir -p watchlists recommendations
    ```
    *Note: If the application complains about invalid JSON on startup, simply add `{}` to the empty `.json` files. The array-based ones like `activity_logs.json` should have `[]`.*

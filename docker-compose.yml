@@ -25,3 +25,5 @@ services:
       - ./recommendations:/app/recommendations
       - ./users_expirations.json:/app/users_expirations.json
       - ./activity_logs.json:/app/activity_logs.json
+      - ./library_index.json:/app/library_index.json
+      - ./genre_backdrops_cache.json:/app/genre_backdrops_cache.json
