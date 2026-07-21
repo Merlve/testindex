@@ -14,6 +14,19 @@ const _require = typeof require !== 'undefined' ? require : createRequire(import
 const _filename = typeof __filename !== 'undefined' ? __filename : fileURLToPath(import.meta.url);
 const _dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(_filename);
 
+function safeReadJSON(filePath: string) {
+  try {
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const raw = fs.readFileSync(filePath, 'utf8').trim();
+      if (raw) return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error(`[STARTUP ERROR] Failed to read ${filePath}: `, e.message);
+  }
+  return null;
+}
+
+
 
 const app = express();
 const PORT = Number(process.env.SERVER_PORT) || 3000;
@@ -31,7 +44,7 @@ let appConfig = {
 try {
   if (fs.existsSync(configPath)) {
     if (fs.statSync(configPath).isFile()) {
-      const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const loaded = safeReadJSON(configPath);
       appConfig = { ...appConfig, ...loaded };
       console.log(`[STARTUP] Successfully loaded config from ${configPath}`);
     } else {
@@ -89,7 +102,7 @@ let tmdbCache: Record<string, any> = {};
 try {
   if (fs.existsSync(dbPath)) {
     if (fs.statSync(dbPath).isFile()) {
-      tmdbCache = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+      tmdbCache = (safeReadJSON(dbPath) || {});
       console.log(`[STARTUP] Successfully loaded TMDB cache from ${dbPath}`);
     } else {
       console.warn(`[STARTUP] Warning: ${dbPath} exists but is not a file.`);
@@ -113,7 +126,7 @@ let libraryIndexLastUpdated = 0;
 try {
   if (fs.existsSync(libraryIndexPath)) {
     if (fs.statSync(libraryIndexPath).isFile()) {
-      const data = JSON.parse(fs.readFileSync(libraryIndexPath, 'utf8'));
+      const data = (safeReadJSON(libraryIndexPath) || { items: [], lastUpdated: 0 });
       libraryIndex = data.items || [];
       libraryIndexLastUpdated = data.lastUpdated || 0;
       console.log(`[STARTUP] Successfully loaded Library Index from ${libraryIndexPath}`);
@@ -129,46 +142,59 @@ function saveLibraryIndex() {
   } catch (e) { console.error("Library index write error", e); }
 }
 
+let isFetchingLibrary = false;
+let libraryFetchPromise = null;
+
 async function getLibraryIndex(token: string, forceRefresh = false) {
    if (!forceRefresh && libraryIndex.length > 0 && (Date.now() - libraryIndexLastUpdated < 15 * 60 * 1000)) {
        return libraryIndex;
    }
-   try {
-        const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
-        const res = await axios.post(`${openlistUrl}/api/fs/list`, { path: appConfig.basePath, password: "" }, { headers: { Authorization: token } });
-        if (res.data.code !== 200) return libraryIndex;
-        const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
-        
-        const catData = await Promise.all(dirs.map(async (dir: string) => {
-            try {
-                const subRes = await axios.post(`${openlistUrl}/api/fs/list`, { path: `${appConfig.basePath}/${dir}`, password: "" }, { headers: { Authorization: token } });
-                return {
-                    name: dir,
-                    items: subRes.data?.data?.content || []
-                };
-            } catch (e) {
-                return { name: dir, items: [] };
-            }
-        }));
-        
-        let allItems: any[] = [];
-        for (const c of catData) {
-            for (const item of c.items) {
-                const { cleanName, year } = parseMediaName(item.name);
-                allItems.push({ ...item, category: c.name, cleanName, year });
-            }
-        }
-        
-        if (allItems.length > 0) {
-            libraryIndex = allItems;
-            libraryIndexLastUpdated = Date.now();
-            saveLibraryIndex();
-        }
-   } catch(e) {
-       console.error("Failed to refresh library index", e);
+   if (libraryFetchPromise && !forceRefresh) {
+       return libraryFetchPromise;
    }
-   return libraryIndex;
+
+   libraryFetchPromise = (async () => {
+       try {
+            const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
+            const res = await axios.post(`${openlistUrl}/api/fs/list`, { path: appConfig.basePath, password: "" }, { headers: { Authorization: token } });
+            if (res.data.code !== 200) return libraryIndex;
+            const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
+            
+            const catData = await Promise.all(dirs.map(async (dir: string) => {
+                try {
+                    const subRes = await axios.post(`${openlistUrl}/api/fs/list`, { path: `${appConfig.basePath}/${dir}`, password: "" }, { headers: { Authorization: token } });
+                    return {
+                        name: dir,
+                        items: subRes.data?.data?.content || []
+                    };
+                } catch (e) {
+                    return { name: dir, items: [] };
+                }
+            }));
+            
+            let allItems: any[] = [];
+            for (const c of catData) {
+                for (const item of c.items) {
+                    const { cleanName, year } = parseMediaName(item.name);
+                    allItems.push({ ...item, category: c.name, cleanName, year });
+                }
+            }
+            
+            if (allItems.length > 0) {
+                libraryIndex = allItems;
+                libraryIndexLastUpdated = Date.now();
+                saveLibraryIndex();
+            }
+       } catch(e) {
+           console.error("Failed to refresh library index", e);
+       } finally {
+           libraryFetchPromise = null;
+       }
+       return libraryIndex;
+   })();
+   return libraryFetchPromise;
 }
+
 
 // Recommendations storage
 const recommendationsDir = path.join(process.cwd(), 'recommendations');
@@ -187,7 +213,7 @@ function loadUserRecommendations(user) {
   const filePath = getUserRecommendationsPath(user);
   try {
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      return (safeReadJSON(filePath) || []);
     }
   } catch (e) {}
   return null;
@@ -221,7 +247,7 @@ function loadUserWatchlist(user: string): any[] {
   const filePath = getUserWatchlistPath(user);
   try {
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      return (safeReadJSON(filePath) || []);
     }
   } catch (e) {
     console.error(`Error loading watchlist for user ${user}:`, e);
@@ -451,7 +477,7 @@ const expirationsFile = path.join(process.cwd(), 'users_expirations.json');
 let userExpirations: Record<string, string> = {};
 if (fs.existsSync(expirationsFile)) {
   try {
-    userExpirations = JSON.parse(fs.readFileSync(expirationsFile, 'utf-8'));
+    userExpirations = (safeReadJSON(expirationsFile) || {});
   } catch(e) {}
 }
 
@@ -514,7 +540,7 @@ const logsFile = path.join(process.cwd(), 'activity_logs.json');
 let activityLogs: any[] = [];
 if (fs.existsSync(logsFile)) {
   try {
-    activityLogs = JSON.parse(fs.readFileSync(logsFile, 'utf-8'));
+    activityLogs = (safeReadJSON(logsFile) || []);
   } catch(e) {}
 }
 
@@ -1113,7 +1139,7 @@ const genreBackdropsCachePath = path.join(process.cwd(), 'genre_backdrops_cache.
 let genreBackdropsCache: { time: number, data: any[] } | null = null;
 try {
   if (fs.existsSync(genreBackdropsCachePath)) {
-    genreBackdropsCache = JSON.parse(fs.readFileSync(genreBackdropsCachePath, 'utf8'));
+    genreBackdropsCache = safeReadJSON(genreBackdropsCachePath);
   }
 } catch (e) {}
 
@@ -1704,7 +1730,7 @@ const jfOverrideFile = 'jf_override.json';
 let jfOverrides: Record<string, any> = {};
 if (fs.existsSync(jfOverrideFile)) {
     try {
-        jfOverrides = JSON.parse(fs.readFileSync(jfOverrideFile, 'utf-8'));
+        jfOverrides = (safeReadJSON(jfOverrideFile) || {});
     } catch(e) {}
 }
 
