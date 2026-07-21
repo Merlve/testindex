@@ -28,7 +28,7 @@ export const TMDB_GENRES: Record<number, string> = {
   10768: "War & Politics"
 };
 
-export function getGenreNames(genreIds: number[] | undefined): string[] {
+export function getGenresWithIds(genreIds: number[] | undefined): {id: number, name: string}[] {
   if (!genreIds || !Array.isArray(genreIds)) return [];
-  return genreIds.map(id => TMDB_GENRES[id]).filter(Boolean);
+  return genreIds.map(id => ({ id, name: TMDB_GENRES[id] })).filter(g => Boolean(g.name));
 }

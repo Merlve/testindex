@@ -7,7 +7,7 @@ import { Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronD
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { parseMediaName } from '../utils/nameParser';
-import { getGenreNames } from '../utils/genres';
+import { getGenresWithIds } from '../utils/genres';
 import { clearRecommendationsCache } from './Recommendations';
 
 function formatBytes(bytes: number, decimals = 2) {
@@ -165,6 +165,7 @@ export default function Details() {
 
   const [inWatchlist, setInWatchlist] = useState(false);
   const [refreshingFolder, setRefreshingFolder] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
 
   const handleRefreshFolder = async (silent = false) => {
     if (!token) return;
@@ -488,7 +489,15 @@ export default function Details() {
   if (initialLoadState.isLoading) return <DetailsSkeleton onRefresh={() => handleRefreshFolder(false)} refreshingFolder={refreshingFolder} />;
 
   const backdrop = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` : null;
-  const displayGenres = tmdb?.genres ? tmdb.genres.map((g: any) => g.name) : getGenreNames(tmdb?.genre_ids);
+  const displayGenres = tmdb?.genres 
+    ? tmdb.genres.map((g: any) => ({ id: g.id, name: g.name })) 
+    : getGenresWithIds(tmdb?.genre_ids);
+  
+  const releaseYear = tmdb?.release_date 
+    ? new Date(tmdb.release_date).getFullYear() 
+    : tmdb?.first_air_date 
+      ? new Date(tmdb.first_air_date).getFullYear() 
+      : null;
   const isVideo = (name: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(name);
   const videoItems = items.filter(i => !i.is_dir && isVideo(i.name));
   const dirItems = items.filter(i => i.is_dir);
@@ -590,9 +599,11 @@ export default function Details() {
         </div>
       )}
 
-      <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 bg-black/50 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-full hover:bg-black/10 dark:bg-white/10 transition backdrop-blur">
-        <ChevronLeft size={24} />
-      </button>
+      {location.key !== 'default' && (
+        <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 bg-black/50 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-full hover:bg-black/10 dark:bg-white/10 transition backdrop-blur">
+          <ChevronLeft size={24} />
+        </button>
+      )}
 
       {backdrop && (
         <div className="absolute top-0 left-0 w-full h-[60vh] md:h-[70vh] pointer-events-none z-0">
@@ -608,7 +619,10 @@ export default function Details() {
             <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} className="w-32 sm:w-40 md:w-64 rounded-xl md:rounded-2xl shadow-2xl shrink-0 border border-black/5 dark:border-white/5" alt="Poster" />
           )}
           <div className="flex-1 min-w-0 md:hidden flex flex-col gap-2 pt-2">
-            <h1 className="text-2xl font-bold text-black dark:text-white tracking-tight leading-tight line-clamp-3">{tmdb?.title || tmdb?.name || name}</h1>
+            <h1 className="text-2xl font-bold text-black dark:text-white tracking-tight leading-tight line-clamp-3">
+              {tmdb?.title || tmdb?.name || name}
+              {releaseYear ? <span className="text-gray-500 font-normal ml-2">({releaseYear})</span> : null}
+            </h1>
             <p className="text-[10px] font-mono text-gray-600 dark:text-gray-400 break-words break-all line-clamp-2">{fullPath}</p>
             <button onClick={() => {
               if (user === 'guest') {
@@ -625,7 +639,10 @@ export default function Details() {
 
         <div className="flex-1 min-w-0 text-left">
           <div className="hidden md:flex flex-row items-center gap-4 mb-2">
-            <h1 className="text-4xl lg:text-5xl font-extrabold text-black dark:text-white tracking-tight">{tmdb?.title || tmdb?.name || name}</h1>
+            <h1 className="text-4xl lg:text-5xl font-extrabold text-black dark:text-white tracking-tight">
+              {tmdb?.title || tmdb?.name || name}
+              {releaseYear ? <span className="text-gray-500 font-normal ml-3">({releaseYear})</span> : null}
+            </h1>
             <button onClick={() => {
               if (user === 'guest') {
                 setToast('Sign up for the website plan to use this feature');
@@ -640,10 +657,14 @@ export default function Details() {
           <p className="hidden md:block text-xs md:text-sm font-mono text-gray-600 dark:text-gray-400 mb-4 break-words break-all">{fullPath}</p>
           {displayGenres && displayGenres.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
-              {displayGenres.map((g, i) => (
-                <span key={i} className="px-3 py-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-full text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  {g}
-                </span>
+              {displayGenres.map((g: any, i: number) => (
+                <button 
+                  key={i} 
+                  onClick={() => navigate(`/genre/${g.id}?name=${encodeURIComponent(g.name)}`)}
+                  className="px-3 py-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-full text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                >
+                  {g.name}
+                </button>
               ))}
             </div>
           )}
@@ -660,10 +681,28 @@ export default function Details() {
           </div>
           
           <div className="bg-[#fbf4eb]/95 dark:bg-[#1a1a22]/95 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-black/10 dark:border-white/10 shadow-2xl text-left mt-8 md:mt-12">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-              <h2 className="text-lg font-bold text-black dark:text-white">{category === 'MOVIES' ? 'Files' : 'Episodes / Files'}</h2>
-              <div className="flex flex-wrap gap-3 items-center">
-                {user !== 'guest' && videoItems.length > 0 && (
+            <div 
+              className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 cursor-pointer group"
+              onClick={() => setShowFiles(!showFiles)}
+            >
+              <h2 className="flex-1 text-lg font-bold text-black dark:text-white flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2.5 rounded-xl group-hover:border-purple-600/50 group-hover:shadow-md transition-all">
+                <div className="flex items-center gap-2">
+                  {category === 'MOVIES' ? 'Files' : 'Episodes / Files'}
+                  <div className={`transition-transform duration-300 ${showFiles ? 'rotate-180' : ''}`}>
+                    <ChevronDown size={20} />
+                  </div>
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleRefreshFolder(false); }} 
+                  disabled={refreshingFolder} 
+                  className="hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white p-1 rounded-lg transition" 
+                  title="Refresh folder"
+                >
+                  <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
+                </button>
+              </h2>
+              <div className="flex flex-wrap gap-3 items-center" onClick={(e) => e.stopPropagation()}>
+                {user !== 'guest' && videoItems.length > 0 && showFiles && (
                   <>
                     <label className="flex items-center gap-2 cursor-pointer bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-3 py-2 rounded-xl hover:border-purple-600/50 transition">
                       <input 
@@ -686,13 +725,12 @@ export default function Details() {
                     )}
                   </>
                 )}
-                <button onClick={() => handleRefreshFolder(false)} disabled={refreshingFolder} className="bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl transition" title="Refresh folder">
-                  <RefreshCw size={18} className={refreshingFolder ? 'animate-spin' : ''} />
-                </button>
               </div>
             </div>
 
-            {(!user || user === 'guest') ? (
+            {showFiles && (
+              <>
+                {(!user || user === 'guest') ? (
               <div className="text-center py-12 flex flex-col items-center gap-4">
                 <p className="text-gray-700 dark:text-gray-300 font-medium text-lg">
                   Please log in to access episodes and files.
@@ -805,6 +843,8 @@ export default function Details() {
                   </div>
                 )}
               </>
+            )}
+            </>
             )}
           </div>
         </div>

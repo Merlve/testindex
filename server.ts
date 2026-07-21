@@ -1026,11 +1026,11 @@ app.get('/api/meta/collections', (req, res) => {
            queries: new Set<string>()
         };
       }
-      const match = key.match(/^[A-Z]+-(.+?)(?:-\d{4})?$/);
+      const match = key.match(/^[a-zA-Z]+-(.+?)(?:-\d{4})?$/);
       if (match) {
           collections[cId].queries.add(match[1]);
       } else {
-          collections[cId].queries.add(key.replace(/^[A-Z]+-/, ''));
+          collections[cId].queries.add(key.replace(/^[a-zA-Z]+-/, ''));
       }
     }
   }
@@ -1041,6 +1041,29 @@ app.get('/api/meta/collections', (req, res) => {
   }));
   
   res.json({ success: true, collections: result });
+});
+
+app.get('/api/meta/genre/:genreId', (req, res) => {
+  const genreId = parseInt(req.params.genreId, 10);
+  const queries = new Set<string>();
+
+  for (const key in tmdbCache) {
+    const item = tmdbCache[key];
+    if (item) {
+      const hasGenre = (item.genres && item.genres.some((g: any) => g.id === genreId)) ||
+                       (item.genre_ids && item.genre_ids.includes(genreId));
+      if (hasGenre) {
+        const match = key.match(/^[a-zA-Z]+-(.+?)(?:-\d{4})?$/);
+        if (match) {
+            queries.add(match[1].toLowerCase());
+        } else {
+            queries.add(key.replace(/^[a-zA-Z]+-/, '').toLowerCase());
+        }
+      }
+    }
+  }
+
+  res.json({ success: true, genreId, queries: Array.from(queries) });
 });
 
 app.get('/api/meta/trending', async (req, res) => {
