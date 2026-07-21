@@ -1108,7 +1108,21 @@ app.get('/api/meta/collections', (req, res) => {
   res.json({ success: true, collections: result });
 });
 
+// Genre Backdrops Cache
+const genreBackdropsCachePath = path.join(process.cwd(), 'genre_backdrops_cache.json');
+let genreBackdropsCache: { time: number, data: any[] } | null = null;
+try {
+  if (fs.existsSync(genreBackdropsCachePath)) {
+    genreBackdropsCache = JSON.parse(fs.readFileSync(genreBackdropsCachePath, 'utf8'));
+  }
+} catch (e) {}
+
 app.get('/api/meta/genres/backdrops', async (req, res) => {
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  if (genreBackdropsCache && (Date.now() - genreBackdropsCache.time < SEVEN_DAYS)) {
+      return res.json({ success: true, genres: genreBackdropsCache.data });
+  }
+
   const genres: Record<number, string> = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
     99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
@@ -1169,6 +1183,11 @@ app.get('/api/meta/genres/backdrops', async (req, res) => {
         });
      }
   });
+
+  genreBackdropsCache = { time: Date.now(), data: genreBackdrops };
+  try {
+     fs.writeFileSync(genreBackdropsCachePath, JSON.stringify(genreBackdropsCache));
+  } catch (e) {}
 
   res.json({ success: true, genres: genreBackdrops });
 });
