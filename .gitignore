@@ -15,3 +15,5 @@ jellyfin_cache.json
 jf_override.json
 activity_logs.json
 users_expirations.json
+library_index.json
+genre_backdrops_cache.json
