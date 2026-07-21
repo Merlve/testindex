@@ -124,7 +124,7 @@ export default function Genre() {
     >
       <div className="flex flex-col gap-6 mb-8">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition">
+          <button onClick={() => navigate(-1)} className="p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-black dark:text-white tracking-tight">{genreName}</h1>

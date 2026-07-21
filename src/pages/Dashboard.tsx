@@ -115,7 +115,7 @@ export default function Dashboard() {
             <p className="font-bold mb-2">Error loading dashboard</p>
             <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
           </div>
-          <button onClick={() => refetch()} className="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 text-black dark:text-white px-5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 transition">
+          <button onClick={() => refetch()} className="flex items-center gap-2 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 text-black dark:text-white px-5 py-2.5 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm transition-all hover:scale-105">
             <RefreshCw size={18} /> Retry
           </button>
         </div>
@@ -133,7 +133,7 @@ export default function Dashboard() {
       className="pb-20"
     >
       <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
-        <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors bg-black/5 dark:bg-white/5 px-4 py-2 rounded-xl border border-black/5 dark:border-white/5 hover:border-black/10 dark:border-white/10">
+        <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-4 py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105">
           <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> {isFetching ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>

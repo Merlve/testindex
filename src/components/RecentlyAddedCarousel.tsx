@@ -54,7 +54,7 @@ export default function RecentlyAddedCarousel() {
           <button 
             onClick={() => fetchRecentlyAdded(true)}
             disabled={isFetching}
-            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:bg-white/20 text-black dark:text-white rounded-lg transition disabled:opacity-50"
+            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:scale-105 disabled:opacity-50"
           >
             <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
             {isFetching ? "Fetching..." : "Fetch"}

@@ -5,11 +5,11 @@ export default function DetailsSkeleton({ onRefresh, refreshingFolder }: { onRef
   const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-20 relative overflow-hidden">
-      <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 bg-black/50 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-full hover:bg-black/10 dark:bg-white/10 transition backdrop-blur">
+      <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
         <ChevronLeft size={24} />
       </button>
       {onRefresh && (
-        <button onClick={onRefresh} disabled={refreshingFolder} className="absolute top-6 right-6 z-50 bg-black/50 border border-black/10 dark:border-white/10 text-black dark:text-white p-2 rounded-full hover:bg-black/10 dark:bg-white/10 transition backdrop-blur" title="Refresh folder">
+        <button onClick={onRefresh} disabled={refreshingFolder} className="absolute top-6 right-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110" title="Refresh folder">
           <RefreshCw size={24} className={refreshingFolder ? 'animate-spin' : ''} />
         </button>
       )}

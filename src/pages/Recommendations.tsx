@@ -172,7 +172,7 @@ export default function RecommendationsPage() {
             <button 
               onClick={fetchRecs}
               disabled={isRefreshing}
-              className="p-3 bg-black/5 dark:bg-white/5 hover:bg-purple-600 hover:text-white border border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400 rounded-full flex items-center justify-center transition disabled:opacity-50"
+              className="p-3 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full flex items-center justify-center transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:scale-105 disabled:opacity-50"
               title="Refresh Recommendations"
             >
               <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />

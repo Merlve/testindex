@@ -83,7 +83,7 @@ export default function CollectionsPage() {
       className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-20"
     >
       <div className="px-4 md:px-8 py-6 sticky top-0 bg-[#fffcf9]/90 dark:bg-[#08080a]/90 backdrop-blur z-40 border-b border-black/5 dark:border-white/5 flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition text-black dark:text-white">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
           <ChevronLeft size={24} />
         </button>
         <h2 className="text-2xl font-bold text-black dark:text-white flex items-center gap-2">

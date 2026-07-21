@@ -84,7 +84,7 @@ export default function Collection() {
     return (
       <div className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] flex flex-col items-center justify-center pb-20 text-center px-4">
         <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">Collection Not Found</h2>
-        <button onClick={() => navigate(-1)} className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+        <button onClick={() => navigate(-1)} className="px-6 py-2 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 text-black dark:text-white rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm transition-all hover:scale-105 font-bold">
           Go Back
         </button>
       </div>
@@ -99,7 +99,7 @@ export default function Collection() {
     >
       <button 
         onClick={() => navigate(-1)} 
-        className="absolute top-6 left-6 z-50 bg-black/50 border border-black/10 dark:border-white/10 text-white p-2 rounded-full hover:bg-black/80 transition backdrop-blur"
+        className="absolute top-6 left-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110"
       >
         <ChevronLeft size={24} />
       </button>
