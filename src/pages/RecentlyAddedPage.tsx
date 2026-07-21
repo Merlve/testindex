@@ -114,9 +114,9 @@ export default function RecentlyAddedPage() {
   return (
     <>
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className="p-4 sm:p-12 min-h-screen pb-20"
     >
       <div className="flex flex-col mb-6 sm:mb-8 gap-4">

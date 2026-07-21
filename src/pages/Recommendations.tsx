@@ -61,23 +61,6 @@ export default function RecommendationsPage() {
   useEffect(() => {
     sessionStorage.setItem('recs_state', JSON.stringify({ page, typeFilter, viewMode }));
   }, [page, typeFilter, viewMode]);
-  const [showTopBtn, setShowTopBtn] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 400) {
-        setShowTopBtn(true);
-      } else {
-        setShowTopBtn(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   const handleViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
@@ -154,9 +137,9 @@ export default function RecommendationsPage() {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className="pb-20 px-4 sm:px-12 min-h-screen"
     >
       <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between mt-8 mb-8 gap-4">
@@ -288,22 +271,7 @@ export default function RecommendationsPage() {
           )}
         </>
       )}
-      <AnimatePresence>
-        {showTopBtn && (
-          <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={scrollToTop}
-          className="fixed bottom-24 right-6 sm:bottom-8 sm:right-8 p-3 rounded-full bg-purple-600 text-white shadow-xl shadow-purple-600/30 z-50 flex items-center justify-center"
-          title="Scroll to top"
-        >
-          <ArrowUp size={24} />
-          </motion.button>
-        )}
-      </AnimatePresence>
+
     </motion.div>
   );
 }

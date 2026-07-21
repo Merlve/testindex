@@ -124,13 +124,14 @@ export default function Dashboard() {
     );
   }
 
-  const featured = featuredItems[slideIndex];
+  const actualSlideIndex = Math.min(slideIndex, Math.max(0, featuredItems.length - 1));
+  const featured = featuredItems[actualSlideIndex];
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className="pb-20"
     >
       <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
@@ -141,7 +142,7 @@ export default function Dashboard() {
       {featured && (
         <FeaturedSlide 
          featured={featured} 
-         slideIndex={slideIndex} 
+         slideIndex={actualSlideIndex} 
          totalSlides={featuredItems.length} 
          onNext={() => setSlideIndex(prev => (prev + 1) % featuredItems.length)}
          onPrev={() => setSlideIndex(prev => (prev - 1 + featuredItems.length) % featuredItems.length)}

@@ -12,9 +12,15 @@ import ScrollToTopButton from './ScrollToTopButton';
 
 
 function ScrollRestorer({ scrollKey, mainRef }: { scrollKey: string, mainRef: React.RefObject<HTMLElement> }) {
+  const navigationType = useNavigationType();
   useLayoutEffect(() => {
     if (!mainRef.current) return;
     const el = mainRef.current;
+    
+    if (navigationType !== 'POP') {
+      el.scrollTop = 0;
+      return;
+    }
     
     const savedScrollStr = sessionStorage.getItem(`scroll-${scrollKey}`);
     if (!savedScrollStr) {
@@ -24,38 +30,32 @@ function ScrollRestorer({ scrollKey, mainRef }: { scrollKey: string, mainRef: Re
     
     const targetScroll = parseInt(savedScrollStr, 10);
     
-    // Function to attempt restoration
     const attemptRestore = () => {
       if (el.scrollHeight >= targetScroll + el.clientHeight || targetScroll === 0) {
         el.scrollTop = targetScroll;
-        return true; // Success
+        return true;
       }
-      return false; // Still waiting for content
+      return false;
     };
-
     if (attemptRestore()) return;
     
-    // If we couldn't restore immediately (e.g. content loading), observe mutations
     const observer = new MutationObserver(() => {
       if (attemptRestore()) {
         observer.disconnect();
       }
     });
-    
     observer.observe(el, { childList: true, subtree: true, characterData: true });
     
-    // Fallback cleanup
     const timeout = setTimeout(() => {
       observer.disconnect();
-      // One final attempt
       el.scrollTop = targetScroll;
-    }, 2000); // Stop trying after 2 seconds
+    }, 2000);
     
     return () => {
       observer.disconnect();
       clearTimeout(timeout);
     };
-  }, [scrollKey, mainRef]);
+  }, [scrollKey, mainRef, navigationType]);
   return null;
 }
 
@@ -143,12 +143,7 @@ export default function Layout() {
     }
   }, [isDark]);
 
-  useEffect(() => {
-    const mainEl = document.querySelector('main');
-    if (mainEl && navigationType !== 'POP') {
-      mainEl.scrollTo(0, 0);
-    }
-  }, [location.pathname, navigationType]);
+
 
   useEffect(() => {
     let timeout: any;
@@ -328,10 +323,10 @@ export default function Layout() {
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
             className="w-full min-h-full"
           >
             <ScrollRestorer scrollKey={location.pathname} mainRef={mainRef} />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp } from 'lucide-react';
 
 export default function ScrollToTopButton({ scrollRef }: { scrollRef: React.RefObject<HTMLElement> }) {
@@ -34,14 +34,6 @@ export default function ScrollToTopButton({ scrollRef }: { scrollRef: React.RefO
     }
   };
 
-  // Check if current route is Dashboard, Genre, or Search results
-  const isDashboard = location.pathname === '/';
-  const isGenre = location.pathname.startsWith('/genre/');
-  const isSearchResults = location.pathname.startsWith('/category/search');
-
-  if (!isDashboard && !isGenre && !isSearchResults) {
-    return null;
-  }
 
   return (
     <AnimatePresence>
