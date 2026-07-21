@@ -12,12 +12,13 @@ async function saveJellyfinCache() {
   await writeSQLiteJSON('jellyfin_cache', { recentlyAddedCache, lastFetchTime });
 }
 
-readSQLiteJSON('jellyfin_cache').then(loadedCache => {
+export async function initJellyfinCache() {
+  const loadedCache = await readSQLiteJSON('jellyfin_cache');
   if (loadedCache) {
     if (loadedCache.recentlyAddedCache) recentlyAddedCache = loadedCache.recentlyAddedCache;
     if (loadedCache.lastFetchTime) lastFetchTime = loadedCache.lastFetchTime;
   }
-});
+}
 
 
 function stripAccents(s: string): string {

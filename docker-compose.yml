@@ -17,13 +17,4 @@ services:
       - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
       - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
     volumes:
-      - ./config.json:/app/config.json
-      - ./db.json:/app/db.json
-      - ./jf_override.json:/app/jf_override.json
-      - ./jellyfin_cache.json:/app/jellyfin_cache.json
-      - ./watchlists:/app/watchlists
-      - ./recommendations:/app/recommendations
-      - ./users_expirations.json:/app/users_expirations.json
-      - ./activity_logs.json:/app/activity_logs.json
-      - ./library_index.json:/app/library_index.json
-      - ./genre_backdrops_cache.json:/app/genre_backdrops_cache.json
+      - ./data:/app/data

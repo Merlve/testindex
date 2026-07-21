@@ -53,6 +53,14 @@ cp .env.example .env
 
 Shindex is containerized and configured via `docker-compose.yml`.
 
+## Breaking Change (SQLite Migration)
+
+In recent updates, Shindex has moved all local JSON flat-files to a robust local SQLite database to prevent file locking (`EBUSY`/`EISDIR`) issues and data corruption on Docker.
+
+**If you are updating from an older version:**
+1. Update your `docker-compose.yml` to only mount `./data:/app/data` (remove all the individual `.json` file volumes).
+2. If you still have the old JSON files in your directory, the new container will automatically migrate their contents into the new SQLite database on first boot.
+
 1. **Clone the repository:**
    ```bash
    git clone <repo-url>

@@ -1,5 +1,5 @@
 import express from 'express';
-import { getRecentlyAdded, getLocalItems } from './jellyfin';
+import { getRecentlyAdded, getLocalItems, initJellyfinCache } from './jellyfin';
 
 import cors from 'cors';
 import fs from 'fs';
@@ -1590,6 +1590,7 @@ let jfOverrides: Record<string, any> = {};
 
 async function initSQLiteState() {
   await initSQLiteDB();
+  await initJellyfinCache();
   const loadedConfig = await readSQLiteJSON('config');
   if (loadedConfig) appConfig = { ...appConfig, ...loadedConfig };
   tmdbCache = (await readSQLiteJSON('db')) || {};
