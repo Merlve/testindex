@@ -18,6 +18,89 @@ const _dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(_fi
 
 
 
+
+// --- In-Memory Cache Implementation ---
+class MemoryCache {
+  private cache = new Map<string, { data: any, expiry: number }>();
+  private sweepInterval: NodeJS.Timeout;
+
+  constructor() {
+    this.sweepInterval = setInterval(() => this.sweep(), 60000);
+  }
+
+  get(key: string): any | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiry) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.data;
+  }
+
+  set(key: string, data: any, ttlSeconds: number) {
+    this.cache.set(key, {
+      data,
+      expiry: Date.now() + ttlSeconds * 1000
+    });
+  }
+
+  delete(key: string) {
+    this.cache.delete(key);
+  }
+
+  private sweep() {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expiry) {
+        this.cache.delete(key);
+      }
+    }
+  }
+}
+
+const apiCache = new MemoryCache();
+
+function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
+  return (req: any, res: any, next: any) => {
+    if (req.method !== 'GET' && req.method !== 'POST') return next();
+
+    // Do not cache if client explicitly asks for refresh
+    if (req.body?.refresh === true || req.query?.refresh === 'true') {
+      return next();
+    }
+
+    const token = req.headers.authorization || '';
+    const keyPayload = {
+      path: req.originalUrl,
+      body: req.body
+    };
+    
+    let key = `${req.method}_${JSON.stringify(keyPayload)}`;
+    if (isPrivate) {
+      key += `_${token}`;
+    }
+
+    const cachedData = apiCache.get(key);
+    if (cachedData) {
+      res.setHeader('Cache-Control', `${isPrivate ? 'private' : 'public'}, max-age=${ttlSeconds}`);
+      return res.json(cachedData);
+    }
+
+    const originalJson = res.json.bind(res);
+    res.json = ((body: any) => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        apiCache.set(key, body, ttlSeconds);
+        res.setHeader('Cache-Control', `${isPrivate ? 'private' : 'public'}, max-age=${ttlSeconds}`);
+      }
+      return originalJson(body);
+    });
+
+    next();
+  };
+}
+// ----------------------------------------
+
 const app = express();
 const PORT = Number(process.env.SERVER_PORT) || 3000;
 
@@ -524,7 +607,7 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 // API: Openlist Proxy - FS List
-app.post('/api/fs/list', async (req, res) => {
+app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
   try {
     let token = req.headers.authorization;
     if (!token || token === 'guest-token') token = getOpenlistApiKey();
@@ -556,7 +639,7 @@ app.post('/api/fs/list', async (req, res) => {
 });
 
 // API: Openlist Proxy - FS Get (for signed URLs)
-app.post('/api/fs/get', async (req, res) => {
+app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
   try {
     let token = req.headers.authorization;
     if (!token || token === 'guest-token') token = getOpenlistApiKey();
@@ -575,7 +658,7 @@ app.post('/api/fs/get', async (req, res) => {
 });
 
 // API: Openlist Proxy - FS Search
-app.post('/api/fs/search', async (req, res) => {
+app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
   try {
     let token = req.headers.authorization;
     if (!token || token === 'guest-token') token = getOpenlistApiKey();
@@ -716,7 +799,7 @@ app.post('/api/fs/search', async (req, res) => {
 });
 
 // API: TMDB Proxy with Cache
-app.get('/api/meta/search_all', async (req, res) => {
+app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) => {
   const { query, type, year, forceType } = req.query;
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
@@ -872,7 +955,7 @@ app.post('/api/meta/batch', async (req, res) => {
   res.json(results);
 });
 
-app.get('/api/meta/search', async (req, res) => {
+app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   const { query, type, year, tmdbId } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
@@ -986,7 +1069,7 @@ app.get('/api/meta/search', async (req, res) => {
   }
 });
 
-app.get('/api/meta/collections', (req, res) => {
+app.get('/api/meta/collections', cacheMiddleware(3600, true), (req, res) => {
   const collections: Record<number, any> = {};
   for (const key in tmdbCache) {
     const item = tmdbCache[key];
@@ -1021,7 +1104,7 @@ app.get('/api/meta/collections', (req, res) => {
 // Genre Backdrops Cache
 let genreBackdropsCache: { time: number, data: any[] } | null = null;
 
-app.get('/api/meta/genres/backdrops', async (req, res) => {
+app.get('/api/meta/genres/backdrops', cacheMiddleware(3600, true), async (req, res) => {
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
   if (genreBackdropsCache && (Date.now() - genreBackdropsCache.time < SEVEN_DAYS)) {
       return res.json({ success: true, genres: genreBackdropsCache.data });
@@ -1141,7 +1224,7 @@ app.get('/api/meta/genre/:genreId', async (req, res) => {
   res.json({ success: true, genreId, items: matchedItems });
 });
 
-app.get('/api/meta/trending', async (req, res) => {
+app.get('/api/meta/trending', cacheMiddleware(3600, true), async (req, res) => {
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return res.json({ results: [] });
   
@@ -1461,7 +1544,7 @@ app.post('/api/meta/autofetch/stop', (req, res) => {
 // API: Gemini Chatbot
 
 // API: Jellyfin Recently Added
-app.get('/api/jellyfin/recently-added', async (req, res) => {
+app.get('/api/jellyfin/recently-added', cacheMiddleware(300, true), async (req, res) => {
   try {
     const force = req.query.force === 'true';
     const items = await getRecentlyAdded(getOpenlistUrl, getOpenlistApiKey, appConfig.basePath, force);

@@ -7,6 +7,7 @@ import SearchModal from './SearchModal';
 import NavbarSearch from './NavbarSearch';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
+import ScrollToTopButton from './ScrollToTopButton';
 
 
 
@@ -337,6 +338,8 @@ export default function Layout() {
             {outlet}
           </motion.div>
         </AnimatePresence>
+        
+        <ScrollToTopButton scrollRef={mainRef} />
       </main>
 
       {/* Floating Bottom Nav for Mobile/Tablet */}
