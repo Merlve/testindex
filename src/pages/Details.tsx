@@ -171,7 +171,7 @@ export default function Details() {
     if (!token) return;
     setRefreshingFolder(true);
     try {
-      const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}`, refresh: true }, { headers: { Authorization: token } });
+      const res = await axios.post('/api/fs/list', { reqPath: `/${currentBrowsePath}`, refresh: true }, { headers: { Authorization: token } });
       if (res.data.code === 200) {
         setItems(res.data.data.content || []);
         setCurrentPage(1);
