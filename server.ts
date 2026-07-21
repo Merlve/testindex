@@ -1128,36 +1128,36 @@ app.get('/api/meta/genres/backdrops', async (req, res) => {
   const items = await getLibraryIndex(token);
   const genreBackdrops: any[] = [];
   
+  const tmdbKeys = Object.keys(tmdbCache);
+  const overriddenKeys = tmdbKeys.filter(k => tmdbCache[k]?._overridden);
+
+  const itemsWithCache = items.map((item: any) => {
+     const type = item.category;
+     const baseQuery = (item.cleanName || '').toLowerCase().trim();
+     const year = item.year;
+     const baseKey = `${type}-${baseQuery}`;
+     
+     let cached = null;
+     const overriddenKey = overriddenKeys.find(k => k.startsWith(baseKey));
+     if (overriddenKey) {
+        cached = tmdbCache[overriddenKey];
+     } else {
+        const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+        if (tmdbCache[cacheKey]) {
+           cached = tmdbCache[cacheKey];
+        } else if (year && tmdbCache[baseKey]) {
+           cached = tmdbCache[baseKey];
+        }
+     }
+     return { ...item, _cached: cached };
+  }).filter((item: any) => item._cached && item._cached.backdrop_path);
+  
   Object.keys(genres).forEach(idStr => {
      const genreId = parseInt(idStr, 10);
-     const matched = items.filter((item: any) => {
-         const type = item.category;
-         const baseQuery = (item.cleanName || '').toLowerCase().trim();
-         const year = item.year;
-         const baseKey = `${type}-${baseQuery}`;
-         
-         let cached = null;
-         const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
-         if (overriddenKey) {
-            cached = tmdbCache[overriddenKey];
-         } else {
-            const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
-            if (tmdbCache[cacheKey]) {
-               cached = tmdbCache[cacheKey];
-            } else if (year && tmdbCache[baseKey]) {
-               cached = tmdbCache[baseKey];
-            }
-         }
-         
-         if (cached) {
-            const hasGenre = (cached.genres && cached.genres.some((g: any) => g.id === genreId)) || 
-                             (cached.genre_ids && cached.genre_ids.includes(genreId));
-            if (hasGenre && cached.backdrop_path) {
-                item._cached = cached;
-                return true;
-            }
-         }
-         return false;
+     const matched = itemsWithCache.filter((item: any) => {
+         const cached = item._cached;
+         return (cached.genres && cached.genres.some((g: any) => g.id === genreId)) || 
+                (cached.genre_ids && cached.genre_ids.includes(genreId));
      });
      
      if (matched.length > 0) {
