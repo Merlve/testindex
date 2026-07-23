@@ -15,7 +15,7 @@ export default function DetailsSkeleton({ onRefresh, refreshingFolder }: { onRef
       )}
 
       {/* Backdrop Skeleton */}
-      <div className="absolute top-0 left-0 w-full h-[60vh] md:h-[70vh] pointer-events-none z-0 bg-gray-200/20 dark:bg-gray-800/20 animate-pulse">
+      <div className="absolute -top-16 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 bg-gray-200/20 dark:bg-gray-800/20 animate-pulse overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/80 dark:via-[#08080a]/80 to-transparent z-10"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/50 dark:via-[#08080a]/50 to-transparent z-10"></div>
       </div>

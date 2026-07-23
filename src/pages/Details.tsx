@@ -679,10 +679,10 @@ export default function Details() {
       )}
 
       {backdrop && (
-        <div className="absolute top-0 left-0 w-full h-[60vh] md:h-[70vh] pointer-events-none z-0">
+        <div className="absolute -top-16 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/80 dark:via-[#08080a]/80 to-transparent z-10"></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/50 dark:via-[#08080a]/50 to-transparent z-10"></div>
-          <img src={backdrop} className="w-full h-full object-cover opacity-40 md:opacity-30 mask-image:linear-gradient(to_bottom,black,transparent)" alt="Backdrop" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/30 dark:via-[#08080a]/30 to-transparent z-10"></div>
+          <img src={backdrop} className="w-full h-full object-cover opacity-50 md:opacity-40" alt="Backdrop" />
         </div>
       )}
       

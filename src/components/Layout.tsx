@@ -320,7 +320,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-[#fffcf9] dark:bg-[#08080a] text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
       {/* Mobile Top Bar */}
-      <div className={`md:hidden fixed top-0 left-0 right-0 h-16 bg-[#f3efec] dark:bg-[#0d0d12] border-b border-black/5 dark:border-white/5 flex items-center justify-between px-4 z-40 transition-transform duration-500 ${isIdle && !mobileOpen ? '-translate-y-full' : 'translate-y-0'}`}>
+      <div className={`md:hidden fixed top-0 left-0 right-0 h-16 bg-[#f3efec]/80 dark:bg-[#0d0d12]/80 backdrop-blur-md border-b border-black/5 dark:border-white/5 flex items-center justify-between px-4 z-40 transition-transform duration-500 ${isIdle && !mobileOpen ? '-translate-y-full' : 'translate-y-0'}`}>
         <Link to="/" className="flex items-center gap-3">
           <SiteLogo size="sm" />
           <span className="font-bold text-black dark:text-white tracking-tight">SHUTTER!</span>
@@ -455,7 +455,7 @@ export default function Layout() {
           navigationType={navigationType} 
         />
         {/* Desktop Top Navbar */}
-        <div className={`hidden md:flex sticky top-0 left-0 right-0 z-40 bg-[#fffcf9]/80 dark:bg-[#08080a]/80 backdrop-blur-md border-b border-black/5 dark:border-white/5 px-8 py-4 items-center justify-end transition-transform duration-500 ${isIdle ? '-translate-y-full' : 'translate-y-0'}`}>
+        <div className={`hidden md:flex absolute top-0 left-0 right-0 h-16 z-40 bg-[#fffcf9]/40 dark:bg-[#08080a]/40 backdrop-blur-md border-b border-black/5 dark:border-white/5 px-8 items-center justify-end transition-transform duration-500 ${isIdle ? '-translate-y-full' : 'translate-y-0'}`}>
           <div className="flex items-center gap-6">
             <button onClick={() => setIsDark(!isDark)} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">
               {isDark ? <Sun size={20} /> : <Moon size={20} />}
