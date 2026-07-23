@@ -5,7 +5,7 @@ import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, M
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import SearchModal from './SearchModal';
 import NavbarSearch from './NavbarSearch';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import ScrollToTopButton from './ScrollToTopButton';
 
@@ -147,6 +147,7 @@ export default function Layout() {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const navigationType = useNavigationType();
   const outlet = useOutlet();
   const mainRef = useRef<HTMLElement>(null);
@@ -347,7 +348,7 @@ export default function Layout() {
               </NavLink>
             </>
           )}
-          <button onClick={() => { logout(); navigate('/login'); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'}`}>
+          <button onClick={() => { logout(); queryClient.clear(); navigate('/login'); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'}`}>
             <LogOut size={20} /> {!isCollapsed && <span>Logout</span>}
           </button>
           <div className={`mt-4 flex items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 ${isCollapsed ? 'justify-center px-0' : 'px-4'}`}>

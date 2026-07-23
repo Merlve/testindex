@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router';
 import { Eye, EyeOff } from 'lucide-react';
+import { useQueryClient } from "@tanstack/react-query";
 import axios from 'axios';
 
 export default function Login() {
@@ -17,6 +18,7 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (localStorage.getItem('guest_timeout') === 'true') {
@@ -59,6 +61,7 @@ export default function Login() {
       }
       
       login('guest', 'guest-token');
+      queryClient.clear();
       sessionStorage.setItem('justLoggedIn', 'true');
         sessionStorage.setItem('showWhatsApp', 'true');
       const from = location.state?.from || '/';

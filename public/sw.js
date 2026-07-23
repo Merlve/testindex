@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shindex-cache-v2';
+const CACHE_NAME = 'shindex-cache-v3';
 const urlsToCache = [
   '/',
   '/index.html'
@@ -30,6 +30,12 @@ self.addEventListener('fetch', event => {
         })
         .catch(() => caches.match(event.request))
     );
+    return;
+  }
+  
+  // Bypass cache for API requests
+  if (event.request.url.includes('/api/')) {
+    event.respondWith(fetch(event.request));
     return;
   }
   
