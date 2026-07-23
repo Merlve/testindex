@@ -11,68 +11,105 @@ import ScrollToTopButton from './ScrollToTopButton';
 
 
 
-function ScrollRestorer({ scrollKey, mainRef, navigationType }: { scrollKey: string, mainRef: React.RefObject<HTMLElement>, navigationType: string }) { 
-  const isRestored = useRef(false);
+function ScrollRestorer({ 
+  scrollKey, 
+  locationPathAndSearch, 
+  mainRef, 
+  navigationType 
+}: { 
+  scrollKey: string, 
+  locationPathAndSearch: string, 
+  mainRef: React.RefObject<HTMLElement>, 
+  navigationType: string 
+}) { 
+  const isRestoredRef = useRef(false);
+  const isProgrammaticRef = useRef(false);
 
   useLayoutEffect(() => {
     if (!mainRef.current) return;
     const el = mainRef.current;
     
+    // Stop recording scroll events during navigation state change
+    isRestoredRef.current = false;
+
     if (navigationType !== 'POP') {
+      isProgrammaticRef.current = true;
       el.scrollTop = 0;
-      isRestored.current = true;
-      return;
+      isRestoredRef.current = true;
+      const t = setTimeout(() => {
+        isProgrammaticRef.current = false;
+      }, 50);
+      return () => clearTimeout(t);
     }
-    
-    const savedScrollStr = sessionStorage.getItem(`scroll-${scrollKey}`);
+
+    const savedKeyStr = sessionStorage.getItem(`scroll-key-${scrollKey}`);
+    const savedPathStr = sessionStorage.getItem(`scroll-path-${locationPathAndSearch}`);
+    const savedScrollStr = savedKeyStr || savedPathStr;
+
     if (!savedScrollStr) {
+      isProgrammaticRef.current = true;
       el.scrollTop = 0;
-      isRestored.current = true;
-      return;
+      isRestoredRef.current = true;
+      const t = setTimeout(() => {
+        isProgrammaticRef.current = false;
+      }, 50);
+      return () => clearTimeout(t);
     }
-    
+
     const targetScroll = parseInt(savedScrollStr, 10);
-    
+
     const attemptRestore = () => {
-      console.log('attemptRestore', { scrollKey, scrollHeight: el.scrollHeight, targetScroll, clientHeight: el.clientHeight });
-      // Allow a 100px margin in case layout hasn't fully expanded
-      if (el.scrollHeight >= targetScroll + el.clientHeight - 100 || targetScroll === 0) {
-        el.scrollTop = targetScroll;
-        isRestored.current = true;
+      if (!mainRef.current) return false;
+      const currentEl = mainRef.current;
+      if (targetScroll === 0 || currentEl.scrollHeight >= targetScroll + currentEl.clientHeight - 100) {
+        isProgrammaticRef.current = true;
+        currentEl.scrollTop = targetScroll;
+        isRestoredRef.current = true;
+        setTimeout(() => {
+          isProgrammaticRef.current = false;
+        }, 50);
         return true;
       }
       return false;
     };
-    
+
     if (attemptRestore()) return;
-    
+
     const observer = new MutationObserver(() => {
       if (attemptRestore()) {
         observer.disconnect();
       }
     });
+
     observer.observe(el, { childList: true, subtree: true, characterData: true });
-    
+
     const timeout = setTimeout(() => {
       observer.disconnect();
-      if (!isRestored.current) {
-          el.scrollTop = targetScroll;
-          isRestored.current = true;
+      if (!isRestoredRef.current && mainRef.current) {
+        isProgrammaticRef.current = true;
+        mainRef.current.scrollTop = targetScroll;
+        isRestoredRef.current = true;
+        setTimeout(() => {
+          isProgrammaticRef.current = false;
+        }, 50);
       }
-    }, 2000);
-    
+    }, 1500);
+
     return () => {
       observer.disconnect();
       clearTimeout(timeout);
     };
-  }, [scrollKey, mainRef, navigationType]);
+  }, [scrollKey, locationPathAndSearch, mainRef, navigationType]);
 
   useEffect(() => {
     const handleScroll = () => {
-      if (mainRef.current && isRestored.current) {
-        sessionStorage.setItem(`scroll-${scrollKey}`, mainRef.current.scrollTop.toString());
+      if (mainRef.current && isRestoredRef.current && !isProgrammaticRef.current) {
+        const pos = mainRef.current.scrollTop.toString();
+        sessionStorage.setItem(`scroll-key-${scrollKey}`, pos);
+        sessionStorage.setItem(`scroll-path-${locationPathAndSearch}`, pos);
       }
     };
+
     const mainEl = mainRef.current;
     if (mainEl) {
       mainEl.addEventListener('scroll', handleScroll, { passive: true });
@@ -82,7 +119,7 @@ function ScrollRestorer({ scrollKey, mainRef, navigationType }: { scrollKey: str
         mainEl.removeEventListener('scroll', handleScroll);
       }
     };
-  }, [scrollKey, mainRef]);
+  }, [scrollKey, locationPathAndSearch, mainRef]);
 
   return null;
 }
@@ -322,6 +359,12 @@ export default function Layout() {
 
       {/* Main Content */}
       <main ref={mainRef} className="flex-1 overflow-y-auto relative bg-[#fffcf9] dark:bg-[#08080a] pt-16 md:pt-0">
+        <ScrollRestorer 
+          scrollKey={location.key} 
+          locationPathAndSearch={location.pathname + location.search} 
+          mainRef={mainRef} 
+          navigationType={navigationType} 
+        />
         {/* Desktop Top Navbar */}
         <div className={`hidden md:flex sticky top-0 left-0 right-0 z-40 bg-[#fffcf9]/80 dark:bg-[#08080a]/80 backdrop-blur-md border-b border-black/5 dark:border-white/5 px-8 py-4 items-center justify-end transition-transform duration-500 ${isIdle ? '-translate-y-full' : 'translate-y-0'}`}>
           <div className="flex items-center gap-6">
@@ -340,7 +383,6 @@ export default function Layout() {
             transition={{ duration: 0.4, ease: "easeOut" }}
             className="w-full min-h-full"
           >
-            <ScrollRestorer scrollKey={location.pathname} mainRef={mainRef} navigationType={navigationType} />
             {outlet}
           </motion.div>
         </AnimatePresence>

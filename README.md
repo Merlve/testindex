@@ -13,6 +13,7 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 - **Smart Integration**: Supports overrides, watchlists, TMDB enrichment (for enhanced metadata, ratings, and posters), and even Telegram notifications for recently added media.
 - **PWA & Mobile Ready**: Responsive, fluid layouts utilizing Tailwind CSS and Framer Motion.
 - **Skeleton Loaders**: Modern UI skeleton screens ensure a smooth perceived performance during data fetching.
+- **Smart Scroll Restoration**: Intelligently records and restores exact scroll positions across history navigation, so returning from media details pages back to categories or search lists maintains your exact scroll location.
 - **Advanced User Management**: Admins can easily manage users with batch operations, import/export functionality, bulk password resets, permission bitmask controls, real-time status updates, and account expiration dates.
 - **Automated & Real-Time Expirations**: Built-in real-time enforcement and recurring 30-second background worker automatically disable user accounts when they reach their set expiration date or attempt login post-expiration.
 - **Resilient Master Proxy Fallback**: Admin operations on Openlist endpoints automatically retry with the master API key if user session tokens lack admin privileges.
