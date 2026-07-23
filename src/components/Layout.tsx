@@ -482,10 +482,10 @@ export default function Layout() {
       {/* Floating Bottom Nav for Mobile/Tablet */}
       <div 
         id="floating-bottom-nav" 
-        className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full border backdrop-blur-md shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] transition-all duration-300 ease-in-out ${
+        className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-1.5 px-2.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out ${
           isUnderlyingDark 
-            ? 'bg-neutral-900/85 border-white/20 text-white shadow-black/50 dark:bg-black/80 dark:border-white/10 dark:text-white' 
-            : 'bg-white/90 border-black/10 text-gray-900 shadow-black/10 dark:bg-black/80 dark:border-white/10 dark:text-white'
+            ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
+            : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
         } ${mobileOpen || isIdle || location.pathname === '/users' ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
         <NavLink 
@@ -493,13 +493,13 @@ export default function Layout() {
           onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
           className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
             isActive && !searchOpen 
-              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
-              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+              ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
           }`}
         >
           {({isActive}) => (
             <>
-              <Home size={24} />
+              <Home size={22} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
                   <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
@@ -514,11 +514,11 @@ export default function Layout() {
           onClick={() => { setSearchOpen(!searchOpen); setMobileOpen(false); }} 
           className={`flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
             searchOpen 
-              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
-              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+              ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
           }`}
         >
-          <Search size={24} />
+          <Search size={22} />
           <AnimatePresence>
             {searchOpen && (
               <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
@@ -532,13 +532,13 @@ export default function Layout() {
           onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
           className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
             isActive && !searchOpen 
-              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
-              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+              ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
           }`}
         >
           {({isActive}) => (
             <>
-              <Bookmark size={24} />
+              <Bookmark size={22} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
                   <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
@@ -554,13 +554,13 @@ export default function Layout() {
           onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
           className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
             isActive && !searchOpen 
-              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
-              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+              ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
           }`}
         >
           {({isActive}) => (
             <>
-              <Sparkles size={24} />
+              <Sparkles size={22} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
                   <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">

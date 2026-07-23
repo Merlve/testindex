@@ -8,7 +8,7 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 - **Dynamic Genres List**: A beautiful all-genres page with intelligent backdrop image caching (caches the best backdrop from a genre for 7 days) mapped precisely to TMDB.
 - **Personalized 'For You' Recommendations**: A dedicated recommendations page suggesting new content based on user watchlists, automatically filtered to only display items that are actually available in your local library.
 - **Watchlist Functionality**: Users can easily save items to their personal watchlist for later viewing.
-- **Mobile-responsive Bottom Navigation**: A sleek, floating bottom navigation bar with dynamic contrast blending (icons automatically turn light on dark backgrounds and dark on light backgrounds in light mode), disappearing during screen idle time and instantly reappearing upon user touch or scroll.
+- **Mobile-responsive Bottom Navigation**: A floating bottom navigation bar with Apple-inspired liquid glass translucency (`backdrop-blur-xl`, `backdrop-saturate-[180%]`, and specular rim lighting), dynamic contrast background awareness, and idle auto-hiding that reappears on touch or scroll.
 - **Unified Media View**: Seamlessly fetch and display media from Jellyfin and Openlist.
 - **Smart Integration**: Supports overrides, watchlists, TMDB enrichment (for enhanced metadata, ratings, and posters), and even Telegram notifications for recently added media.
 - **PWA & Mobile Ready**: Responsive, fluid layouts utilizing Tailwind CSS and Framer Motion.
