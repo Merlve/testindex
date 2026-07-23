@@ -68,7 +68,23 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
               <button onClick={() => onPlay(url)} className="flex items-center gap-1 bg-white text-black hover:bg-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">
                 <Play size={14} fill="currentColor" /> Play
               </button>
-              <a href={url} download target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+              <a 
+                href={url} 
+                download={item.name} 
+                rel="noreferrer" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = item.name || 'download';
+                  a.style.display = 'none';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                }}
+                title="Download file"
+                className="flex items-center gap-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+              >
                 <Download size={14} />
               </a>
             </>
