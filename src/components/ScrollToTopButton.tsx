@@ -44,7 +44,7 @@ export default function ScrollToTopButton({ scrollRef }: { scrollRef: React.RefO
           exit={{ opacity: 0, y: 20, scale: 0.8 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
           onClick={scrollToTop}
-          className="fixed bottom-24 right-6 md:bottom-8 md:right-8 z-50 p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full shadow-lg hover:shadow-purple-500/25 transition-colors group"
+          className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 w-12 h-12 md:w-14 md:h-14 bg-purple-600 hover:bg-purple-500 text-white rounded-full shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center group"
           aria-label="Scroll to top"
         >
           <ArrowUp size={24} className="group-hover:-translate-y-1 transition-transform" />

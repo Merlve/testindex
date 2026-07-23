@@ -182,7 +182,7 @@ export default function Layout() {
 
   const checkLuminance = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const navElement = document.getElementById('floating-bottom-nav');
+    const navElement = document.getElementById('floating-search-btn') || document.getElementById('floating-top-right-nav');
     if (!navElement) return;
 
     const rect = navElement.getBoundingClientRect();
@@ -510,101 +510,20 @@ export default function Layout() {
         <ScrollToTopButton scrollRef={mainRef} />
       </main>
 
-      {/* Floating Bottom Nav for Mobile/Tablet */}
-      {!isIPhone && (
-        <div 
-          id="floating-bottom-nav" 
-          className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-1.5 px-2.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out ${
+        {/* Floating Search Circle Button (All Devices) */}
+        <button
+          id="floating-search-btn"
+          onClick={() => setSearchOpen(true)}
+          title="Search"
+          aria-label="Search"
+          className={`fixed bottom-20 right-6 md:bottom-24 md:right-8 z-50 w-12 h-12 md:w-14 md:h-14 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 flex items-center justify-center cursor-pointer ${
             isUnderlyingDark 
               ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
               : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
-          } ${mobileOpen || isIdle || location.pathname === '/users' ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
+          } ${mobileOpen || isIdle ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
         >
-          <NavLink 
-            to="/" 
-            onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
-            className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
-              isActive && !searchOpen 
-                ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
-                : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
-            }`}
-          >
-            {({isActive}) => (
-              <>
-                <Home size={22} />
-                <AnimatePresence>
-                  {isActive && !searchOpen && (
-                    <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
-                      Home
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </>
-            )}
-          </NavLink>
-          <button 
-            onClick={() => { setSearchOpen(!searchOpen); setMobileOpen(false); }} 
-            className={`flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
-              searchOpen 
-                ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
-                : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
-            }`}
-          >
-            <Search size={22} />
-            <AnimatePresence>
-              {searchOpen && (
-                <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
-                  Search
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </button>
-          <NavLink 
-            to="/watchlist" 
-            onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
-            className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
-              isActive && !searchOpen 
-                ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
-                : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
-            }`}
-          >
-            {({isActive}) => (
-              <>
-                <Bookmark size={22} />
-                <AnimatePresence>
-                  {isActive && !searchOpen && (
-                    <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
-                      Watchlist
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </>
-            )}
-          </NavLink>
-          <NavLink 
-            to="/recommendations" 
-            onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
-            className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
-              isActive && !searchOpen 
-                ? (isUnderlyingDark ? 'bg-white/20 text-white shadow-inner dark:bg-white/15 dark:text-white' : 'bg-black/10 text-gray-900 shadow-inner dark:bg-white/15 dark:text-white') + ' font-semibold'
-                : (isUnderlyingDark ? 'text-gray-200 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
-            }`}
-          >
-            {({isActive}) => (
-              <>
-                <Sparkles size={22} />
-                <AnimatePresence>
-                  {isActive && !searchOpen && (
-                    <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
-                      For You
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </>
-            )}
-          </NavLink>
-        </div>
-      )}
+          <Search size={22} />
+        </button>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
     </div>
   );
