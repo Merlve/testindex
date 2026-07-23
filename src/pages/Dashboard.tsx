@@ -14,13 +14,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 const DashboardSkeleton = () => (
   <div className="animate-pulse pb-20">
     <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
-       <div className="w-244 h-9 bg-black/5 dark:bg-white/5 rounded-xl"></div>
+       <div className="w-24 h-9 bg-black/5 dark:bg-white/5 rounded-xl"></div>
     </div>
     <section className="px-4 sm:px-8 pt-2 sm:pt-4 mb-2 mt-0 sm:mt-2">
-      <div className="relative h-[200px] sm:h-[320px] bg-black/5 dark:bg-white/5 rounded-3xl overflow-hidden shadow-24xl">
+      <div className="relative h-[200px] sm:h-[320px] bg-black/5 dark:bg-white/5 rounded-3xl overflow-hidden shadow-2xl">
          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent flex flex-col justify-center px-6 sm:px-12">
-            <div className="w-240 h-5 bg-black/10 dark:bg-white/10 rounded-full mb-4 mt-8"></div>
-            <div className="w-24/3 h-10 bg-black/10 dark:bg-white/10 rounded-xl mb-2"></div>
+            <div className="w-24 h-5 bg-black/10 dark:bg-white/10 rounded-full mb-4 mt-8"></div>
+            <div className="w-2/3 sm:w-1/2 h-10 bg-black/10 dark:bg-white/10 rounded-xl mb-2"></div>
             <div className="flex gap-4 mt-8">
               <div className="w-32 h-10 sm:h-12 bg-black/10 dark:bg-white/10 rounded-xl"></div>
               <div className="w-32 h-10 sm:h-12 bg-black/10 dark:bg-white/10 rounded-xl hidden sm:block"></div>
@@ -28,16 +28,16 @@ const DashboardSkeleton = () => (
          </div>
       </div>
     </section>
-    <div className="px-4 sm:px-8 flex-1 flex flex-col gap-0 sm:gap-4 pb-12">
+    <div className="px-4 sm:px-8 flex-1 flex flex-col gap-6 sm:gap-8 pb-12 mt-4">
       {[1, 2, 3].map((i) => (
         <div key={i}>
           <div className="flex justify-between items-end mb-2">
             <div className="w-48 h-6 bg-black/10 dark:bg-white/10 rounded-lg"></div>
-            <div className="w-244 h-4 bg-black/10 dark:bg-white/10 rounded-lg"></div>
+            <div className="w-24 h-4 bg-black/10 dark:bg-white/10 rounded-lg"></div>
           </div>
           <div className="flex overflow-hidden gap-4 pb-2">
              {[1, 2, 3, 4, 5, 6].map((j) => (
-               <div key={j} className="flex-none w-[140px] sm:w-[160px] md:w-[180px] lg:w-[200px] h-[210px] sm:h-[240px] md:h-[270px] lg:h-[300px] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
+               <div key={j} className="flex-none w-28 sm:w-36 md:w-48 aspect-[2/3] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
              ))}
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function Dashboard() {
        />
       )}
 
-      <div className="px-4 sm:px-8 flex-1 flex flex-col gap-0 sm:gap-4 pb-12">
+      <div className="px-4 sm:px-8 flex-1 flex flex-col gap-6 sm:gap-8 pb-12 mt-4">
         <TrendingCarousel categories={categories} />
         <RecentlyAddedCarousel />
         {categories.map(cat => (
@@ -168,7 +168,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div id={`carousel-${cat.name}`} className="flex overflow-24-auto gap-4 pb-2 scrollbar-hide">
+            <div id={`carousel-${cat.name}`} className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide">
                {cat.items.slice(0, 10).map((item, i) => (
                  <ItemCard key={i} item={item} category={cat.name} parentPath={`/home/${cat.name}`} />
                ))}

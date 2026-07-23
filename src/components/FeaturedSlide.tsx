@@ -138,9 +138,9 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
           <ChevronRight size={24} />
         </button>
         
-        <div className="relative z-20 h-full flex flex-col justify-center px-6 sm:px-12">
-          <span className="inline-block px-3 py-1 bg-purple-300 dark:bg-purple-600 text-black dark:text-white text-[10px] font-bold rounded-full mb-4 w-fit tracking-wider pointer-events-none">FEATURED</span>
-          <h1 className="text-3xl sm:text-5xl font-bold mb-4 tracking-tight text-black dark:text-white line-clamp-1 pointer-events-none">{title}</h1>
+        <div className="relative z-20 h-full flex flex-col justify-center px-12 sm:px-20 pointer-events-none">
+          <span className="inline-block px-3 py-1 bg-purple-300 dark:bg-purple-600 text-black dark:text-white text-[10px] font-bold rounded-full mb-4 w-fit tracking-wider">FEATURED</span>
+          <h1 className="text-3xl sm:text-5xl font-bold mb-4 tracking-tight text-black dark:text-white line-clamp-1">{title}</h1>
           
           <div className="flex items-center gap-4 mt-8 pointer-events-auto">
             <Link to={`/home/${encodeURIComponent(featured.category)}/${encodeURIComponent(featured.name)}`} className="px-6 py-2 sm:px-8 sm:py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:scale-105 transition-transform text-sm sm:text-base">
