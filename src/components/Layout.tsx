@@ -34,7 +34,7 @@ function ScrollRestorer({ scrollKey, mainRef, navigationType }: { scrollKey: str
     const targetScroll = parseInt(savedScrollStr, 10);
     
     const attemptRestore = () => {
-      
+      console.log('attemptRestore', { scrollKey, scrollHeight: el.scrollHeight, targetScroll, clientHeight: el.clientHeight });
       // Allow a 100px margin in case layout hasn't fully expanded
       if (el.scrollHeight >= targetScroll + el.clientHeight - 100 || targetScroll === 0) {
         el.scrollTop = targetScroll;
@@ -79,9 +79,6 @@ function ScrollRestorer({ scrollKey, mainRef, navigationType }: { scrollKey: str
     }
     return () => {
       if (mainEl) {
-        if (isRestored.current) {
-          sessionStorage.setItem(`scroll-${scrollKey}`, mainEl.scrollTop.toString());
-        }
         mainEl.removeEventListener('scroll', handleScroll);
       }
     };
@@ -347,7 +344,7 @@ export default function Layout() {
             {outlet}
           </motion.div>
         </AnimatePresence>
-        
+
         <ScrollToTopButton scrollRef={mainRef} />
       </main>
 
