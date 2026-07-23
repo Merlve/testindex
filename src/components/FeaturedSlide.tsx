@@ -94,7 +94,7 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
   return (
     <section className="px-4 sm:px-8 pt-2 sm:pt-4 mb-2 mt-0 sm:mt-2">
       <div 
-        className="relative h-[200px] sm:h-[320px] rounded-3xl overflow-hidden group cursor-grab active:cursor-grabbing"
+        className="relative h-[260px] sm:h-[360px] rounded-3xl overflow-hidden group cursor-grab active:cursor-grabbing"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -142,11 +142,11 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
           <span className="inline-block px-3 py-1 bg-purple-300 dark:bg-purple-600 text-black dark:text-white text-[10px] font-bold rounded-full mb-4 w-fit tracking-wider">FEATURED</span>
           <h1 className="text-3xl sm:text-5xl font-bold mb-4 tracking-tight text-black dark:text-white line-clamp-1">{title}</h1>
           
-          <div className="flex items-center gap-4 mt-8 pointer-events-auto">
-            <Link to={`/home/${encodeURIComponent(featured.category)}/${encodeURIComponent(featured.name)}`} className="px-6 py-2 sm:px-8 sm:py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:scale-105 transition-transform text-sm sm:text-base">
-              <Play fill="currentColor" size={20} /> Watch Now
+          <div className="flex items-center gap-4 mt-4 sm:mt-8 pointer-events-auto">
+            <Link to={`/home/${encodeURIComponent(featured.category)}/${encodeURIComponent(featured.name)}`} className="px-4 py-1.5 sm:px-8 sm:py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:scale-105 transition-transform text-xs sm:text-base">
+              <Play fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5" /> Watch Now
             </Link>
-            <Link to={`/home/${encodeURIComponent(featured.category)}/${encodeURIComponent(featured.name)}`} className="px-6 py-2 sm:px-8 sm:py-3 bg-black/10 dark:bg-white/10 backdrop-blur-md text-black dark:text-white font-bold rounded-xl border border-black/20 dark:border-white/20 flex items-center gap-2 hover:bg-black/20 dark:bg-white/20 transition-all hidden sm:flex text-sm sm:text-base">
+            <Link to={`/home/${encodeURIComponent(featured.category)}/${encodeURIComponent(featured.name)}`} className="px-4 py-1.5 sm:px-8 sm:py-3 bg-black/10 dark:bg-white/10 backdrop-blur-md text-black dark:text-white font-bold rounded-xl border border-black/20 dark:border-white/20 flex items-center gap-2 hover:bg-black/20 dark:bg-white/20 transition-all hidden sm:flex text-xs sm:text-base">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
               Download
             </Link>

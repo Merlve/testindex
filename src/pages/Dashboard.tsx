@@ -17,7 +17,7 @@ const DashboardSkeleton = () => (
        <div className="w-24 h-9 bg-black/5 dark:bg-white/5 rounded-xl"></div>
     </div>
     <section className="px-4 sm:px-8 pt-2 sm:pt-4 mb-2 mt-0 sm:mt-2">
-      <div className="relative h-[200px] sm:h-[320px] bg-black/5 dark:bg-white/5 rounded-3xl overflow-hidden shadow-2xl">
+      <div className="relative h-[260px] sm:h-[360px] bg-black/5 dark:bg-white/5 rounded-3xl overflow-hidden shadow-2xl">
          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent flex flex-col justify-center px-6 sm:px-12">
             <div className="w-24 h-5 bg-black/10 dark:bg-white/10 rounded-full mb-4 mt-8"></div>
             <div className="w-2/3 sm:w-1/2 h-10 bg-black/10 dark:bg-white/10 rounded-xl mb-2"></div>
@@ -37,7 +37,7 @@ const DashboardSkeleton = () => (
           </div>
           <div className="flex overflow-hidden gap-4 pb-2">
              {[1, 2, 3, 4, 5, 6].map((j) => (
-               <div key={j} className="flex-none w-28 sm:w-36 md:w-48 aspect-[2/3] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
+               <div key={j} className="flex-none w-32 sm:w-40 md:w-48 aspect-[2/3] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
              ))}
           </div>
         </div>
