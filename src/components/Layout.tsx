@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Outlet, NavLink, useNavigate, Link, useLocation, useNavigationType, useOutlet } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles } from 'lucide-react';
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import SearchModal from './SearchModal';
 import NavbarSearch from './NavbarSearch';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -160,6 +160,7 @@ export default function Layout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
+  const [isUnderlyingDark, setIsUnderlyingDark] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -168,6 +169,69 @@ export default function Layout() {
     }
     return true;
   });
+
+  const checkLuminance = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const navElement = document.getElementById('floating-bottom-nav');
+    if (!navElement) return;
+
+    const rect = navElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const pointX = rect.left + rect.width / 2;
+    const pointY = rect.top + rect.height / 2;
+
+    const elements = document.elementsFromPoint(pointX, pointY);
+    const underlyingElement = elements.find(el => !navElement.contains(el) && el !== navElement);
+
+    if (!underlyingElement) {
+      setIsUnderlyingDark(false);
+      return;
+    }
+
+    let isDarkBg = false;
+    let curr: HTMLElement | null = underlyingElement as HTMLElement;
+
+    while (curr && curr !== document.body && curr !== document.documentElement) {
+      const tagName = curr.tagName.toUpperCase();
+      
+      if (
+        tagName === 'IMG' ||
+        tagName === 'VIDEO' ||
+        tagName === 'CANVAS' ||
+        curr.classList.contains('bg-black') ||
+        curr.classList.contains('bg-neutral-900') ||
+        curr.classList.contains('bg-dark') ||
+        curr.classList.contains('bg-purple-950')
+      ) {
+        isDarkBg = true;
+        break;
+      }
+
+      const style = window.getComputedStyle(curr);
+      const bg = style.backgroundColor;
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        const match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          const a = match[4] !== undefined ? parseFloat(match[4]) : 1;
+
+          if (a > 0.15) {
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            if (brightness < 140) {
+              isDarkBg = true;
+            }
+            break;
+          }
+        }
+      }
+      curr = curr.parentElement;
+    }
+
+    setIsUnderlyingDark(isDarkBg);
+  }, []);
 
   useEffect(() => {
     if (sessionStorage.getItem('justLoggedIn') === 'true') {
@@ -192,13 +256,12 @@ export default function Layout() {
     }
   }, [isDark]);
 
-
-
   useEffect(() => {
     let timeout: NodeJS.Timeout;
 
     const handleUserActivity = () => {
       setIsIdle(false);
+      checkLuminance();
       clearTimeout(timeout);
       timeout = setTimeout(() => {
         setIsIdle(true);
@@ -223,6 +286,8 @@ export default function Layout() {
       window.addEventListener(eventName, handleUserActivity, { capture: true, passive: true });
     });
 
+    checkLuminance();
+
     timeout = setTimeout(() => {
       setIsIdle(true);
     }, 3500);
@@ -233,11 +298,13 @@ export default function Layout() {
       });
       clearTimeout(timeout);
     };
-  }, []);
+  }, [checkLuminance]);
 
   useEffect(() => {
     setIsIdle(false);
-  }, [location.pathname, location.search]);
+    const timer = setTimeout(() => checkLuminance(), 100);
+    return () => clearTimeout(timer);
+  }, [location.pathname, location.search, checkLuminance]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ['layout-categories'],
@@ -413,10 +480,25 @@ export default function Layout() {
       </main>
 
       {/* Floating Bottom Nav for Mobile/Tablet */}
-      <div className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full bg-white/20 dark:bg-black/40 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.15)] transition-all duration-500 ease-in-out ${mobileOpen || isIdle || location.pathname === '/users' ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
-        <NavLink to="/" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
+      <div 
+        id="floating-bottom-nav" 
+        className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full border backdrop-blur-md shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] transition-all duration-300 ease-in-out ${
+          isUnderlyingDark 
+            ? 'bg-neutral-900/85 border-white/20 text-white shadow-black/50 dark:bg-black/80 dark:border-white/10 dark:text-white' 
+            : 'bg-white/90 border-black/10 text-gray-900 shadow-black/10 dark:bg-black/80 dark:border-white/10 dark:text-white'
+        } ${mobileOpen || isIdle || location.pathname === '/users' ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
+      >
+        <NavLink 
+          to="/" 
+          onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
+          className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
+            isActive && !searchOpen 
+              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+          }`}
+        >
           {({isActive}) => (
-            <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
+            <>
               <Home size={24} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
@@ -425,24 +507,37 @@ export default function Layout() {
                   </motion.span>
                 )}
               </AnimatePresence>
-            </div>
+            </>
           )}
         </NavLink>
-        <button onClick={() => { setSearchOpen(!searchOpen); setMobileOpen(false); }} className={`flex items-center gap-2 transition-all duration-300 ${searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
-          <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
-            <Search size={24} />
-            <AnimatePresence>
-              {searchOpen && (
-                <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
-                  Search
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </div>
+        <button 
+          onClick={() => { setSearchOpen(!searchOpen); setMobileOpen(false); }} 
+          className={`flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
+            searchOpen 
+              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+          }`}
+        >
+          <Search size={24} />
+          <AnimatePresence>
+            {searchOpen && (
+              <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+                Search
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
-        <NavLink to="/watchlist" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
+        <NavLink 
+          to="/watchlist" 
+          onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
+          className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
+            isActive && !searchOpen 
+              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+          }`}
+        >
           {({isActive}) => (
-            <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
+            <>
               <Bookmark size={24} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
@@ -451,12 +546,20 @@ export default function Layout() {
                   </motion.span>
                 )}
               </AnimatePresence>
-            </div>
+            </>
           )}
         </NavLink>
-        <NavLink to="/recommendations" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
+        <NavLink 
+          to="/recommendations" 
+          onClick={() => { setMobileOpen(false); setSearchOpen(false); }} 
+          className={({isActive}) => `flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-full ${
+            isActive && !searchOpen 
+              ? (isUnderlyingDark ? 'bg-white/20 text-white dark:bg-white/10 dark:text-white' : 'bg-black/10 text-gray-900 dark:bg-white/10 dark:text-white') + ' font-semibold'
+              : (isUnderlyingDark ? 'text-gray-300 hover:text-white dark:text-gray-300 dark:hover:text-white' : 'text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white')
+          }`}
+        >
           {({isActive}) => (
-            <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
+            <>
               <Sparkles size={24} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
@@ -465,7 +568,7 @@ export default function Layout() {
                   </motion.span>
                 )}
               </AnimatePresence>
-            </div>
+            </>
           )}
         </NavLink>
       </div>
