@@ -319,23 +319,53 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-[#fffcf9] dark:bg-[#08080a] text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
-      {/* Mobile Top Bar */}
-      <div className={`md:hidden fixed top-0 left-0 right-0 h-16 bg-[#f3efec]/80 dark:bg-[#0d0d12]/80 backdrop-blur-md border-b border-black/5 dark:border-white/5 flex items-center justify-between px-4 z-40 transition-transform duration-500 ${isIdle && !mobileOpen ? '-translate-y-full' : 'translate-y-0'}`}>
-        <Link to="/" className="flex items-center gap-3">
+      {/* Floating Top Left Brand Pill (Persistent) */}
+      <div 
+        id="floating-top-left-nav"
+        className={`fixed top-4 left-4 md:left-6 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out ${
+          isUnderlyingDark 
+            ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
+            : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
+        }`}
+      >
+        <Link to="/" className="flex items-center gap-2.5">
           <SiteLogo size="sm" />
-          <span className="font-bold text-black dark:text-white tracking-tight">SHUTTER!</span>
+          <span className="font-bold tracking-tight text-sm">SHUTTER!</span>
         </Link>
-        <div className="flex items-center gap-4">
-          <button onClick={() => setIsDark(!isDark)} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">
-            {isDark ? <Sun size={22} /> : <Moon size={22} />}
-          </button>
-          <button onClick={() => setSearchOpen(true)} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">
-            <Search size={22} />
-          </button>
-          <button onClick={() => setMobileOpen(true)} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">
-            <Menu size={24} />
-          </button>
-        </div>
+      </div>
+
+      {/* Floating Top Right Action Pill (Hides on idle) */}
+      <div 
+        id="floating-top-right-nav"
+        className={`fixed top-4 right-4 md:right-6 z-40 flex items-center gap-3 px-3.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out ${
+          isUnderlyingDark 
+            ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
+            : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
+        } ${
+          isIdle && !mobileOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+        }`}
+      >
+        <button 
+          onClick={() => setIsDark(!isDark)} 
+          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current"
+          title="Toggle theme"
+        >
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+        <button 
+          onClick={() => setSearchOpen(true)} 
+          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current flex items-center gap-1.5"
+          title="Search"
+        >
+          <Search size={20} />
+        </button>
+        <button 
+          onClick={() => setMobileOpen(true)} 
+          className="md:hidden p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current"
+          title="Open menu"
+        >
+          <Menu size={22} />
+        </button>
       </div>
 
       {/* Mobile Overlay */}
@@ -447,22 +477,13 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main ref={mainRef} className="flex-1 overflow-y-auto relative bg-[#fffcf9] dark:bg-[#08080a] pt-16 md:pt-0">
+      <main ref={mainRef} className="flex-1 overflow-y-auto relative bg-[#fffcf9] dark:bg-[#08080a] pt-16">
         <ScrollRestorer 
           scrollKey={location.key} 
           locationPathAndSearch={location.pathname + location.search} 
           mainRef={mainRef} 
           navigationType={navigationType} 
         />
-        {/* Desktop Top Navbar */}
-        <div className={`hidden md:flex absolute top-0 left-0 right-0 h-16 z-40 bg-[#fffcf9]/40 dark:bg-[#08080a]/40 backdrop-blur-md border-b border-black/5 dark:border-white/5 px-8 items-center justify-end transition-transform duration-500 ${isIdle ? '-translate-y-full' : 'translate-y-0'}`}>
-          <div className="flex items-center gap-6">
-            <button onClick={() => setIsDark(!isDark)} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            <NavbarSearch />
-          </div>
-        </div>
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}

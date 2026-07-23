@@ -9,7 +9,7 @@ Shindex is a sleek, unified frontend dashboard that integrates with your existin
 - **Personalized 'For You' Recommendations**: A dedicated recommendations page suggesting new content based on user watchlists, automatically filtered to only display items that are actually available in your local library.
 - **Watchlist Functionality**: Users can easily save items to their personal watchlist for later viewing.
 - **Immersive Media Details**: Media details pages feature edge-to-edge backdrop hero images that extend seamlessly to the top edge of the viewport behind floating glass navigation bars, eliminating plain gaps when the navigation menu slides out of view.
-- **Mobile-responsive Bottom Navigation**: A floating bottom navigation bar with Apple-inspired liquid glass translucency (`backdrop-blur-xl`, `backdrop-saturate-[180%]`, and specular rim lighting), dynamic contrast background awareness, and idle auto-hiding that reappears on touch or scroll.
+- **Mobile-responsive Navigation Pills**: Floating top navigation grouped into dual Apple-inspired liquid glass pill bars (`backdrop-blur-xl`, `backdrop-saturate-[180%]`, specular rim light): a persistent brand pill (SHUTTER! logo & text) that stays visible, and a top-right action pill (theme toggle, search, and menu) that auto-hides when idle alongside the floating bottom navigation bar.
 - **Unified Media View**: Seamlessly fetch and display media from Jellyfin and Openlist.
 - **Smart Integration**: Supports overrides, watchlists, TMDB enrichment (for enhanced metadata, ratings, and posters), and even Telegram notifications for recently added media.
 - **PWA & Mobile Ready**: Responsive, fluid layouts utilizing Tailwind CSS and Framer Motion.
