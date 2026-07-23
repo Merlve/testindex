@@ -195,28 +195,49 @@ export default function Layout() {
 
 
   useEffect(() => {
-    let timeout: any;
-    const resetIdle = () => {
-      if (isIdle) setIsIdle(false);
+    let timeout: NodeJS.Timeout;
+
+    const handleUserActivity = () => {
+      setIsIdle(false);
       clearTimeout(timeout);
-      timeout = setTimeout(() => setIsIdle(true), 4000);
+      timeout = setTimeout(() => {
+        setIsIdle(true);
+      }, 3500);
     };
 
-    window.addEventListener('mousemove', resetIdle);
-    window.addEventListener('keydown', resetIdle);
-    window.addEventListener('touchstart', resetIdle);
-    window.addEventListener('scroll', resetIdle, true);
-    
-    resetIdle();
-    
+    const events = [
+      'mousemove',
+      'mousedown',
+      'mouseup',
+      'touchstart',
+      'touchmove',
+      'touchend',
+      'scroll',
+      'keydown',
+      'wheel',
+      'pointermove',
+      'pointerdown'
+    ];
+
+    events.forEach(eventName => {
+      window.addEventListener(eventName, handleUserActivity, { capture: true, passive: true });
+    });
+
+    timeout = setTimeout(() => {
+      setIsIdle(true);
+    }, 3500);
+
     return () => {
-      window.removeEventListener('mousemove', resetIdle);
-      window.removeEventListener('keydown', resetIdle);
-      window.removeEventListener('touchstart', resetIdle);
-      window.removeEventListener('scroll', resetIdle, true);
+      events.forEach(eventName => {
+        window.removeEventListener(eventName, handleUserActivity, { capture: true });
+      });
       clearTimeout(timeout);
     };
-  }, [isIdle]);
+  }, []);
+
+  useEffect(() => {
+    setIsIdle(false);
+  }, [location.pathname, location.search]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ['layout-categories'],
@@ -392,10 +413,10 @@ export default function Layout() {
       </main>
 
       {/* Floating Bottom Nav for Mobile/Tablet */}
-      <div className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] transition-all duration-500 ease-in-out ${mobileOpen || isIdle || location.pathname === '/users' ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
-        <NavLink to="/" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
+      <div className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full bg-white/20 dark:bg-black/40 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.15)] transition-all duration-500 ease-in-out ${mobileOpen || isIdle || location.pathname === '/users' ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
+        <NavLink to="/" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
           {({isActive}) => (
-            <>
+            <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
               <Home size={24} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
@@ -404,22 +425,24 @@ export default function Layout() {
                   </motion.span>
                 )}
               </AnimatePresence>
-            </>
+            </div>
           )}
         </NavLink>
-        <button onClick={() => { setSearchOpen(!searchOpen); setMobileOpen(false); }} className={`flex items-center gap-2 transition-all duration-300 ${searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
-          <Search size={24} />
-          <AnimatePresence>
-            {searchOpen && (
-              <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
-                Search
-              </motion.span>
-            )}
-          </AnimatePresence>
+        <button onClick={() => { setSearchOpen(!searchOpen); setMobileOpen(false); }} className={`flex items-center gap-2 transition-all duration-300 ${searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
+          <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
+            <Search size={24} />
+            <AnimatePresence>
+              {searchOpen && (
+                <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: 'auto', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+                  Search
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
         </button>
-        <NavLink to="/watchlist" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
+        <NavLink to="/watchlist" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
           {({isActive}) => (
-            <>
+            <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
               <Bookmark size={24} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
@@ -428,12 +451,12 @@ export default function Layout() {
                   </motion.span>
                 )}
               </AnimatePresence>
-            </>
+            </div>
           )}
         </NavLink>
-        <NavLink to="/recommendations" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
+        <NavLink to="/recommendations" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'px-4 py-2'}`}>
           {({isActive}) => (
-            <>
+            <div className="flex items-center gap-2 mix-blend-difference dark:mix-blend-normal text-white dark:text-white">
               <Sparkles size={24} />
               <AnimatePresence>
                 {isActive && !searchOpen && (
@@ -442,7 +465,7 @@ export default function Layout() {
                   </motion.span>
                 )}
               </AnimatePresence>
-            </>
+            </div>
           )}
         </NavLink>
       </div>
