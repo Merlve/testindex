@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
@@ -9,6 +9,8 @@ import { useAuth } from '../context/AuthContext';
 
 export default function RecentlyAddedCarousel() {
   const { user, token } = useAuth();
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const fetchRecentlyAdded = async () => {
     const res = await axios.get('/api/jellyfin/recently-added', { headers: { Authorization: token } });
@@ -21,17 +23,49 @@ export default function RecentlyAddedCarousel() {
   const { data: items = [], isLoading: loading, isFetching, refetch } = useQuery({
     queryKey: ['recentlyAdded'],
     queryFn: fetchRecentlyAdded,
-    staleTime: 10 * 60 * 1000,
+    refetchInterval: 3 * 60 * 1000,
+    staleTime: 60 * 1000,
     retry: 3,
     retryDelay: 2000,
   });
 
-  if (loading && items.length === 0) {
-    // We still show the header but with a loading state below
-  }
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const handleFetchJellyfin = async () => {
+    setIsRefreshing(true);
+    setToastMsg(null);
+    try {
+      const res = await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } });
+      if (res.data?.success) {
+        const fetchedItems = res.data.data || [];
+        queryClient.setQueryData(['recentlyAdded'], fetchedItems);
+        await refetch();
+        queryClient.invalidateQueries();
+        if (fetchedItems.length === 0) {
+          setToastMsg('Jellyfin fetch completed, but 0 items were matched on OpenList.');
+        } else {
+          setToastMsg(`Successfully fetched ${fetchedItems.length} items from Jellyfin!`);
+        }
+      } else {
+        setToastMsg(`Jellyfin fetch failed: ${res.data?.error || res.data?.message || 'Unknown error'}`);
+      }
+    } catch (e: any) {
+      console.error('[Jellyfin] Refresh error:', e);
+      const errMsg = e.response?.data?.error || e.response?.data?.message || e.message || 'Failed to fetch from Jellyfin';
+      setToastMsg(`Jellyfin fetch failed: ${errMsg}`);
+    } finally {
+      setIsRefreshing(false);
+      setTimeout(() => setToastMsg(null), 6000);
+    }
+  };
 
   return (
     <div className="relative">
+      {toastMsg && (
+        <div className="mb-3 px-4 py-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs rounded-xl backdrop-blur-md transition-all">
+          {toastMsg}
+        </div>
+      )}
       <div className="flex justify-between items-end mb-2">
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2"> 
@@ -40,14 +74,14 @@ export default function RecentlyAddedCarousel() {
           </h3>
           <Link to="/recently-added" className="text-xs text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider">View All</Link>
         </div>
-        {user === 'admin' && (
+        {user && user !== 'guest' && (
           <button 
-            onClick={async () => { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); refetch(); }}
-            disabled={isFetching}
-            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:scale-105 disabled:opacity-50"
+            onClick={handleFetchJellyfin}
+            disabled={isFetching || isRefreshing}
+            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:scale-105 disabled:opacity-50 cursor-pointer"
           >
-            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
-            {isFetching ? "Fetching..." : "Fetch"}
+            <RefreshCw size={14} className={(isFetching || isRefreshing) ? "animate-spin text-purple-400" : ""} />
+            {(isFetching || isRefreshing) ? "Fetching..." : "Fetch"}
           </button>
         )}
       </div>

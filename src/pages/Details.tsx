@@ -450,12 +450,32 @@ export default function Details() {
       const { cleanName, year } = parseMediaName(searchName);
       
       const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' });
-      if (res.data.success) {
-        setTmdb(res.data.data);
+      if (res.data.success && res.data.data) {
+        const newData = res.data.data;
+        setTmdb(newData);
         setShowMetadataModal(false);
         setSearchTitle('');
         setSearchResults([]);
         clearRecommendationsCache();
+
+        // Update recently_browsed in localStorage
+        try {
+          const actualParentPath = pathParts.slice(0, -1).join('/');
+          const recentStr = localStorage.getItem('recently_browsed') || '[]';
+          let recent = JSON.parse(recentStr);
+          const newItem = {
+            item: { name },
+            category,
+            parentPath: actualParentPath,
+            tmdbData: newData,
+            timestamp: Date.now()
+          };
+          recent = recent.filter((r: any) => r.item.name !== name || r.parentPath !== actualParentPath);
+          recent.unshift(newItem);
+          recent = recent.slice(0, 20);
+          localStorage.setItem('recently_browsed', JSON.stringify(recent));
+        } catch(e) {}
+
         queryClient.invalidateQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
@@ -475,12 +495,32 @@ export default function Details() {
       }
       const { cleanName, year } = parseMediaName(searchName);
       const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle });
-      if (res.data.success) {
-        setTmdb(res.data.data);
+      if (res.data.success && res.data.data) {
+        const newData = res.data.data;
+        setTmdb(newData);
         setShowMetadataModal(false);
         setNewTmdbId('');
         setCustomTitle('');
         clearRecommendationsCache();
+
+        // Update recently_browsed in localStorage
+        try {
+          const actualParentPath = pathParts.slice(0, -1).join('/');
+          const recentStr = localStorage.getItem('recently_browsed') || '[]';
+          let recent = JSON.parse(recentStr);
+          const newItem = {
+            item: { name },
+            category,
+            parentPath: actualParentPath,
+            tmdbData: newData,
+            timestamp: Date.now()
+          };
+          recent = recent.filter((r: any) => r.item.name !== name || r.parentPath !== actualParentPath);
+          recent.unshift(newItem);
+          recent = recent.slice(0, 20);
+          localStorage.setItem('recently_browsed', JSON.stringify(recent));
+        } catch(e) {}
+
         queryClient.invalidateQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
@@ -557,7 +597,7 @@ export default function Details() {
               />
             </div>
             
-            <div className="max-h-64 overflow-y-auto mb-4 space-y-2">
+            <div className="max-h-52 overflow-y-auto mb-4 space-y-2">
               {searching ? (
                 <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Searching...</div>
               ) : searchResults.length > 0 ? (
@@ -581,17 +621,46 @@ export default function Details() {
               ) : searchTitle ? (
                 <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">No results found</div>
               ) : (
-                <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Type a title to search</div>
+                <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Type a title above to search online</div>
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-black/10 dark:border-white/10">
-              <button type="button" onClick={() => {
-                setShowMetadataModal(false);
-                setSearchTitle('');
-                setSearchResults([]);
-              }} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">Cancel</button>
-            </div>
+            <form onSubmit={handleFixMetadata} className="pt-3 border-t border-black/10 dark:border-white/10 space-y-3">
+              <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Or Manual Override</div>
+              <div className="grid grid-cols-2 gap-2">
+                <input 
+                  type="text" 
+                  value={newTmdbId} 
+                  onChange={e => setNewTmdbId(e.target.value)} 
+                  placeholder="TMDB ID (e.g. 1234)" 
+                  className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-black dark:text-white focus:outline-none focus:border-purple-600/50"
+                />
+                <input 
+                  type="text" 
+                  value={customTitle} 
+                  onChange={e => setCustomTitle(e.target.value)} 
+                  placeholder="Custom Display Title" 
+                  className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-black dark:text-white focus:outline-none focus:border-purple-600/50"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => {
+                  setShowMetadataModal(false);
+                  setSearchTitle('');
+                  setSearchResults([]);
+                  setNewTmdbId('');
+                  setCustomTitle('');
+                }} className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition">Cancel</button>
+                <button 
+                  type="submit" 
+                  disabled={!newTmdbId && !customTitle}
+                  className="px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition"
+                >
+                  Apply Override
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

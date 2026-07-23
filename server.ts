@@ -83,7 +83,7 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
 
     const cachedData = forceRefresh ? null : apiCache.get(key);
     if (cachedData) {
-      res.setHeader('Cache-Control', `${isPrivate ? 'private' : 'public'}, max-age=${ttlSeconds}`);
+      res.setHeader('Cache-Control', 'no-store');
       return res.json(cachedData);
     }
 
@@ -91,7 +91,7 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
     res.json = ((body: any) => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         apiCache.set(key, body, ttlSeconds);
-        res.setHeader('Cache-Control', `${isPrivate ? 'private' : 'public'}, max-age=${ttlSeconds}`);
+        res.setHeader('Cache-Control', 'no-store');
       }
       return originalJson(body);
     });
@@ -522,6 +522,13 @@ app.post('/api/users/expirations', async (req, res) => {
 setInterval(() => {
   checkAndEnforceExpirations().catch(console.error);
 }, 30 * 1000);
+
+// Jellyfin auto-fetch job (runs every 3 minutes)
+setInterval(() => {
+  getRecentlyAdded(getOpenlistUrl, getOpenlistApiKey, appConfig.basePath, false).catch((err) => {
+    console.error('[Jellyfin Auto-Fetch Interval Error]', err.message || err);
+  });
+}, 3 * 60 * 1000);
 // ------------------------
 
 // --- Activity Logs ---
@@ -1315,7 +1322,11 @@ app.post('/api/meta/correct', (req, res) => {
   const { query, type, year, data } = req.body;
   if (!query || !data) return res.status(400).json({ error: 'Invalid data' });
   const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
+  const baseKey = `${type}-${query.toLowerCase().trim()}`;
+  data._overridden = true;
   tmdbCache[cacheKey] = data;
+  tmdbCache[baseKey] = data;
+  apiCache.clear();
   saveDb();
   addLog('TMDB Corrected', 'Admin', `Corrected TMDB data for query: ${query} (Type: ${type})`);
   res.json({ success: true, data });
@@ -1328,6 +1339,10 @@ app.post('/api/meta/override', async (req, res) => {
   
   try {
     const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
+    const baseKey = `${type}-${query.toLowerCase().trim()}`;
+
+    // Clear server response cache so all GET queries get fresh data immediately
+    apiCache.clear();
 
     if (customTitle && !tmdbId) {
       // Just override title in existing cache or create a mock
@@ -1336,9 +1351,9 @@ app.post('/api/meta/override', async (req, res) => {
       data.name = customTitle; // tv uses name
       data._overridden = true;
       tmdbCache[cacheKey] = data;
-      const baseKey = `${type}-${query.toLowerCase().trim()}`;
+      tmdbCache[baseKey] = data;
       for (const key of Object.keys(tmdbCache)) {
-           if (key.startsWith(baseKey)) {
+           if (key.startsWith(baseKey) || key.includes(query.toLowerCase().trim())) {
                tmdbCache[key] = data;
            }
       }
@@ -1374,9 +1389,9 @@ app.post('/api/meta/override', async (req, res) => {
        }
        data._overridden = true;
        tmdbCache[cacheKey] = data;
-       const baseKey = `${type}-${query.toLowerCase().trim()}`;
+       tmdbCache[baseKey] = data;
        for (const key of Object.keys(tmdbCache)) {
-           if (key.startsWith(baseKey)) {
+           if (key.startsWith(baseKey) || key.includes(query.toLowerCase().trim())) {
                tmdbCache[key] = data;
            }
        }
@@ -1616,10 +1631,17 @@ app.post('/api/meta/autofetch/stop', (req, res) => {
 // API: Gemini Chatbot
 
 // API: Jellyfin Recently Added
-app.get('/api/jellyfin/recently-added', cacheMiddleware(300, true), async (req, res) => {
+app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, res) => {
   try {
     const force = req.query.force === 'true';
-    const items = await getRecentlyAdded(getOpenlistUrl, getOpenlistApiKey, appConfig.basePath, force);
+    if (force) {
+      apiCache.clear();
+    }
+    let userToken = req.headers.authorization as string | undefined;
+    if (userToken && userToken.startsWith('Bearer ')) userToken = userToken.substring(7);
+    const getToken = () => process.env.OPENLIST_API_KEY || userToken;
+
+    const items = await getRecentlyAdded(getOpenlistUrl, getToken, appConfig.basePath, force);
     
     // Proactively fetch TMDB metadata for all recent items so they are instantly ready and cached
     const tmdbKey = process.env.TMDB_API_KEY;
