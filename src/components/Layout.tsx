@@ -11,8 +11,7 @@ import ScrollToTopButton from './ScrollToTopButton';
 
 
 
-function ScrollRestorer({ scrollKey, mainRef }: { scrollKey: string, mainRef: React.RefObject<HTMLElement> }) {
-  const navigationType = useNavigationType();
+function ScrollRestorer({ scrollKey, mainRef, navigationType }: { scrollKey: string, mainRef: React.RefObject<HTMLElement>, navigationType: string }) { 
   const isRestored = useRef(false);
 
   useLayoutEffect(() => {
@@ -110,6 +109,7 @@ export default function Layout() {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const outlet = useOutlet();
   const mainRef = useRef<HTMLElement>(null);
   
@@ -117,7 +117,6 @@ export default function Layout() {
 
 
 
-  const navigationType = useNavigationType();
   const [searchOpen, setSearchOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -340,7 +339,7 @@ export default function Layout() {
             transition={{ duration: 0.4, ease: "easeOut" }}
             className="w-full min-h-full"
           >
-            <ScrollRestorer scrollKey={location.pathname} mainRef={mainRef} />
+            <ScrollRestorer scrollKey={location.pathname} mainRef={mainRef} navigationType={navigationType} />
             {outlet}
           </motion.div>
         </AnimatePresence>
