@@ -1,17 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, User, Search, ChevronLeft, Plus, Trash2, Download, Upload, CheckSquare, Square, Eye, EyeOff, Calendar, Key } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, User, Search, ChevronLeft, Plus, Trash2, Download, Upload, CheckSquare, Square, Eye, EyeOff, Calendar, Key, RefreshCw } from 'lucide-react';
 
 export default function Users() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const { token } = useAuth();
-  const [expirations, setExpirations] = useState<Record<string, string>>({});
   
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -19,34 +18,36 @@ export default function Users() {
   const [bulkAction, setBulkAction] = useState<'password' | 'expiration' | null>(null);
   const [bulkValue, setBulkValue] = useState('');
 
-  const fetchUsers = async () => {
-    try {
-      const res = await axios.get('/api/admin/user/list', { headers: { Authorization: token } });
-      if (res.data?.data?.content) {
-        setUsers(res.data.data.content);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: usersData, isLoading: usersLoading, refetch: refetchUsers, isRefetching: isRefetchingUsers } = useQuery({
+    queryKey: ['adminUsers', token],
+    queryFn: async () => {
+      const res = await axios.get(`/api/admin/user/list?refresh=true&t=${Date.now()}`, { headers: { Authorization: token } });
+      return res.data?.data?.content || [];
+    },
+    enabled: !!token,
+    staleTime: 0
+  });
 
-  const fetchExpirations = async () => {
-    try {
-      const res = await axios.get('/api/users/expirations', { headers: { Authorization: token } });
-      setExpirations(res.data);
-    } catch (e) {}
-  };
+  const { data: expirationsData, isLoading: expirationsLoading, refetch: refetchExpirations, isRefetching: isRefetchingExpirations } = useQuery({
+    queryKey: ['adminUserExpirations', token],
+    queryFn: async () => {
+      const res = await axios.get(`/api/users/expirations?t=${Date.now()}`, { headers: { Authorization: token } });
+      return res.data || {};
+    },
+    enabled: !!token,
+    staleTime: 0
+  });
 
-  useEffect(() => {
-    fetchUsers();
-    fetchExpirations();
-  }, [token]);
+  const users = usersData || [];
+  const expirations = expirationsData || {};
+  const loading = usersLoading || expirationsLoading || isRefetchingUsers || isRefetchingExpirations || actionLoading;
 
-  const filteredUsers = users.filter(u => {
+  const fetchUsers = async () => { await refetchUsers(); };
+  const fetchExpirations = async () => { await refetchExpirations(); };
+
+  const filteredUsers = users.filter((u: any) => {
     const matchesSearch = u.username.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' ? true : (statusFilter === 'active' ? !u.disabled : u.disabled);
+    const matchesStatus = statusFilter === 'all' ? true : (statusFilter === 'active' ? !u.disabled : !!u.disabled);
     return matchesSearch && matchesStatus;
   });
 
@@ -68,71 +69,83 @@ export default function Users() {
 
   const handleBatchDelete = async () => {
     if (!confirm('Are you sure you want to delete selected users?')) return;
-    setLoading(true);
+    setActionLoading(true);
+    let successCount = 0;
     for (const id of selectedIds) {
       try {
-        await axios.post('/api/admin/user/delete', { id }, { headers: { Authorization: token } });
-        // Also remove expiration
-        await axios.post('/api/users/expirations', { userId: id, expirationDate: '' }, { headers: { Authorization: token } });
+        const res = await axios.post('/api/admin/user/delete', { id }, { headers: { Authorization: token } });
+        if (res.data?.code === 200) {
+          successCount++;
+          await axios.post('/api/users/expirations', { userId: id, expirationDate: '' }, { headers: { Authorization: token } });
+        }
       } catch (e) { console.error('Failed to delete', id); }
     }
-    await axios.post('/api/admin/log', { action: 'Batch Delete', details: `Deleted ${selectedIds.size} users.` }, { headers: { Authorization: token } });
+    await axios.post('/api/admin/log', { action: 'Batch Delete', details: `Deleted ${successCount} users.` }, { headers: { Authorization: token } });
     setSelectedIds(new Set());
     await fetchUsers();
   };
 
   const handleBatchDisable = async () => {
-    setLoading(true);
+    setActionLoading(true);
+    let successCount = 0;
     for (const id of selectedIds) {
       try {
         const user = users.find(u => u.id === id);
         if (user) {
-          await axios.post('/api/admin/user/update', { ...user, disabled: true }, { headers: { Authorization: token } });
+          const res = await axios.post('/api/admin/user/update', { ...user, disabled: true }, { headers: { Authorization: token } });
+          if (res.data?.code === 200) successCount++;
         }
       } catch (e) { console.error('Failed to disable', id); }
     }
-    await axios.post('/api/admin/log', { action: 'Batch Disable', details: `Disabled ${selectedIds.size} users.` }, { headers: { Authorization: token } });
+    await axios.post('/api/admin/log', { action: 'Batch Disable', details: `Disabled ${successCount} users.` }, { headers: { Authorization: token } });
     setSelectedIds(new Set());
     await fetchUsers();
   };
 
   const handleBatchEnable = async () => {
-    setLoading(true);
+    setActionLoading(true);
+    let successCount = 0;
     for (const id of selectedIds) {
       try {
         const user = users.find(u => u.id === id);
         if (user) {
-          await axios.post('/api/admin/user/update', { ...user, disabled: false }, { headers: { Authorization: token } });
+          const res = await axios.post('/api/admin/user/update', { ...user, disabled: false }, { headers: { Authorization: token } });
+          if (res.data?.code === 200) successCount++;
         }
       } catch (e) { console.error('Failed to enable', id); }
     }
-    await axios.post('/api/admin/log', { action: 'Batch Enable', details: `Enabled ${selectedIds.size} users.` }, { headers: { Authorization: token } });
+    await axios.post('/api/admin/log', { action: 'Batch Enable', details: `Enabled ${successCount} users.` }, { headers: { Authorization: token } });
     setSelectedIds(new Set());
     await fetchUsers();
   };
 
   const executeBulkAction = async () => {
-    setLoading(true);
+    setActionLoading(true);
+    let successCount = 0;
     for (const id of selectedIds) {
       if (bulkAction === 'password') {
         try {
           const user = users.find(u => u.id === id);
           if (user) {
-            await axios.post('/api/admin/user/update', { ...user, password: bulkValue }, { headers: { Authorization: token } });
+            const res = await axios.post('/api/admin/user/update', { ...user, password: bulkValue }, { headers: { Authorization: token } });
+            if (res.data?.code === 200) successCount++;
           }
         } catch (e) { console.error('Failed to set password', id); }
       } else if (bulkAction === 'expiration') {
         try {
-          await axios.post('/api/users/expirations', { userId: id, expirationDate: bulkValue }, { headers: { Authorization: token } });
+          const isoDate = bulkValue ? new Date(bulkValue).toISOString() : '';
+          const res = await axios.post('/api/users/expirations', { userId: id, expirationDate: isoDate }, { headers: { Authorization: token } });
+          if (res.data?.success) successCount++;
         } catch (e) { console.error('Failed to set expiration', id); }
       }
     }
-    await axios.post('/api/admin/log', { action: `Batch ${bulkAction === 'password' ? 'Password' : 'Expiration'} Update`, details: `Updated ${bulkAction} for ${selectedIds.size} users.` }, { headers: { Authorization: token } });
+    await axios.post('/api/admin/log', { action: `Batch ${bulkAction === 'password' ? 'Password' : 'Expiration'} Update`, details: `Updated ${bulkAction} for ${successCount} users.` }, { headers: { Authorization: token } });
     setBulkAction(null);
     setBulkValue('');
     setSelectedIds(new Set());
     await fetchUsers();
     await fetchExpirations();
+    setActionLoading(false);
   };
 
   const handleExport = () => {
@@ -161,7 +174,7 @@ export default function Users() {
         const importedUsers = JSON.parse(event.target?.result as string);
         if (!Array.isArray(importedUsers)) throw new Error('Invalid format');
 
-        setLoading(true);
+        setActionLoading(true);
         for (const u of importedUsers) {
           try {
             const { id, expirationDate, ...userData } = u;
@@ -186,7 +199,7 @@ export default function Users() {
         alert('Failed to parse file');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setLoading(false);
+        setActionLoading(false);
       }
     };
     reader.readAsText(file);
@@ -225,9 +238,26 @@ export default function Users() {
   return (
     <div className="p-4 md:p-8 lg:p-12 max-w-6xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-black dark:text-white">User Management</h2>
-          <p className="text-sm text-gray-500 mt-1">{users.filter(u => !u.disabled).length} active users</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h2 className="text-3xl font-bold text-black dark:text-white">User Management</h2>
+            <p className="text-sm text-gray-500 mt-1">{users.filter(u => !u.disabled).length} active users</p>
+          </div>
+          
+          <button 
+            onClick={async () => {
+              setActionLoading(true);
+              await fetchUsers();
+              await fetchExpirations();
+              setActionLoading(false);
+            }}
+            disabled={loading}
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center shadow-lg hover:bg-blue-500 transition-all shrink-0 disabled:opacity-50"
+            title="Refresh Data"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh Data
+          </button>
         </div>
         
         {bulkAction && (
@@ -267,7 +297,7 @@ export default function Users() {
           </div>
         )}
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled')}
@@ -341,9 +371,9 @@ export default function Users() {
           <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
           {filteredUsers.length === 0 ? (
-            <div className="col-span-full p-12 text-center text-gray-500">
+            <div className="col-span-full p-8 text-center text-gray-500">
               No users found matching "{searchQuery}"
             </div>
           ) : (
@@ -351,24 +381,24 @@ export default function Users() {
               <div
                 key={u.id}
                 onClick={() => setSelectedUser(u)}
-                className={`w-full text-left p-6 rounded-2xl border flex items-center transition-all bg-[#fffcf9]/80 dark:bg-[#1a1a22]/80 hover:shadow-lg backdrop-blur-sm cursor-pointer ${selectedIds.has(u.id) ? 'border-purple-500 shadow-sm' : 'border-black/5 dark:border-white/5 hover:border-purple-500/30'}`}
+                className={`w-full text-left p-2.5 sm:p-3.5 rounded-xl border flex items-center transition-all bg-[#fffcf9]/80 dark:bg-[#1a1a22]/80 hover:shadow-md backdrop-blur-sm cursor-pointer ${selectedIds.has(u.id) ? 'border-purple-500 shadow-sm' : 'border-black/5 dark:border-white/5 hover:border-purple-500/30'}`}
               >
-                <div onClick={(e) => toggleSelect(u.id, e)} className="mr-4 text-gray-400 hover:text-purple-500 transition-colors">
-                  {selectedIds.has(u.id) ? <CheckSquare className="w-5 h-5 text-purple-500" /> : <Square className="w-5 h-5" />}
+                <div onClick={(e) => toggleSelect(u.id, e)} className="mr-2.5 text-gray-400 hover:text-purple-500 transition-colors">
+                  {selectedIds.has(u.id) ? <CheckSquare className="w-4 h-4 text-purple-500" /> : <Square className="w-4 h-4" />}
                 </div>
-                <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center mr-4 shrink-0">
-                  <User className="w-5 h-5 text-purple-500" />
+                <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center mr-3 shrink-0">
+                  <User className="w-4 h-4 text-purple-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-black dark:text-white font-bold truncate">{u.username}</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`w-2 h-2 rounded-full ${u.disabled ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                    <span className="text-xs text-gray-500 uppercase tracking-wider font-bold">
+                  <div className="text-black dark:text-white font-bold text-sm truncate">{u.username}</div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${u.disabled ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
                       {u.disabled ? 'Disabled' : 'Active'}
                     </span>
                     {expirations[u.id] && (
                       <span className="text-[10px] text-gray-400 font-medium ml-auto truncate" title={new Date(expirations[u.id]).toLocaleString()}>
-                        Expires: {new Date(expirations[u.id]).toLocaleDateString()}
+                        Exp: {new Date(expirations[u.id]).toLocaleDateString()}
                       </span>
                     )}
                   </div>
@@ -382,13 +412,31 @@ export default function Users() {
   );
 }
 
+function formatForDatetimeLocal(val?: string) {
+  if (!val) return '';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
 function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations }: { user: any, isCreating: boolean, onSaved: () => void, onCancel: () => void, token: string, expirations: Record<string, string> }) {
-  const [formData, setFormData] = useState({ ...user, password: '', expirationDate: expirations[user.id] || '' });
+  const [formData, setFormData] = useState({
+    ...user,
+    permission: typeof user.permission === 'number' ? user.permission : 0,
+    password: '',
+    expirationDate: formatForDatetimeLocal(expirations[user.id])
+  });
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    setFormData({ ...user, password: '', expirationDate: expirations[user.id] || '' });
+    setFormData({
+      ...user,
+      permission: typeof user.permission === 'number' ? user.permission : 0,
+      password: '',
+      expirationDate: formatForDatetimeLocal(expirations[user.id])
+    });
   }, [user, expirations]);
 
   const handleSave = async () => {
@@ -402,54 +450,70 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
           setSaving(false);
           return;
         }
-        await axios.post('/api/admin/user/create', {
+        const createRes = await axios.post('/api/admin/user/create', {
           username: formData.username,
           password: formData.password,
           base_path: formData.base_path,
-          role: formData.role,
-          disabled: formData.disabled,
-          permission: formData.permission
+          role: formData.role || 0,
+          disabled: !!formData.disabled,
+          permission: formData.permission || 0
         }, { headers: { Authorization: token } });
         
-        // Try to fetch to get ID to set expiration
-        if (formData.expirationDate) {
-          const listRes = await axios.get('/api/admin/user/list', { headers: { Authorization: token } });
+        if (createRes.data?.code !== 200) {
+          alert(`Failed to create user: ${createRes.data?.message || 'Server error'}`);
+          setSaving(false);
+          return;
+        }
+
+        if (createRes.data?.data?.id) {
+          createdUserId = createRes.data.data.id;
+        } else {
+          const listRes = await axios.get('/api/admin/user/list?refresh=true', { headers: { Authorization: token } });
           const newUsers = listRes.data?.data?.content || [];
           const createdUser = newUsers.find((nu: any) => nu.username === formData.username);
           if (createdUser) createdUserId = createdUser.id;
         }
       } else {
-        await axios.post('/api/admin/user/update', {
+        const updateRes = await axios.post('/api/admin/user/update', {
           id: formData.id,
           username: formData.username,
           password: formData.password || undefined,
           base_path: formData.base_path,
-          role: formData.role,
-          disabled: formData.disabled,
-          permission: formData.permission
+          role: formData.role || 0,
+          disabled: !!formData.disabled,
+          permission: formData.permission || 0
         }, { headers: { Authorization: token } });
+
+        if (updateRes.data?.code !== 200) {
+          alert(`Failed to update user: ${updateRes.data?.message || 'Server error'}`);
+          setSaving(false);
+          return;
+        }
       }
       
-      if (createdUserId) {
+      const targetUserId = isCreating ? createdUserId : formData.id;
+      if (targetUserId) {
+        const isoExpiration = formData.expirationDate ? new Date(formData.expirationDate).toISOString() : '';
         await axios.post('/api/users/expirations', {
-          userId: createdUserId,
-          expirationDate: formData.expirationDate
+          userId: targetUserId,
+          expirationDate: isoExpiration
         }, { headers: { Authorization: token } });
       }
 
       alert(`User ${isCreating ? 'created' : 'updated'} successfully!`);
       onSaved();
-    } catch (e) {
-      alert(`Failed to ${isCreating ? 'create' : 'update'} user`);
+    } catch (e: any) {
+      alert(`Failed to ${isCreating ? 'create' : 'update'} user: ${e.response?.data?.message || e.message}`);
     } finally {
       setSaving(false);
     }
   };
 
   const togglePermission = (bit: number) => {
-    const current = formData.permission || 0;
+    const current = typeof formData.permission === 'number' ? formData.permission : 0;
     const isSet = (current & bit) === bit;
-    setFormData({ ...formData, permission: isSet ? current & ~bit : current | bit });
+    const nextPerm = isSet ? (current & ~bit) : (current | bit);
+    setFormData({ ...formData, permission: nextPerm });
   };
 
   const permissionsList = [
@@ -478,7 +542,7 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
           <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Username</label>
           <input 
             className="w-full bg-white dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:border-purple-500 focus:outline-none transition-colors"
-            value={formData.username}
+            value={formData.username || ''}
             onChange={e => setFormData({...formData, username: e.target.value})}
           />
         </div>
@@ -489,7 +553,7 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
               className="w-full bg-white dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 pr-12 text-black dark:text-white focus:border-purple-500 focus:outline-none transition-colors"
               type={showPassword ? "text" : "password"}
               placeholder={isCreating ? "Enter password" : "Leave blank to keep unchanged"}
-              value={formData.password}
+              value={formData.password || ''}
               onChange={e => setFormData({...formData, password: e.target.value})}
             />
             <button
@@ -505,7 +569,7 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
           <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Base Path</label>
           <input 
             className="w-full bg-white dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:border-purple-500 focus:outline-none transition-colors font-mono"
-            value={formData.base_path}
+            value={formData.base_path || '/'}
             onChange={e => setFormData({...formData, base_path: e.target.value})}
             placeholder="/"
           />
@@ -513,10 +577,10 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
         
         <div className="bg-white/50 dark:bg-[#08080a]/50 p-6 rounded-2xl border border-black/5 dark:border-white/5">
           <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-4">Account Status</label>
-          <label className="flex items-center space-x-3 cursor-pointer">
+          <label className="flex items-center space-x-3 cursor-pointer select-none">
             <input 
               type="checkbox" 
-              checked={formData.disabled}
+              checked={!!formData.disabled}
               onChange={e => setFormData({...formData, disabled: e.target.checked})}
               className="w-5 h-5 accent-purple-600 rounded"
             />
@@ -529,7 +593,7 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
           <input 
             type="datetime-local"
             className="w-full bg-white dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:border-purple-500 focus:outline-none transition-colors"
-            value={formData.expirationDate}
+            value={formData.expirationDate || ''}
             onChange={e => setFormData({...formData, expirationDate: e.target.value})}
           />
           <p className="text-[10px] text-gray-500 mt-2">Leave empty for no expiration. User will be disabled automatically on the set date and time.</p>
@@ -540,19 +604,15 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
         <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-6">Permissions</label>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6">
           {permissionsList.map(p => {
-            const isChecked = (formData.permission & p.bit) === p.bit;
+            const isChecked = ((formData.permission || 0) & p.bit) === p.bit;
             return (
-              <label 
+              <button
                 key={p.bit} 
-                className="flex items-center space-x-3 cursor-pointer group"
-                onClick={() => {
-                  const newPermission = isChecked 
-                    ? formData.permission & ~p.bit 
-                    : formData.permission | p.bit;
-                  setFormData({...formData, permission: newPermission});
-                }}
+                type="button"
+                onClick={() => togglePermission(p.bit)}
+                className="flex items-center space-x-3 cursor-pointer group text-left focus:outline-none"
               >
-                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isChecked ? 'bg-purple-600 border-purple-600' : 'bg-transparent border-gray-400 group-hover:border-purple-500'}`}>
+                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors shrink-0 ${isChecked ? 'bg-purple-600 border-purple-600' : 'bg-transparent border-gray-400 group-hover:border-purple-500'}`}>
                   {isChecked && (
                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -560,7 +620,7 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
                   )}
                 </div>
                 <span className="text-sm text-black dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{p.label}</span>
-              </label>
+              </button>
             )
           })}
         </div>
@@ -568,12 +628,14 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
 
       <div className="pt-8 flex justify-end gap-4">
         <button 
+          type="button"
           onClick={onCancel}
           className="bg-black/5 dark:bg-white/5 text-black dark:text-white font-bold px-10 py-4 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-all flex items-center"
         >
           Back to Users
         </button>
         <button 
+          type="button"
           onClick={handleSave}
           disabled={saving}
           className="bg-purple-600 text-white font-bold px-10 py-4 rounded-xl hover:bg-purple-500 transition-all flex items-center shadow-xl shadow-purple-600/20 disabled:opacity-50"

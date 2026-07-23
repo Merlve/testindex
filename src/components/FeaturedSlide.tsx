@@ -92,9 +92,9 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
   };
 
   return (
-    <section className="px-4 sm:px-8 pt-4 mb-8 mt-4">
+    <section className="px-4 sm:px-8 pt-2 sm:pt-4 mb-2 mt-0 sm:mt-2">
       <div 
-        className="relative h-[250px] sm:h-[320px] rounded-3xl overflow-hidden group cursor-grab active:cursor-grabbing"
+        className="relative h-[200px] sm:h-[320px] rounded-3xl overflow-hidden group cursor-grab active:cursor-grabbing"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}

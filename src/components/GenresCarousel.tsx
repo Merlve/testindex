@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -11,34 +12,31 @@ interface GenreBackdrop {
 }
 
 export default function GenresCarousel() {
-  const [genres, setGenres] = useState<GenreBackdrop[]>([]);
-  const [loading, setLoading] = useState(true);
   const { token } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchGenres = async () => {
-      try {
-        const res = await axios.get('/api/meta/genres/backdrops', {
-          headers: { Authorization: token }
-        });
-        if (res.data.success && res.data.genres) {
-          setGenres(res.data.genres);
-        }
-      } catch (error) {
-        console.error('Failed to fetch genres backdrops', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (token) fetchGenres();
-  }, [token]);
+  const fetchGenres = async () => {
+    const res = await axios.get('/api/meta/genres/backdrops', {
+      headers: { Authorization: token }
+    });
+    if (res.data.success && res.data.genres) {
+      return res.data.genres;
+    }
+    return [];
+  };
+
+  const { data: genres = [], isLoading: loading } = useQuery({
+    queryKey: ['genresCarousel', token],
+    queryFn: fetchGenres,
+    enabled: !!token,
+    staleTime: 10 * 60 * 1000,
+  });
 
   if (loading || genres.length === 0) return null;
 
   return (
-    <div className="mb-12">
-      <div className="flex justify-between items-end mb-4">
+    <div className="relative">
+      <div className="flex justify-between items-end mb-2">
         <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
           <Film className="text-blue-500" size={20} />
           Genres
@@ -53,12 +51,12 @@ export default function GenresCarousel() {
           </div>
         </div>
       </div>
-      <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide">
+      <div className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide">
         {genres.map(genre => (
           <button
             key={genre.id}
             onClick={() => navigate(`/genre/${genre.id}?name=${encodeURIComponent(genre.name)}`)}
-            className="relative w-48 h-28 sm:w-56 sm:h-32 flex-shrink-0 rounded-2xl overflow-hidden group hover:scale-105 transition-all shadow-md cursor-pointer border border-black/10 dark:border-white/10"
+            className="relative w-32 h-20 sm:w-56 sm:h-32 flex-shrink-0 rounded-2xl overflow-hidden group hover:scale-105 transition-all shadow-md cursor-pointer border border-black/10 dark:border-white/10"
           >
             <img 
               src={`https://image.tmdb.org/t/p/w500${genre.backdrop_path}`} 

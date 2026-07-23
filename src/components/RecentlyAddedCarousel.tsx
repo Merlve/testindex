@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
@@ -7,48 +8,31 @@ import { Clock, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function RecentlyAddedCarousel() {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
   const { user } = useAuth();
-
-  const fetchRecentlyAdded = async (force: boolean = false, retryCount: number = 0) => {
-    try {
-      if (force) setIsFetching(true);
-      else if (retryCount === 0) setLoading(true);
-      
-      const res = await axios.get(`/api/jellyfin/recently-added${force ? '?force=true' : ''}`);
-      if (res.data?.success) {
-        setItems(res.data.data || []);
-      }
-    } catch (err: any) {
-      console.error('Failed to fetch recently added', err);
-      if (err.message === 'Network Error' && retryCount < 3) {
-         setTimeout(() => fetchRecentlyAdded(force, retryCount + 1), 2000);
-         return;
-      }
-    } finally {
-      if (retryCount >= 3 || !isFetching) {
-         setLoading(false);
-         setIsFetching(false);
-      }
+  
+  const fetchRecentlyAdded = async () => {
+    const res = await axios.get('/api/jellyfin/recently-added');
+    if (res.data?.success) {
+      return res.data.data || [];
     }
+    return [];
   };
 
-  useEffect(() => {
-    fetchRecentlyAdded();
-    // Refresh every 10 mins
-    const interval = setInterval(() => fetchRecentlyAdded(false), 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data: items = [], isLoading: loading, isFetching, refetch } = useQuery({
+    queryKey: ['recentlyAdded'],
+    queryFn: fetchRecentlyAdded,
+    staleTime: 10 * 60 * 1000,
+    retry: 3,
+    retryDelay: 2000,
+  });
 
   if (loading && items.length === 0) {
     // We still show the header but with a loading state below
   }
 
   return (
-    <div className="mb-12">
-      <div className="flex justify-between items-end mb-4">
+    <div className="relative">
+      <div className="flex justify-between items-end mb-2">
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2"> 
              <Clock className="text-blue-500" size={20} /> 
@@ -58,7 +42,7 @@ export default function RecentlyAddedCarousel() {
         </div>
         {user === 'admin' && (
           <button 
-            onClick={() => fetchRecentlyAdded(true)}
+            onClick={async () => { await axios.get('/api/jellyfin/recently-added?force=true'); refetch(); }}
             disabled={isFetching}
             className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:scale-105 disabled:opacity-50"
           >
@@ -73,7 +57,7 @@ export default function RecentlyAddedCarousel() {
       {(loading || isFetching) && items.length === 0 && (
         <div className="text-gray-500 text-sm italic">Fetching recent items...</div>
       )}
-      <div className="flex overflow-x-auto gap-5 pb-4 scrollbar-hide">
+      <div className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide">
          {items.slice(0, 15).map((item, i) => (
            <ItemCard key={i} item={item} category={item._cat} parentPath={item._parent} />
          ))}

@@ -132,14 +132,22 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
 
       </div>
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
-        <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-xs sm:text-sm'}`}>
+        <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-[11px] sm:text-xs'}`}>
             {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle">REC</span>}
             {tmdb?.title || tmdb?.name || item.name}
         </h3>
-        <p className={`uppercase tracking-wider font-bold mb-1 ${viewMode === 'list' ? 'text-[10px] sm:text-xs text-purple-400' : 'text-[9px] sm:text-[11px] text-gray-600 dark:text-gray-400'}`}>{category}</p>
-        <p className={`truncate ${viewMode === 'list' ? 'text-[10px] sm:text-xs text-gray-500' : 'text-[9px] sm:text-[10px] text-gray-600'}`}>{item._rec ? 'Not in library' : fullPath}</p>
-        {viewMode === 'list' && tmdb?.overview && (
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-2 hidden sm:-webkit-box sm:block" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{tmdb.overview}</p>
+        {viewMode === 'list' ? (
+          <>
+            <p className="uppercase tracking-wider font-bold mb-0.5 text-[10px] sm:text-xs text-purple-400">{category}</p>
+            <p className="truncate text-[10px] sm:text-xs text-gray-500">{item._rec ? 'Not in library' : fullPath}</p>
+            {tmdb?.overview && (
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-2 hidden sm:-webkit-box sm:block" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{tmdb.overview}</p>
+            )}
+          </>
+        ) : (
+          <p className="truncate text-[10px] text-gray-600 dark:text-gray-400">
+             {tmdb?.release_date ? tmdb.release_date.substring(0, 4) : tmdb?.first_air_date ? tmdb.first_air_date.substring(0, 4) : ''}
+          </p>
         )}
       </div>
       {item._jf && user === 'admin' && (
@@ -154,7 +162,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     </>
   );
 
-  const cardClasses = `group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-2 sm:gap-3 ${className || 'w-32 sm:w-48 flex-shrink-0'}`}`;
+  const cardClasses = `group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-1 sm:gap-2 ${className || 'w-24 sm:w-32 md:w-48 flex-shrink-0'}`}`;
 
   return (
     <>

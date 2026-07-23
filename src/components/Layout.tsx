@@ -13,30 +13,37 @@ import ScrollToTopButton from './ScrollToTopButton';
 
 function ScrollRestorer({ scrollKey, mainRef }: { scrollKey: string, mainRef: React.RefObject<HTMLElement> }) {
   const navigationType = useNavigationType();
+  const isRestored = useRef(false);
+
   useLayoutEffect(() => {
     if (!mainRef.current) return;
     const el = mainRef.current;
     
     if (navigationType !== 'POP') {
       el.scrollTop = 0;
+      isRestored.current = true;
       return;
     }
     
     const savedScrollStr = sessionStorage.getItem(`scroll-${scrollKey}`);
     if (!savedScrollStr) {
       el.scrollTop = 0;
+      isRestored.current = true;
       return;
     }
     
     const targetScroll = parseInt(savedScrollStr, 10);
     
     const attemptRestore = () => {
-      if (el.scrollHeight >= targetScroll + el.clientHeight || targetScroll === 0) {
+      // Allow a 100px margin in case layout hasn't fully expanded
+      if (el.scrollHeight >= targetScroll + el.clientHeight - 100 || targetScroll === 0) {
         el.scrollTop = targetScroll;
+        isRestored.current = true;
         return true;
       }
       return false;
     };
+    
     if (attemptRestore()) return;
     
     const observer = new MutationObserver(() => {
@@ -48,7 +55,10 @@ function ScrollRestorer({ scrollKey, mainRef }: { scrollKey: string, mainRef: Re
     
     const timeout = setTimeout(() => {
       observer.disconnect();
-      el.scrollTop = targetScroll;
+      if (!isRestored.current) {
+          el.scrollTop = targetScroll;
+          isRestored.current = true;
+      }
     }, 2000);
     
     return () => {
@@ -56,6 +66,24 @@ function ScrollRestorer({ scrollKey, mainRef }: { scrollKey: string, mainRef: Re
       clearTimeout(timeout);
     };
   }, [scrollKey, mainRef, navigationType]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (mainRef.current && isRestored.current) {
+        sessionStorage.setItem(`scroll-${scrollKey}`, mainRef.current.scrollTop.toString());
+      }
+    };
+    const mainEl = mainRef.current;
+    if (mainEl) {
+      mainEl.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    return () => {
+      if (mainEl) {
+        mainEl.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [scrollKey, mainRef]);
+
   return null;
 }
 
@@ -85,24 +113,7 @@ export default function Layout() {
   const outlet = useOutlet();
   const mainRef = useRef<HTMLElement>(null);
   
-  useEffect(() => {
-    const handleScroll = () => {
-      if (mainRef.current) {
-        sessionStorage.setItem(`scroll-${location.pathname}`, mainRef.current.scrollTop.toString());
-      }
-    };
-    
-    const mainEl = mainRef.current;
-    if (mainEl) {
-      mainEl.addEventListener('scroll', handleScroll);
-    }
-    
-    return () => {
-      if (mainEl) {
-        mainEl.removeEventListener('scroll', handleScroll);
-      }
-    };
-  }, [location.pathname]);
+
 
 
 
@@ -338,7 +349,7 @@ export default function Layout() {
       </main>
 
       {/* Floating Bottom Nav for Mobile/Tablet */}
-      <div className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] transition-all duration-500 ease-in-out ${mobileOpen || isIdle ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
+      <div className={`lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-2 py-2 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] transition-all duration-500 ease-in-out ${mobileOpen || isIdle || location.pathname === '/users' ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
         <NavLink to="/" onClick={() => { setMobileOpen(false); setSearchOpen(false); }} className={({isActive}) => `flex items-center gap-2 transition-all duration-300 ${isActive && !searchOpen ? 'text-purple-600 dark:text-purple-400 bg-black/10 dark:bg-white/10 px-4 py-2 rounded-full' : 'hover:text-purple-600 dark:hover:text-purple-400 px-4 py-2'}`}>
           {({isActive}) => (
             <>

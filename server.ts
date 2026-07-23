@@ -454,7 +454,48 @@ app.post('/api/config', (req, res) => {
 // --- User Expirations ---
 let userExpirations: Record<string, string> = {};
 
+async function checkAndEnforceExpirations() {
+  try {
+    const adminToken = getOpenlistApiKey();
+    if (!adminToken) return;
+
+    const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`;
+    const listRes = await axios.get(targetUrl, { headers: { Authorization: adminToken } });
+    const users = listRes.data?.data?.content || [];
+    
+    const now = Date.now();
+    let updated = false;
+
+    for (const user of users) {
+      const expDateStr = userExpirations[user.id] || userExpirations[String(user.id)];
+      if (expDateStr) {
+        const expTime = new Date(expDateStr).getTime();
+        if (!isNaN(expTime) && expTime <= now) {
+          if (!user.disabled) {
+            console.log(`[EXPIRATION] Disabling expired user ${user.username} (ID: ${user.id}). Expired at: ${expDateStr}`);
+            const updateUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/update`;
+            await axios.post(updateUrl, {
+              ...user,
+              disabled: true
+            }, { headers: { Authorization: adminToken } });
+            addLog('cron_disable', 'System/Cron', `User ${user.username} was disabled automatically (expired at ${expDateStr}).`);
+          }
+          delete userExpirations[user.id];
+          delete userExpirations[String(user.id)];
+          updated = true;
+        }
+      }
+    }
+    if (updated) {
+      await writeSQLiteJSON('users_expirations', userExpirations);
+    }
+  } catch (e: any) {
+    console.error('[EXPIRATION CHECK ERROR]:', e.message);
+  }
+}
+
 app.get('/api/users/expirations', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.json(userExpirations);
 });
 
@@ -463,49 +504,24 @@ app.post('/api/users/expirations', async (req, res) => {
   if (userId === undefined || userId === null) return res.status(400).json({ error: 'Missing userId' });
   
   if (expirationDate) {
-    userExpirations[userId] = expirationDate;
+    const d = new Date(expirationDate);
+    const storedDate = !isNaN(d.getTime()) ? d.toISOString() : expirationDate;
+    userExpirations[String(userId)] = storedDate;
   } else {
+    delete userExpirations[String(userId)];
     delete userExpirations[userId];
   }
   await writeSQLiteJSON('users_expirations', userExpirations);
   addLog('User Expiration Set', 'Admin', `Set expiration for user ${userId} to ${expirationDate || 'none'}`);
+  
+  await checkAndEnforceExpirations();
   res.json({ success: true });
 });
 
-// Expiration checking job (runs every minute to disable expired users)
-setInterval(async () => {
-  try {
-    const adminToken = process.env.OPENLIST_API_KEY;
-    if (!adminToken) return;
-
-    const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`;
-    const listRes = await axios.get(targetUrl, { headers: { Authorization: adminToken } });
-    const users = listRes.data?.data?.content || [];
-    
-    const now = new Date();
-
-    for (const user of users) {
-      const expDateStr = userExpirations[user.id];
-      if (expDateStr && !user.disabled) {
-        const expDate = new Date(expDateStr);
-        if (expDate <= now) {
-          console.log(`[CRON] Disabling user ${user.username} as their expiration date ${expDateStr} has been reached.`);
-          const updateUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/update`;
-          await axios.post(updateUrl, {
-            ...user,
-            disabled: true
-          }, { headers: { Authorization: adminToken } });
-          addLog('cron_disable', 'System/Cron', `User ${user.username} was disabled automatically. Expired: ${expDateStr}`);
-          
-          delete userExpirations[user.id];
-          await writeSQLiteJSON('users_expirations', userExpirations);
-        }
-      }
-    }
-  } catch (e) {
-    console.error('[CRON Error checking user expirations]:', e);
-  }
-}, 60 * 1000); // Check every minute
+// Expiration checking job (runs every 30 seconds to disable expired users)
+setInterval(() => {
+  checkAndEnforceExpirations().catch(console.error);
+}, 30 * 1000);
 // ------------------------
 
 // --- Activity Logs ---
@@ -532,13 +548,46 @@ app.post('/api/admin/log', async (req, res) => {
 app.all('/api/admin/*', async (req, res) => {
   try {
     const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}${req.originalUrl}`;
-    const token = req.headers.authorization;
-    const response = await axios({
-      method: req.method as any,
-      url: targetUrl,
-      data: req.body,
-      headers: { Authorization: token || '' }
-    });
+    let token = req.headers.authorization;
+    const masterApiKey = getOpenlistApiKey();
+    if (!token || token === 'guest-token' || token === 'null' || token === 'undefined') {
+      token = masterApiKey;
+    }
+
+    let response: any;
+    try {
+      response = await axios({
+        method: req.method as any,
+        url: targetUrl,
+        data: req.body,
+        headers: { Authorization: token || '' }
+      });
+    } catch (reqErr: any) {
+      if (masterApiKey && token !== masterApiKey) {
+        response = await axios({
+          method: req.method as any,
+          url: targetUrl,
+          data: req.body,
+          headers: { Authorization: masterApiKey }
+        });
+      } else {
+        throw reqErr;
+      }
+    }
+
+    // If Openlist returned non-200 code inside payload (e.g. 401 or 403 "You are not an admin"), retry with master admin key
+    if (response.data?.code !== 200 && masterApiKey && token !== masterApiKey) {
+      const fallbackResponse = await axios({
+        method: req.method as any,
+        url: targetUrl,
+        data: req.body,
+        headers: { Authorization: masterApiKey }
+      });
+      if (fallbackResponse.data?.code === 200) {
+        response = fallbackResponse;
+      }
+    }
+
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && response.data?.code === 200) {
       let action = 'Admin Action';
       let details = `Endpoint: ${req.originalUrl}`;
@@ -548,6 +597,15 @@ app.all('/api/admin/*', async (req, res) => {
       
       addLog(action, 'Admin', details);
     }
+
+    if (req.originalUrl.includes('/user/')) {
+      checkAndEnforceExpirations().catch(console.error);
+    }
+
+    if (req.method === 'GET') {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+
     res.json(response.data);
   } catch (error: any) {
     if (error.response?.data) {
@@ -558,15 +616,29 @@ app.all('/api/admin/*', async (req, res) => {
 });
 
 // API: Openlist Proxy - Login
-
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
+    await checkAndEnforceExpirations();
+
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/auth/login`;
     console.log(`[LOGIN] Attempting to login via Openlist at: ${url}`);
     const response = await axios.post(url, { username, password });
     
     if (response.data.code === 200) {
+      const masterApiKey = getOpenlistApiKey();
+      if (masterApiKey) {
+        try {
+          const listRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`, {
+            headers: { Authorization: masterApiKey }
+          });
+          const userObj = listRes.data?.data?.content?.find((u: any) => u.username === username);
+          if (userObj && userObj.disabled) {
+            addLog('Login Failed', username, 'Login blocked: Account is disabled or subscription expired.');
+            return res.json({ code: 401, message: 'Subscription Expired / Account Disabled' });
+          }
+        } catch (e) {}
+      }
       addLog('Login Success', username, 'User logged in successfully.');
     } else {
       addLog('Login Failed', username, `Login failed: ${response.data.message || 'Invalid credentials'}`);
@@ -1691,6 +1763,25 @@ async function initSQLiteState() {
 async function startServer() {
   await initSQLiteState();
 
+  // API: Jellyfin Override
+  app.post('/api/jellyfin/override', async (req, res) => {
+      let token = req.headers.authorization;
+      if (!token || token === 'guest-token') return res.status(401).json({ error: 'Unauthorized' });
+      
+      const { jfName, openlistPath, category, year } = req.body;
+      if (!jfName) return res.status(400).json({ error: 'Missing name' });
+      
+      jfOverrides[jfName] = { openlistPath, category, year };
+      await writeSQLiteJSON('jf_override', jfOverrides);
+      addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
+      
+      res.json({ success: true, overrides: jfOverrides });
+  });
+
+  app.get('/api/jellyfin/overrides', (req, res) => {
+      res.json(jfOverrides);
+  });
+
   const isProd = process.env.NODE_ENV === "production" || _filename.endsWith('.cjs');
   if (!isProd) {
     const vite = await createViteServer({
@@ -1706,28 +1797,7 @@ async function startServer() {
     });
   }
 
-  
-// API: Jellyfin Override
-
-app.post('/api/jellyfin/override', async (req, res) => {
-    let token = req.headers.authorization;
-    if (!token || token === 'guest-token') return res.status(401).json({ error: 'Unauthorized' });
-    // basic admin check or rely on front-end for now
-    
-    const { jfName, openlistPath, category, year } = req.body;
-    if (!jfName) return res.status(400).json({ error: 'Missing name' });
-    
-    jfOverrides[jfName] = { openlistPath, category, year };
-    await writeSQLiteJSON('jf_override', jfOverrides);
-    addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
-    
-    res.json({ success: true, overrides: jfOverrides });
-});
-
-app.get('/api/jellyfin/overrides', (req, res) => {
-    res.json(jfOverrides);
-});
-app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
