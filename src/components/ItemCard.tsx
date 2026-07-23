@@ -49,58 +49,45 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
   };
 
 
-  useEffect(() => {
-    if (tmdbData) {
-      setTmdb(tmdbData);
-      return;
+  
+  let searchName = item.name;
+  if (/^(s\d+|season\s*\d+)$/i.test(item.name)) {
+    const parentParts = parentPath.split('/').filter(Boolean);
+    if (parentParts.length > 0) {
+      searchName = parentParts[parentParts.length - 1];
     }
-    setTmdb(null);
-    // Only fetch for directories (shows/movies) or large files
-    const fetchTmdb = async () => {
-      let searchName = item.name;
-      if (/^(s\d+|season\s*\d+)$/i.test(item.name)) {
-        const parentParts = parentPath.split('/').filter(Boolean);
-        if (parentParts.length > 0) {
-          searchName = parentParts[parentParts.length - 1];
-        }
-      }
-      
-      let jfYear = '';
-      if (item._jf && item._jf.year) {
-         jfYear = item._jf.year;
-      }
-      
-      const { cleanName, year } = parseMediaName(searchName);
-      const searchYear = jfYear || year;
-      
+  }
+  let jfYear = '';
+  if (item._jf && item._jf.year) jfYear = item._jf.year;
+  const { cleanName, year } = parseMediaName(searchName);
+  const searchYear = jfYear || year;
+
+  const { data: fetchedTmdb } = useQuery({
+    queryKey: ['tmdb', item.name, category, parentPath, item._jf?.tmdbId],
+    queryFn: async () => {
       try {
         let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}`;
-        if (item._jf && item._jf.tmdbId) {
-            url += `&tmdbId=${item._jf.tmdbId}`;
-        }
+        if (item._jf && item._jf.tmdbId) url += `&tmdbId=${item._jf.tmdbId}`;
         
-        // If we have a tmdbId from Jellyfin, we could use a specific endpoint, 
-        // but for now let's just do search, as that caches well locally.
         const res = await axios.get(url);
         if (res.data && res.data.poster_path) {
-          setTmdb(res.data);
+          return res.data;
         } else if (item._jf && item._jf.tmdbId) {
-          // Fallback to fetch by ID if search failed
           const fallbackRes = await axios.get(`/api/meta/search_all?query=fallback&type=${category}&tmdbId=${item._jf.tmdbId}`);
-          if (fallbackRes.data?.results?.[0]) {
-             setTmdb(fallbackRes.data.results[0]);
-          } else if (fallbackRes.data && fallbackRes.data.poster_path) {
-             setTmdb(fallbackRes.data);
-          }
+          if (fallbackRes.data?.results?.[0]) return fallbackRes.data.results[0];
+          if (fallbackRes.data && fallbackRes.data.poster_path) return fallbackRes.data;
         }
-      } catch (err: any) {
-        if (err.message !== 'Network Error' && !err.response) {
-            console.log("TMDB fetch error", err.message || err);
-        }
+        return null;
+      } catch (e) {
+        return null;
       }
-    };
-    fetchTmdb();
-  }, [item.name, category, item._jf, tmdbData]);
+    },
+    enabled: !tmdbData,
+    staleTime: Infinity, // don't refetch automatically unless invalidated
+  });
+
+  const displayTmdb = tmdbData || fetchedTmdb || tmdb;
+
 
   const sanitizedPath = `${parentPath}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
   const fullPath = `/${sanitizedPath}`;
@@ -108,8 +95,8 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     const innerContent = (
     <>
       <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all duration-300 ${viewMode === 'grid' ? 'group-hover:-translate-y-2 group-hover:scale-[1.02] group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)]' : ''} flex-shrink-0`}>
-        {tmdb?.poster_path ? (
-          <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
+        {displayTmdb?.poster_path ? (
+          <img src={`https://image.tmdb.org/t/p/w500${displayTmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 bg-[#fbf4eb] dark:bg-[#1a1a22] z-0">
             <Film size={32} className="mb-2 opacity-50 sm:w-12 sm:h-12" />
@@ -117,9 +104,9 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-        {tmdb?.vote_average && (
+        {displayTmdb?.vote_average && (
           <div className={`absolute top-2 right-2 ${viewMode === 'grid' ? 'sm:top-3 sm:right-3' : ''} px-1.5 py-0.5 bg-black/60 backdrop-blur rounded text-[10px] font-bold text-yellow-500 z-20`}>
-            {Number(tmdb.vote_average).toFixed(1)}
+            {Number(displayTmdb.vote_average).toFixed(1)}
           </div>
         )}
         <button
@@ -134,19 +121,19 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
         <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-[11px] sm:text-xs'}`}>
             {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle">REC</span>}
-            {tmdb?.title || tmdb?.name || item.name}
+            {displayTmdb?.title || displayTmdb?.name || item.name}
         </h3>
         {viewMode === 'list' ? (
           <>
             <p className="uppercase tracking-wider font-bold mb-0.5 text-[10px] sm:text-xs text-purple-400">{category}</p>
             <p className="truncate text-[10px] sm:text-xs text-gray-500">{item._rec ? 'Not in library' : fullPath}</p>
-            {tmdb?.overview && (
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-2 hidden sm:-webkit-box sm:block" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{tmdb.overview}</p>
+            {displayTmdb?.overview && (
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-2 hidden sm:-webkit-box sm:block" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{displayTmdb.overview}</p>
             )}
           </>
         ) : (
           <p className="truncate text-[10px] text-gray-600 dark:text-gray-400">
-             {tmdb?.release_date ? tmdb.release_date.substring(0, 4) : tmdb?.first_air_date ? tmdb.first_air_date.substring(0, 4) : ''}
+             {displayTmdb?.release_date ? displayTmdb.release_date.substring(0, 4) : displayTmdb?.first_air_date ? displayTmdb.first_air_date.substring(0, 4) : ''}
           </p>
         )}
       </div>
@@ -167,7 +154,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
   return (
     <>
       {item._rec ? (
-          <a href={`https://www.themoviedb.org/${tmdb?.media_type || (category === 'SERIES' || category === 'ANIME' ? 'tv' : 'movie')}/${tmdb?.id || item._jf?.tmdbId || item.id || ''}`} target="_blank" rel="noopener noreferrer" className={cardClasses}>
+          <a href={`https://www.themoviedb.org/${displayTmdb?.media_type || (category === 'SERIES' || category === 'ANIME' ? 'tv' : 'movie')}/${displayTmdb?.id || item._jf?.tmdbId || item.id || ''}`} target="_blank" rel="noopener noreferrer" className={cardClasses}>
               {innerContent}
           </a>
       ) : (
@@ -210,7 +197,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
                                    category: overrideCat
                                }, { headers: { Authorization: token } });
                                setShowOverrideModal(false);
-                               alert('Saved! Please click Fetch on Recently Added to refresh.');
+                               try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} queryClient.invalidateQueries(); alert('Saved!');
                            } catch(e) {
                                alert('Failed to save override');
                            }

@@ -1,5 +1,6 @@
 import DetailsSkeleton from "../components/DetailsSkeleton";
 import { useEffect, useState, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -113,6 +114,7 @@ function FileRow({ item, fullPath, token, selected, onToggleSelect, onPlay }: { 
 }
 
 export default function Details() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { '*' : paramPath } = useParams();
   const fullPath = paramPath ? `home/${paramPath}` : 'home';
@@ -454,6 +456,7 @@ export default function Details() {
         setSearchTitle('');
         setSearchResults([]);
         clearRecommendationsCache();
+        queryClient.invalidateQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }
@@ -478,6 +481,7 @@ export default function Details() {
         setNewTmdbId('');
         setCustomTitle('');
         clearRecommendationsCache();
+        queryClient.invalidateQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }

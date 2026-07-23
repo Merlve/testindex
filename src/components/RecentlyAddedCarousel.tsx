@@ -8,10 +8,10 @@ import { Clock, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function RecentlyAddedCarousel() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   
   const fetchRecentlyAdded = async () => {
-    const res = await axios.get('/api/jellyfin/recently-added');
+    const res = await axios.get('/api/jellyfin/recently-added', { headers: { Authorization: token } });
     if (res.data?.success) {
       return res.data.data || [];
     }
@@ -42,7 +42,7 @@ export default function RecentlyAddedCarousel() {
         </div>
         {user === 'admin' && (
           <button 
-            onClick={async () => { await axios.get('/api/jellyfin/recently-added?force=true'); refetch(); }}
+            onClick={async () => { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); refetch(); }}
             disabled={isFetching}
             className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:scale-105 disabled:opacity-50"
           >

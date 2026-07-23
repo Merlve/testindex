@@ -38,6 +38,8 @@ class MemoryCache {
     return entry.data;
   }
 
+  clear() { this.cache.clear(); }
+
   set(key: string, data: any, ttlSeconds: number) {
     this.cache.set(key, {
       data,
@@ -66,13 +68,11 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
     if (req.method !== 'GET' && req.method !== 'POST') return next();
 
     // Do not cache if client explicitly asks for refresh
-    if (req.body?.refresh === true || req.query?.refresh === 'true') {
-      return next();
-    }
+    const forceRefresh = req.body?.refresh === true || req.query?.refresh === 'true' || req.query?.force === 'true';
 
     const token = req.headers.authorization || '';
     const keyPayload = {
-      path: req.originalUrl,
+      path: req.originalUrl.replace(/([?&])(force|refresh)=[^&]*&?/g, (m, p1, p2) => p1 === '?' ? '?' : '').replace(/[?&]$/, ''),
       body: req.body
     };
     
@@ -81,7 +81,7 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
       key += `_${token}`;
     }
 
-    const cachedData = apiCache.get(key);
+    const cachedData = forceRefresh ? null : apiCache.get(key);
     if (cachedData) {
       res.setHeader('Cache-Control', `${isPrivate ? 'private' : 'public'}, max-age=${ttlSeconds}`);
       return res.json(cachedData);
@@ -1775,6 +1775,7 @@ async function startServer() {
       await writeSQLiteJSON('jf_override', jfOverrides);
       addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
       
+      apiCache.clear();
       res.json({ success: true, overrides: jfOverrides });
   });
 

@@ -58,7 +58,7 @@ export default function RecentlyAddedPage() {
 
   const fetchItems = async () => {
     try {
-      const res = await axios.get('/api/jellyfin/recently-added');
+      const res = await axios.get('/api/jellyfin/recently-added', { headers: { Authorization: token } });
       if (res.data?.success) {
         return res.data.data || [];
       }
@@ -127,7 +127,7 @@ export default function RecentlyAddedPage() {
           </h2>
           <div className="flex gap-2">
             {user === 'admin' && (
-              <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-3 py-2 sm:px-4 sm:py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105 shrink-0">
+              <button onClick={async () => { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); refetch(); }} disabled={isFetching} className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-3 py-2 sm:px-4 sm:py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105 shrink-0">
                 <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> <span className="hidden sm:inline">{isFetching ? 'Refreshing...' : 'Refresh'}</span>
               </button>
             )}
