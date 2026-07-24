@@ -380,10 +380,12 @@ export default function Layout() {
       {/* Sidebar */}
       <aside 
         className={`fixed md:relative top-0 left-0 h-full bg-[#f3efec] dark:bg-[#0d0d12] flex flex-col py-6 border-r border-black/5 dark:border-white/5 z-50 transition-all duration-500
-          ${isIdle && !mobileOpen 
-            ? 'md:w-0 md:border-none md:overflow-hidden md:opacity-0 md:pointer-events-none md:px-0 w-64 px-4' 
-            : (isCollapsed ? 'w-64 md:w-20 px-4 md:px-2' : 'w-64 px-4')}
-          ${mobileOpen ? 'translate-x-0 opacity-100' : '-translate-x-full md:translate-x-0'}
+          ${mobileOpen 
+            ? 'w-64 px-4 translate-x-0 opacity-100 pointer-events-auto' 
+            : 'w-64 px-4 -translate-x-full opacity-0 pointer-events-none'}
+          ${!isIdle && !mobileOpen
+            ? 'md:w-0 md:border-none md:overflow-hidden md:opacity-0 md:pointer-events-none md:px-0 md:translate-x-0' 
+            : (isCollapsed ? 'md:w-20 md:px-2 md:opacity-100 md:pointer-events-auto md:translate-x-0' : 'md:w-64 md:px-4 md:opacity-100 md:pointer-events-auto md:translate-x-0')}
         `}
       >
         <div className={`flex items-center justify-between px-2 mb-8 shrink-0 ${isCollapsed ? 'md:flex-col md:items-center md:gap-6 md:px-0' : ''}`}>
