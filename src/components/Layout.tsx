@@ -386,56 +386,49 @@ export default function Layout() {
           ${mobileOpen ? 'translate-x-0 opacity-100' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        <div className={`flex ${isCollapsed ? 'flex-col items-center gap-6 px-0' : 'items-center justify-between px-2'} mb-8 shrink-0`}>
-            <Link to="/">
-              {!isCollapsed && (
-                <h1 className="text-xl font-bold text-black dark:text-white flex items-center gap-3 tracking-tight">
-                  <SiteLogo size="md" />
-                  SHUTTER!
-                </h1>
-              )}
-              {isCollapsed && (
+        <div className={`flex items-center justify-between px-2 mb-8 shrink-0 ${isCollapsed ? 'md:flex-col md:items-center md:gap-6 md:px-0' : ''}`}>
+            <Link to="/" onClick={() => setMobileOpen(false)}>
+              <h1 className="text-xl font-bold text-black dark:text-white flex items-center gap-3 tracking-tight">
                 <SiteLogo size="md" />
-              )}
+                <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>SHUTTER!</span>
+              </h1>
             </Link>
             <button 
-              className={`${isCollapsed ? 'flex' : 'hidden md:flex'} text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors`}
+              className="hidden md:flex text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
               onClick={() => setIsCollapsed(!isCollapsed)}
               title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
             </button>
-            {!isCollapsed && (
-              <button 
-                className="md:hidden text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
-                onClick={() => setMobileOpen(false)}
-                title="Close sidebar"
-              >
-                <X size={24} />
-              </button>
-            )}
+            <button 
+              className="md:hidden text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
+              onClick={() => setMobileOpen(false)}
+              title="Close sidebar"
+            >
+              <X size={24} />
+            </button>
           </div>
           
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           <nav className="space-y-1">
-            {!isCollapsed && <div className="text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-widest">Menu</div>}
-            {isCollapsed && <div className="h-4 mt-6"></div>}
+            <div className={`text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-widest ${isCollapsed ? 'block md:hidden' : 'block'}`}>Menu</div>
+            <div className={`mt-6 ${isCollapsed ? 'h-4 block md:block' : 'hidden'}`}></div>
             
-            <NavLink to="/" end onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-              <Home size={20} /> {!isCollapsed && <span>Home</span>}
+            <NavLink to="/" end onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Home size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Home</span>
             </NavLink>
-            <button onClick={() => { setSearchOpen(true); setMobileOpen(false); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'}`}>
-              <Search size={20} /> {!isCollapsed && <span>Search</span>}
+            <button onClick={() => { setSearchOpen(true); setMobileOpen(false); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'}`}>
+              <Search size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Search</span>
             </button>
-            <NavLink to="/watchlist" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-              <Bookmark size={20} /> {!isCollapsed && <span>Watchlist</span>}
+            <NavLink to="/watchlist" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Bookmark size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Watchlist</span>
             </NavLink>
-            <NavLink to="/recommendations" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-              <Sparkles size={20} /> {!isCollapsed && <span>For You</span>}
+            <NavLink to="/recommendations" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Sparkles size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>For You</span>
             </NavLink>
             
-            {!isCollapsed && <div className="text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-8 uppercase tracking-widest">Categories</div>}
-            {isCollapsed && <div className="h-4 mt-8"></div>}
+            <div className={`text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-8 uppercase tracking-widest ${isCollapsed ? 'block md:hidden' : 'block'}`}>Categories</div>
+            <div className={`mt-8 ${isCollapsed ? 'h-4 block md:block' : 'hidden'}`}></div>
             
             {categories.map((cat: string) => {
               let Icon = Folder;
@@ -446,8 +439,8 @@ export default function Layout() {
               else if (lower.includes('drama')) Icon = Compass;
               
               return (
-                <NavLink key={cat} to={`/category/${cat}`} onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                  <Icon size={20} /> {!isCollapsed && <span className="capitalize">{lower}</span>}
+                <NavLink key={cat} to={`/category/${cat}`} onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                  <Icon size={20} className="shrink-0" /> <span className={`capitalize ${isCollapsed ? 'inline md:hidden' : 'inline'}`}>{lower}</span>
                 </NavLink>
               );
             })}
@@ -457,23 +450,23 @@ export default function Layout() {
         <div className="space-y-1 shrink-0 mt-4">
           {user === 'admin' && (
             <>
-              <NavLink to="/users" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                <Users size={20} /> {!isCollapsed && <span>Users</span>}
+              <NavLink to="/users" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                <Users size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Users</span>
               </NavLink>
-              <NavLink to="/admin?tab=logs" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                <Activity size={20} /> {!isCollapsed && <span>Logs</span>}
+              <NavLink to="/admin?tab=logs" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                <Activity size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Logs</span>
               </NavLink>
-              <NavLink to="/admin" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'} ${isActive && !location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                <Settings size={20} /> {!isCollapsed && <span>Settings</span>}
+              <NavLink to="/admin" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive && !location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                <Settings size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Settings</span>
               </NavLink>
             </>
           )}
-          <button onClick={() => { logout(); queryClient.clear(); navigate('/login'); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all ${isCollapsed ? 'justify-center px-0' : 'px-4'}`}>
-            <LogOut size={20} /> {!isCollapsed && <span>Logout</span>}
+          <button onClick={() => { logout(); queryClient.clear(); navigate('/login'); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'}`}>
+            <LogOut size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Logout</span>
           </button>
-          <div className={`mt-4 flex items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 ${isCollapsed ? 'justify-center px-0' : 'px-4'}`}>
+          <div className={`mt-4 flex items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'}`}>
              <div className="w-8 h-8 rounded-full bg-purple-900 border border-purple-600/30 overflow-hidden shrink-0"><div className="w-full h-full bg-[#1e293b] flex items-center justify-center text-[10px] text-purple-400 font-bold">{user?.substring(0, 3).toUpperCase() || 'USR'}</div></div>
-             {!isCollapsed && <div className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{user}</div>}
+             <div className={`text-sm font-medium text-gray-700 dark:text-gray-300 truncate ${isCollapsed ? 'inline md:hidden' : 'inline'}`}>{user}</div>
           </div>
         </div>
       </aside>
