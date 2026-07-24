@@ -486,7 +486,7 @@ export default function Layout() {
           onClick={() => setSearchOpen(true)}
           title="Search"
           aria-label="Search"
-          className={`fixed bottom-20 right-6 md:bottom-24 md:right-8 z-50 w-12 h-12 md:w-14 md:h-14 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 flex items-center justify-center cursor-pointer ${
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 md:bottom-8 z-50 w-12 h-12 md:w-14 md:h-14 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 flex items-center justify-center cursor-pointer ${
             isUnderlyingDark 
               ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
               : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
