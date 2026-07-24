@@ -1,5 +1,5 @@
-name = "shutter"
-main = "worker.ts"
+name = "testindex"
+main = "dist/server.cjs"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
