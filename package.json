@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "TZ=Africa/Lagos tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild worker.ts --bundle --platform=node --format=esm --outfile=dist/worker.mjs --alias:stream=node:stream --alias:http=node:http --alias:https=node:https --alias:events=node:events --alias:buffer=node:buffer --alias:util=node:util --alias:crypto=node:crypto --alias:zlib=node:zlib --alias:url=node:url --alias:path=node:path --alias:fs=node:fs --alias:querystring=node:querystring --alias:string_decoder=node:string_decoder --alias:child_process=node:child_process --alias:os=node:os --alias:net=node:net --alias:tls=node:tls --alias:module=node:module --alias:tty=node:tty --alias:assert=node:assert --external:node:* --external:cloudflare:*",
     "start": "TZ=Africa/Lagos node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
