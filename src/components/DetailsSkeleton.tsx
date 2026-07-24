@@ -4,18 +4,18 @@ import { useNavigate } from 'react-router';
 export default function DetailsSkeleton({ onRefresh, refreshingFolder }: { onRefresh?: () => void, refreshingFolder?: boolean }) {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-20 relative overflow-hidden">
-      <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
+    <div className="-mt-16 min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-20 relative overflow-hidden">
+      <button onClick={() => navigate(-1)} className="absolute top-20 left-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
         <ChevronLeft size={24} />
       </button>
       {onRefresh && (
-        <button onClick={onRefresh} disabled={refreshingFolder} className="absolute top-6 right-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110" title="Refresh folder">
+        <button onClick={onRefresh} disabled={refreshingFolder} className="absolute top-20 right-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110" title="Refresh folder">
           <RefreshCw size={24} className={refreshingFolder ? 'animate-spin' : ''} />
         </button>
       )}
 
       {/* Backdrop Skeleton */}
-      <div className="absolute -top-16 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 bg-gray-200/20 dark:bg-gray-800/20 animate-pulse overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 bg-gray-200/20 dark:bg-gray-800/20 animate-pulse overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/80 dark:via-[#08080a]/80 to-transparent z-10"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/50 dark:via-[#08080a]/50 to-transparent z-10"></div>
       </div>

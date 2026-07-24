@@ -621,7 +621,7 @@ export default function Details() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-24 relative overflow-x-hidden max-w-full"
+      className="-mt-16 min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-24 relative overflow-x-hidden max-w-full"
     >
       {/* Video Modal (Web Player) */}
       {playingUrl && (
@@ -755,15 +755,16 @@ export default function Details() {
 
       {/* Backdrop Image */}
       {backdrop && (
-        <div className="absolute -top-16 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/80 dark:via-[#08080a]/80 to-transparent z-10"></div>
           <div className="absolute inset-0 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/30 dark:via-[#08080a]/30 to-transparent z-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 dark:from-black/40 via-transparent to-transparent z-10"></div>
           <img src={backdrop} className="w-full h-full object-cover opacity-50 md:opacity-40" alt="Backdrop" />
         </div>
       )}
 
       {/* Main Details Section */}
-      <div className="px-4 sm:px-8 md:px-12 pt-4 sm:pt-6 md:pt-8 relative z-20 flex flex-col md:flex-row gap-6 md:gap-10 mb-8">
+      <div className="px-4 sm:px-8 md:px-12 pt-20 sm:pt-24 md:pt-28 relative z-20 flex flex-col md:flex-row gap-6 md:gap-10 mb-8">
         <div className="flex flex-row md:flex-col gap-5 md:gap-6 items-start">
           {tmdb?.poster_path && (
             <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} className="w-32 sm:w-40 md:w-64 rounded-xl md:rounded-2xl shadow-2xl shrink-0 border border-black/5 dark:border-white/5" alt="Poster" />
