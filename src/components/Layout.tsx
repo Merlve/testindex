@@ -157,8 +157,7 @@ export default function Layout() {
 
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
   const [isUnderlyingDark, setIsUnderlyingDark] = useState(false);
 
@@ -236,11 +235,7 @@ export default function Layout() {
 
   useEffect(() => {
     if (sessionStorage.getItem('justLoggedIn') === 'true') {
-      const timer = setTimeout(() => {
-        setIsCollapsed(true);
-      }, 3000);
       sessionStorage.removeItem('justLoggedIn');
-      return () => clearTimeout(timer);
     }
   }, []);
 
@@ -343,94 +338,82 @@ export default function Layout() {
             ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
             : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
         } ${
-          isIdle && !mobileOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+          isIdle && !sidebarOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >
         <button 
           onClick={() => setIsDark(!isDark)} 
-          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current"
+          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current cursor-pointer"
           title="Toggle theme"
         >
           {isDark ? <Sun size={20} /> : <Moon size={20} />}
         </button>
         <button 
           onClick={() => setSearchOpen(true)} 
-          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current flex items-center gap-1.5"
+          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current flex items-center gap-1.5 cursor-pointer"
           title="Search"
         >
           <Search size={20} />
         </button>
         <button 
-          onClick={() => setMobileOpen(true)} 
-          className="md:hidden p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current"
-          title="Open menu"
+          onClick={() => setSidebarOpen(!sidebarOpen)} 
+          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current cursor-pointer"
+          title={sidebarOpen ? "Close menu" : "Open menu"}
         >
-          <Menu size={22} />
+          {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
 
-      {/* Mobile Overlay */}
-      {mobileOpen && (
+      {/* Overlay Backdrop */}
+      {sidebarOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity"
+          onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar Drawer */}
       <aside 
-        className={`fixed md:relative top-0 left-0 h-full bg-[#f3efec] dark:bg-[#0d0d12] flex flex-col py-6 border-r border-black/5 dark:border-white/5 z-50 transition-all duration-500
-          ${mobileOpen 
-            ? 'w-64 px-4 translate-x-0 opacity-100 pointer-events-auto' 
-            : 'w-64 px-4 -translate-x-full opacity-0 pointer-events-none'}
-          ${!isIdle && !mobileOpen
-            ? 'md:w-0 md:border-none md:overflow-hidden md:opacity-0 md:pointer-events-none md:px-0 md:translate-x-0' 
-            : (isCollapsed ? 'md:w-20 md:px-2 md:opacity-100 md:pointer-events-auto md:translate-x-0' : 'md:w-64 md:px-4 md:opacity-100 md:pointer-events-auto md:translate-x-0')}
-        `}
+        className={`fixed top-0 left-0 h-full w-64 bg-[#f3efec] dark:bg-[#0d0d12] flex flex-col py-6 border-r border-black/5 dark:border-white/5 z-50 transition-all duration-300 ease-in-out px-4 ${
+          sidebarOpen 
+            ? 'translate-x-0 opacity-100 pointer-events-auto shadow-2xl' 
+            : '-translate-x-full opacity-0 pointer-events-none'
+        }`}
       >
-        <div className={`flex items-center justify-between px-2 mb-8 shrink-0 ${isCollapsed ? 'md:flex-col md:items-center md:gap-6 md:px-0' : ''}`}>
-            <Link to="/" onClick={() => setMobileOpen(false)}>
-              <h1 className="text-xl font-bold text-black dark:text-white flex items-center gap-3 tracking-tight">
-                <SiteLogo size="md" />
-                <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>SHUTTER!</span>
-              </h1>
-            </Link>
-            <button 
-              className="hidden md:flex text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-            </button>
-            <button 
-              className="md:hidden text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
-              onClick={() => setMobileOpen(false)}
-              title="Close sidebar"
-            >
-              <X size={24} />
-            </button>
-          </div>
+        <div className="flex items-center justify-between px-2 mb-8 shrink-0">
+          <Link to="/" onClick={() => setSidebarOpen(false)}>
+            <h1 className="text-xl font-bold text-black dark:text-white flex items-center gap-3 tracking-tight">
+              <SiteLogo size="md" />
+              <span>SHUTTER!</span>
+            </h1>
+          </Link>
+          <button 
+            className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10"
+            onClick={() => setSidebarOpen(false)}
+            title="Close sidebar"
+          >
+            <X size={24} />
+          </button>
+        </div>
           
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           <nav className="space-y-1">
-            <div className={`text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-widest ${isCollapsed ? 'block md:hidden' : 'block'}`}>Menu</div>
-            <div className={`mt-6 ${isCollapsed ? 'h-4 block md:block' : 'hidden'}`}></div>
+            <div className="text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-widest block">Menu</div>
             
-            <NavLink to="/" end onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-              <Home size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Home</span>
+            <NavLink to="/" end onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Home size={20} className="shrink-0" /> <span>Home</span>
             </NavLink>
-            <button onClick={() => { setSearchOpen(true); setMobileOpen(false); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'}`}>
-              <Search size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Search</span>
+            <button onClick={() => { setSearchOpen(true); setSidebarOpen(false); }} className="w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer justify-start px-4">
+              <Search size={20} className="shrink-0" /> <span>Search</span>
             </button>
-            <NavLink to="/watchlist" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-              <Bookmark size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Watchlist</span>
+            <NavLink to="/watchlist" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Bookmark size={20} className="shrink-0" /> <span>Watchlist</span>
             </NavLink>
-            <NavLink to="/recommendations" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-              <Sparkles size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>For You</span>
+            <NavLink to="/recommendations" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Sparkles size={20} className="shrink-0" /> <span>For You</span>
             </NavLink>
             
-            <div className={`text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-8 uppercase tracking-widest ${isCollapsed ? 'block md:hidden' : 'block'}`}>Categories</div>
-            <div className={`mt-8 ${isCollapsed ? 'h-4 block md:block' : 'hidden'}`}></div>
+            <div className="text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-8 uppercase tracking-widest block">Categories</div>
             
             {categories.map((cat: string) => {
               let Icon = Folder;
@@ -441,8 +424,8 @@ export default function Layout() {
               else if (lower.includes('drama')) Icon = Compass;
               
               return (
-                <NavLink key={cat} to={`/category/${cat}`} onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                  <Icon size={20} className="shrink-0" /> <span className={`capitalize ${isCollapsed ? 'inline md:hidden' : 'inline'}`}>{lower}</span>
+                <NavLink key={cat} to={`/category/${cat}`} onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                  <Icon size={20} className="shrink-0" /> <span className="capitalize">{lower}</span>
                 </NavLink>
               );
             })}
@@ -452,23 +435,23 @@ export default function Layout() {
         <div className="space-y-1 shrink-0 mt-4">
           {user === 'admin' && (
             <>
-              <NavLink to="/users" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                <Users size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Users</span>
+              <NavLink to="/users" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                <Users size={20} className="shrink-0" /> <span>Users</span>
               </NavLink>
-              <NavLink to="/admin?tab=logs" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                <Activity size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Logs</span>
+              <NavLink to="/admin?tab=logs" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                <Activity size={20} className="shrink-0" /> <span>Logs</span>
               </NavLink>
-              <NavLink to="/admin" onClick={() => setMobileOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'} ${isActive && !location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
-                <Settings size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Settings</span>
+              <NavLink to="/admin" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive && !location.search.includes('tab=logs') ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+                <Settings size={20} className="shrink-0" /> <span>Settings</span>
               </NavLink>
             </>
           )}
-          <button onClick={() => { logout(); queryClient.clear(); navigate('/login'); }} className={`w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'}`}>
-            <LogOut size={20} className="shrink-0" /> <span className={isCollapsed ? 'inline md:hidden' : 'inline'}>Logout</span>
+          <button onClick={() => { logout(); queryClient.clear(); navigate('/login'); }} className="w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer justify-start px-4">
+            <LogOut size={20} className="shrink-0" /> <span>Logout</span>
           </button>
-          <div className={`mt-4 flex items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 ${isCollapsed ? 'justify-start px-4 md:justify-center md:px-0' : 'justify-start px-4'}`}>
+          <div className="mt-4 flex items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 justify-start px-4">
              <div className="w-8 h-8 rounded-full bg-purple-900 border border-purple-600/30 overflow-hidden shrink-0"><div className="w-full h-full bg-[#1e293b] flex items-center justify-center text-[10px] text-purple-400 font-bold">{user?.substring(0, 3).toUpperCase() || 'USR'}</div></div>
-             <div className={`text-sm font-medium text-gray-700 dark:text-gray-300 truncate ${isCollapsed ? 'inline md:hidden' : 'inline'}`}>{user}</div>
+             <div className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{user}</div>
           </div>
         </div>
       </aside>
@@ -507,7 +490,7 @@ export default function Layout() {
             isUnderlyingDark 
               ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
               : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
-          } ${mobileOpen || isIdle ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
+          } ${sidebarOpen || isIdle ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
         >
           <Search size={22} />
         </button>
