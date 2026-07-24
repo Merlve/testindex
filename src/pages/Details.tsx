@@ -698,7 +698,7 @@ export default function Details() {
         </div>
       )}
       
-      <div className="px-4 sm:px-12 pt-20 sm:pt-28 md:pt-32 relative z-20 flex flex-col md:flex-row gap-6 md:gap-10 mb-8">
+      <div className="px-4 sm:px-8 md:px-12 pt-4 sm:pt-6 md:pt-8 relative z-20 flex flex-col md:flex-row gap-6 md:gap-10 mb-8">
         <div className="flex flex-row md:flex-col gap-5 md:gap-6 items-start">
           {tmdb?.poster_path && (
             <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} className="w-32 sm:w-40 md:w-64 rounded-xl md:rounded-2xl shadow-2xl shrink-0 border border-black/5 dark:border-white/5" alt="Poster" />
