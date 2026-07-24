@@ -5,7 +5,13 @@ import path from 'path';
 const dbDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
-export const sqliteDb = createClient({ url: 'file:' + path.join(dbDir, 'shindex.db') });
+const dbUrl = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || ('file:' + path.join(dbDir, 'shindex.db'));
+const dbAuthToken = process.env.DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN;
+
+export const sqliteDb = createClient({ 
+  url: dbUrl,
+  ...(dbAuthToken ? { authToken: dbAuthToken } : {})
+});
 
 export async function initSQLiteDB() {
   await sqliteDb.execute('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)');
