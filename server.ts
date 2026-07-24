@@ -1870,9 +1870,15 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.BUILDING_FOR_WORKER !== 'true') {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
-startServer();
+export { app, initSQLiteDB };
+
+if (process.env.BUILDING_FOR_WORKER !== 'true') {
+  startServer();
+}
