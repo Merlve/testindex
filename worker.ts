@@ -1,5 +1,5 @@
 import serverless from 'serverless-http';
-import { app, initSQLiteDB } from './server';
+import { app, initSQLiteState } from './server';
 
 let dbInitialized = false;
 const handler = serverless(app);
@@ -16,10 +16,10 @@ export default {
 
     if (!dbInitialized) {
       try {
-        await initSQLiteDB();
+        await initSQLiteState();
         dbInitialized = true;
       } catch (e) {
-        console.error('Failed to initialize SQLite/Turso DB:', e);
+        console.error('Failed to initialize SQLite/Turso DB state:', e);
       }
     }
 

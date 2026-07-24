@@ -6,7 +6,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { createRequire } from 'module';
 import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB } from './sqlite_db';
@@ -1815,7 +1814,7 @@ app.post('/api/chat', async (req, res) => {
 
 let jfOverrides: Record<string, any> = {};
 
-async function initSQLiteState() {
+export async function initSQLiteState() {
   await initSQLiteDB();
   await initJellyfinCache();
   const loadedConfig = await readSQLiteJSON('config');
@@ -1832,31 +1831,32 @@ async function initSQLiteState() {
   jfOverrides = (await readSQLiteJSON('jf_override')) || {};
 }
 
+// Attach the routes that were in startServer to the app globally
+app.post('/api/jellyfin/override', async (req, res) => {
+    let token = req.headers.authorization;
+    if (!token || token === 'guest-token') return res.status(401).json({ error: 'Unauthorized' });
+    
+    const { jfName, openlistPath, category, year } = req.body;
+    if (!jfName) return res.status(400).json({ error: 'Missing name' });
+    
+    jfOverrides[jfName] = { openlistPath, category, year };
+    await writeSQLiteJSON('jf_override', jfOverrides);
+    addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
+    
+    apiCache.clear();
+    res.json({ success: true, overrides: jfOverrides });
+});
+
+app.get('/api/jellyfin/overrides', (req, res) => {
+    res.json(jfOverrides);
+});
+
 async function startServer() {
   await initSQLiteState();
 
-  // API: Jellyfin Override
-  app.post('/api/jellyfin/override', async (req, res) => {
-      let token = req.headers.authorization;
-      if (!token || token === 'guest-token') return res.status(401).json({ error: 'Unauthorized' });
-      
-      const { jfName, openlistPath, category, year } = req.body;
-      if (!jfName) return res.status(400).json({ error: 'Missing name' });
-      
-      jfOverrides[jfName] = { openlistPath, category, year };
-      await writeSQLiteJSON('jf_override', jfOverrides);
-      addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
-      
-      apiCache.clear();
-      res.json({ success: true, overrides: jfOverrides });
-  });
-
-  app.get('/api/jellyfin/overrides', (req, res) => {
-      res.json(jfOverrides);
-  });
-
   const isProd = process.env.NODE_ENV === "production" || _filename.endsWith('.cjs');
   if (!isProd) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
