@@ -1148,6 +1148,34 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   }
 });
 
+app.get('/api/meta/tv_details', cacheMiddleware(3600, true), async (req, res) => {
+  const { tvId } = req.query;
+  if (!tvId) return res.status(400).json({ error: 'tvId required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json(null);
+
+  try {
+    const response = await axios.get(`https://api.themoviedb.org/3/tv/${tvId}?api_key=${tmdbKey}`);
+    res.json(response.data);
+  } catch (err: any) {
+    res.json(null);
+  }
+});
+
+app.get('/api/meta/tv_season', cacheMiddleware(3600, true), async (req, res) => {
+  const { tvId, season } = req.query;
+  if (!tvId || !season) return res.status(400).json({ error: 'tvId and season required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json(null);
+
+  try {
+    const response = await axios.get(`https://api.themoviedb.org/3/tv/${tvId}/season/${season}?api_key=${tmdbKey}`);
+    res.json(response.data);
+  } catch (err: any) {
+    res.json(null);
+  }
+});
+
 app.get('/api/meta/collections', cacheMiddleware(3600, true), (req, res) => {
   const collections: Record<number, any> = {};
   for (const key in tmdbCache) {
