@@ -71,6 +71,22 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
     const forceRefresh = req.body?.refresh === true || req.query?.refresh === 'true' || req.query?.force === 'true';
 
     const token = req.headers.authorization || '';
+
+    // Create normal body without refresh flags for standard cache key matching
+    const normalBody = req.body ? { ...req.body } : {};
+    delete normalBody.refresh;
+    delete normalBody.force;
+
+    const normalKeyPayload = {
+      path: req.originalUrl.replace(/([?&])(force|refresh)=[^&]*&?/g, (m, p1, p2) => p1 === '?' ? '?' : '').replace(/[?&]$/, ''),
+      body: normalBody
+    };
+
+    let normalKey = `${req.method}_${JSON.stringify(normalKeyPayload)}`;
+    if (isPrivate) {
+      normalKey += `_${token}`;
+    }
+
     const keyPayload = {
       path: req.originalUrl.replace(/([?&])(force|refresh)=[^&]*&?/g, (m, p1, p2) => p1 === '?' ? '?' : '').replace(/[?&]$/, ''),
       body: req.body
@@ -81,7 +97,12 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
       key += `_${token}`;
     }
 
-    const cachedData = forceRefresh ? null : apiCache.get(key);
+    if (forceRefresh) {
+      apiCache.delete(normalKey);
+      apiCache.delete(key);
+    }
+
+    const cachedData = forceRefresh ? null : apiCache.get(normalKey);
     if (cachedData) {
       res.setHeader('Cache-Control', 'no-store');
       return res.json(cachedData);
@@ -91,6 +112,7 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
     res.json = ((body: any) => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         apiCache.set(key, body, ttlSeconds);
+        apiCache.set(normalKey, body, ttlSeconds);
         res.setHeader('Cache-Control', 'no-store');
       }
       return originalJson(body);

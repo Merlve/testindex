@@ -244,6 +244,7 @@ export default function Details() {
   const [seasonTmdb, setSeasonTmdb] = useState<any>(null);
   const [loadingSeasonTmdb, setLoadingSeasonTmdb] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Derived lists
   const isVideoFile = (filename: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(filename);
@@ -278,6 +279,46 @@ export default function Details() {
 
   const activeSeasonTab = seasonTabs[activeSeasonIndex] || seasonTabs[0];
   const activeSeasonPath = activeSeasonTab?.folderName ? `${fullPath}/${activeSeasonTab.folderName}` : fullPath;
+
+  // Refresh folder directly bypassing cache
+  const handleRefreshFolder = async () => {
+    if (refreshing || !token) return;
+    setRefreshing(true);
+    setLoadingFiles(true);
+    try {
+      const isFile = isVideoFile(name);
+      if (isFile) {
+        setBaseItems([{ name, is_dir: false }]);
+      } else {
+        // Refresh base directory list
+        const baseRes = await axios.post(
+          '/api/fs/list',
+          { reqPath: `/${fullPath}`, refresh: true },
+          { headers: { Authorization: token } }
+        );
+        if (baseRes.data?.code === 200) {
+          setBaseItems(baseRes.data.data?.content || []);
+        }
+
+        // If TV Show, also refresh active season directory list
+        if (!isMovieCategory && activeSeasonPath && activeSeasonPath !== fullPath) {
+          const seasonRes = await axios.post(
+            '/api/fs/list',
+            { reqPath: `/${activeSeasonPath}`, refresh: true },
+            { headers: { Authorization: token } }
+          );
+          if (seasonRes.data?.code === 200) {
+            setSeasonItems(seasonRes.data.data?.content || []);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("Error refreshing directory", err);
+    } finally {
+      setRefreshing(false);
+      setLoadingFiles(false);
+    }
+  };
 
   // Fetch Base Items
   useEffect(() => {
@@ -885,8 +926,19 @@ export default function Details() {
                 ) : (
                   /* Multiple Movie Variants Layout */
                   <div className="space-y-3 max-w-2xl">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                      Available Movie Editions ({videoItems.length})
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        Available Movie Editions ({videoItems.length})
+                      </div>
+                      <button
+                        onClick={handleRefreshFolder}
+                        disabled={refreshing || loadingFiles}
+                        title="Refresh folder directory from OpenList"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <RefreshCw size={13} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+                        <span>{refreshing ? "Refreshing..." : "Refresh Folder"}</span>
+                      </button>
                     </div>
                     {videoItems.map((mItem, idx) => {
                       const meta = extractFileMetadata(mItem.name, mItem.size);
@@ -976,31 +1028,42 @@ export default function Details() {
                   )}
 
                   {/* Bulk Select & Actions Bar */}
-                  {videoItems.length > 0 && (
-                    <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2.5 rounded-xl">
-                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 accent-purple-600 rounded"
-                          checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedItems(videoItems.map(v => v.name));
-                            else setSelectedItems([]);
-                          }}
-                        />
-                        <span>{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
-                      </label>
+                  <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2.5 rounded-xl gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-purple-600 rounded disabled:opacity-40 cursor-pointer"
+                        disabled={videoItems.length === 0}
+                        checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedItems(videoItems.map(v => v.name));
+                          else setSelectedItems([]);
+                        }}
+                      />
+                      <span>{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
+                    </label>
 
+                    <div className="flex items-center gap-2">
                       {selectedItems.length > 0 && (
                         <button
                           onClick={handleCopyLinks}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer shrink-0"
                         >
-                          <Copy size={13} /> Copy Links
+                          <Copy size={13} /> <span className="hidden sm:inline">Copy Links</span>
                         </button>
                       )}
+
+                      <button
+                        onClick={handleRefreshFolder}
+                        disabled={refreshing || loadingFiles}
+                        title="Refresh folder directory from OpenList"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <RefreshCw size={13} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+                        <span>{refreshing ? "Refreshing..." : "Refresh Folder"}</span>
+                      </button>
                     </div>
-                  )}
+                  </div>
 
                   {/* Episodes List */}
                   {loadingFiles || loadingSeasonTmdb ? (
