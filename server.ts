@@ -1856,7 +1856,8 @@ async function startServer() {
 
   const isProd = process.env.NODE_ENV === "production" || _filename.endsWith('.cjs');
   if (!isProd) {
-    const { createServer: createViteServer } = await import('vite');
+    const viteModule = 'vite';
+    const { createServer: createViteServer } = await import(viteModule);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -1870,15 +1871,17 @@ async function startServer() {
     });
   }
 
-  if (process.env.BUILDING_FOR_WORKER !== 'true') {
+  const isWorker = typeof (globalThis as any).WebSocketPair !== 'undefined';
+  if (!isWorker && process.env.BUILDING_FOR_WORKER !== 'true') {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   }
 }
 
-export { app, initSQLiteDB };
+export { app };
 
-if (process.env.BUILDING_FOR_WORKER !== 'true') {
+const isWorkerEnv = typeof (globalThis as any).WebSocketPair !== 'undefined';
+if (!isWorkerEnv && process.env.BUILDING_FOR_WORKER !== 'true') {
   startServer();
 }
