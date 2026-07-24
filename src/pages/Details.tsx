@@ -688,11 +688,7 @@ export default function Details() {
         </div>
       )}
 
-      {location.key !== 'default' && (
-        <button onClick={() => navigate(-1)} className="absolute top-6 left-6 z-50 p-2 sm:p-3 rounded-full bg-white/10 dark:bg-black/10 backdrop-blur-sm border border-white/20 dark:border-white/10 text-black dark:text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] hover:bg-white/20 dark:hover:bg-black/20 transition-all hover:scale-110">
-          <ChevronLeft size={24} />
-        </button>
-      )}
+
 
       {backdrop && (
         <div className="absolute -top-16 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 overflow-hidden">

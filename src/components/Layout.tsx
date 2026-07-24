@@ -161,16 +161,7 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
   const [isUnderlyingDark, setIsUnderlyingDark] = useState(false);
-  const [isIPhone, setIsIPhone] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const ua = window.navigator.userAgent || window.navigator.vendor || '';
-      if (/iPhone/i.test(ua)) {
-        setIsIPhone(true);
-      }
-    }
-  }, []);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -389,9 +380,10 @@ export default function Layout() {
       {/* Sidebar */}
       <aside 
         className={`fixed md:relative top-0 left-0 h-full bg-[#f3efec] dark:bg-[#0d0d12] flex flex-col py-6 border-r border-black/5 dark:border-white/5 z-50 transition-all duration-500
-          ${isIdle && !mobileOpen ? 'w-0 border-none overflow-hidden opacity-0 pointer-events-none' : (isCollapsed ? 'w-20' : 'w-64')}
-          ${isIdle && !mobileOpen ? 'px-0' : (isCollapsed ? 'px-2' : 'px-4')}
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          ${isIdle && !mobileOpen 
+            ? 'md:w-0 md:border-none md:overflow-hidden md:opacity-0 md:pointer-events-none md:px-0 w-64 px-4' 
+            : (isCollapsed ? 'w-64 md:w-20 px-4 md:px-2' : 'w-64 px-4')}
+          ${mobileOpen ? 'translate-x-0 opacity-100' : '-translate-x-full md:translate-x-0'}
         `}
       >
         <div className={`flex ${isCollapsed ? 'flex-col items-center gap-6 px-0' : 'items-center justify-between px-2'} mb-8 shrink-0`}>
