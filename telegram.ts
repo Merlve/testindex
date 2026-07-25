@@ -1,19 +1,34 @@
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-
-const NOTIFIED_DB = path.join(process.cwd(), 'notified.json');
+import { readSQLiteJSON, writeSQLiteJSON } from './sqlite_db';
 
 let notifiedItems = new Set<string>();
-if (fs.existsSync(NOTIFIED_DB)) {
-    try {
-        const data = JSON.parse(fs.readFileSync(NOTIFIED_DB, 'utf-8'));
+let initialized = false;
+
+async function initNotified() {
+    if (initialized) return;
+    const data = await readSQLiteJSON('telegram_notified');
+    if (data && Array.isArray(data)) {
         notifiedItems = new Set(data);
-    } catch (e) {}
+    } else {
+        // Migration from old file
+        const NOTIFIED_DB = path.join(process.cwd(), 'notified.json');
+        if (fs.existsSync(NOTIFIED_DB)) {
+            try {
+                const oldData = JSON.parse(fs.readFileSync(NOTIFIED_DB, 'utf-8'));
+                if (Array.isArray(oldData)) {
+                    notifiedItems = new Set(oldData);
+                    await writeSQLiteJSON('telegram_notified', oldData);
+                }
+            } catch (e) {}
+        }
+    }
+    initialized = true;
 }
 
-function saveNotified() {
-    fs.writeFileSync(NOTIFIED_DB, JSON.stringify(Array.from(notifiedItems)));
+async function saveNotified() {
+    await writeSQLiteJSON('telegram_notified', Array.from(notifiedItems));
 }
 
 const COUNTRY_MAP: Record<string, [string, string]> = {
@@ -142,6 +157,7 @@ async function pinTelegramMessage(messageId: number) {
 }
 
 export async function processJellyfinTelegram(items: any[], getOpenlistUrl: () => string) {
+    await initNotified();
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
     if (!botToken || !chatId) return;
@@ -272,7 +288,7 @@ export async function processJellyfinTelegram(items: any[], getOpenlistUrl: () =
             const messageId = await sendTelegramMessage(text, openlistLink, imgUrl);
             
             notifiedItems.add(it.Id);
-            saveNotified();
+            await saveNotified();
 
             if (messageId && itemType.toLowerCase() === 'movie') {
                 await pinTelegramMessage(messageId);

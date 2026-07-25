@@ -70,82 +70,97 @@ export default function Users() {
   const handleBatchDelete = async () => {
     if (!confirm('Are you sure you want to delete selected users?')) return;
     setActionLoading(true);
-    let successCount = 0;
-    for (const id of selectedIds) {
-      try {
-        const res = await axios.post('/api/admin/user/delete', { id }, { headers: { Authorization: token } });
-        if (res.data?.code === 200) {
-          successCount++;
-          await axios.post('/api/users/expirations', { userId: id, expirationDate: '' }, { headers: { Authorization: token } });
-        }
-      } catch (e) { console.error('Failed to delete', id); }
+    try {
+      let successCount = 0;
+      for (const id of selectedIds) {
+        try {
+          const res = await axios.post('/api/admin/user/delete', { id }, { headers: { Authorization: token } });
+          if (res.data?.code === 200) {
+            successCount++;
+            await axios.post('/api/users/expirations', { userId: id, expirationDate: '' }, { headers: { Authorization: token } });
+          }
+        } catch (e) { console.error('Failed to delete', id); }
+      }
+      await axios.post('/api/admin/log', { action: 'Batch Delete', details: `Deleted ${successCount} users.` }, { headers: { Authorization: token } });
+      setSelectedIds(new Set());
+      await fetchUsers();
+    } finally {
+      setActionLoading(false);
     }
-    await axios.post('/api/admin/log', { action: 'Batch Delete', details: `Deleted ${successCount} users.` }, { headers: { Authorization: token } });
-    setSelectedIds(new Set());
-    await fetchUsers();
   };
 
   const handleBatchDisable = async () => {
     setActionLoading(true);
-    let successCount = 0;
-    for (const id of selectedIds) {
-      try {
-        const user = users.find(u => u.id === id);
-        if (user) {
-          const res = await axios.post('/api/admin/user/update', { ...user, disabled: true }, { headers: { Authorization: token } });
-          if (res.data?.code === 200) successCount++;
-        }
-      } catch (e) { console.error('Failed to disable', id); }
+    try {
+      let successCount = 0;
+      for (const id of selectedIds) {
+        try {
+          const user = users.find(u => u.id === id);
+          if (user) {
+            const res = await axios.post('/api/admin/user/update', { ...user, disabled: true }, { headers: { Authorization: token } });
+            if (res.data?.code === 200) successCount++;
+          }
+        } catch (e) { console.error('Failed to disable', id); }
+      }
+      await axios.post('/api/admin/log', { action: 'Batch Disable', details: `Disabled ${successCount} users.` }, { headers: { Authorization: token } });
+      setSelectedIds(new Set());
+      await fetchUsers();
+    } finally {
+      setActionLoading(false);
     }
-    await axios.post('/api/admin/log', { action: 'Batch Disable', details: `Disabled ${successCount} users.` }, { headers: { Authorization: token } });
-    setSelectedIds(new Set());
-    await fetchUsers();
   };
 
   const handleBatchEnable = async () => {
     setActionLoading(true);
-    let successCount = 0;
-    for (const id of selectedIds) {
-      try {
-        const user = users.find(u => u.id === id);
-        if (user) {
-          const res = await axios.post('/api/admin/user/update', { ...user, disabled: false }, { headers: { Authorization: token } });
-          if (res.data?.code === 200) successCount++;
-        }
-      } catch (e) { console.error('Failed to enable', id); }
+    try {
+      let successCount = 0;
+      for (const id of selectedIds) {
+        try {
+          const user = users.find(u => u.id === id);
+          if (user) {
+            const res = await axios.post('/api/admin/user/update', { ...user, disabled: false }, { headers: { Authorization: token } });
+            if (res.data?.code === 200) successCount++;
+          }
+        } catch (e) { console.error('Failed to enable', id); }
+      }
+      await axios.post('/api/admin/log', { action: 'Batch Enable', details: `Enabled ${successCount} users.` }, { headers: { Authorization: token } });
+      setSelectedIds(new Set());
+      await fetchUsers();
+    } finally {
+      setActionLoading(false);
     }
-    await axios.post('/api/admin/log', { action: 'Batch Enable', details: `Enabled ${successCount} users.` }, { headers: { Authorization: token } });
-    setSelectedIds(new Set());
-    await fetchUsers();
   };
 
   const executeBulkAction = async () => {
     setActionLoading(true);
-    let successCount = 0;
-    for (const id of selectedIds) {
-      if (bulkAction === 'password') {
-        try {
-          const user = users.find(u => u.id === id);
-          if (user) {
-            const res = await axios.post('/api/admin/user/update', { ...user, password: bulkValue }, { headers: { Authorization: token } });
-            if (res.data?.code === 200) successCount++;
-          }
-        } catch (e) { console.error('Failed to set password', id); }
-      } else if (bulkAction === 'expiration') {
-        try {
-          const isoDate = bulkValue ? new Date(bulkValue).toISOString() : '';
-          const res = await axios.post('/api/users/expirations', { userId: id, expirationDate: isoDate }, { headers: { Authorization: token } });
-          if (res.data?.success) successCount++;
-        } catch (e) { console.error('Failed to set expiration', id); }
+    try {
+      let successCount = 0;
+      for (const id of selectedIds) {
+        if (bulkAction === 'password') {
+          try {
+            const user = users.find(u => u.id === id);
+            if (user) {
+              const res = await axios.post('/api/admin/user/update', { ...user, password: bulkValue }, { headers: { Authorization: token } });
+              if (res.data?.code === 200) successCount++;
+            }
+          } catch (e) { console.error('Failed to set password', id); }
+        } else if (bulkAction === 'expiration') {
+          try {
+            const isoDate = bulkValue ? new Date(bulkValue).toISOString() : '';
+            const res = await axios.post('/api/users/expirations', { userId: id, expirationDate: isoDate }, { headers: { Authorization: token } });
+            if (res.data?.success) successCount++;
+          } catch (e) { console.error('Failed to set expiration', id); }
+        }
       }
+      await axios.post('/api/admin/log', { action: `Batch ${bulkAction === 'password' ? 'Password' : 'Expiration'} Update`, details: `Updated ${bulkAction} for ${successCount} users.` }, { headers: { Authorization: token } });
+      setBulkAction(null);
+      setBulkValue('');
+      setSelectedIds(new Set());
+      await fetchUsers();
+      await fetchExpirations();
+    } finally {
+      setActionLoading(false);
     }
-    await axios.post('/api/admin/log', { action: `Batch ${bulkAction === 'password' ? 'Password' : 'Expiration'} Update`, details: `Updated ${bulkAction} for ${successCount} users.` }, { headers: { Authorization: token } });
-    setBulkAction(null);
-    setBulkValue('');
-    setSelectedIds(new Set());
-    await fetchUsers();
-    await fetchExpirations();
-    setActionLoading(false);
   };
 
   const handleExport = () => {
@@ -247,9 +262,12 @@ export default function Users() {
           <button 
             onClick={async () => {
               setActionLoading(true);
-              await fetchUsers();
-              await fetchExpirations();
-              setActionLoading(false);
+              try {
+                await fetchUsers();
+                await fetchExpirations();
+              } finally {
+                setActionLoading(false);
+              }
             }}
             disabled={loading}
             className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center shadow-lg hover:bg-blue-500 transition-all shrink-0 disabled:opacity-50"

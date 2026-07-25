@@ -671,6 +671,45 @@ app.post('/api/admin/log', async (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/api/admin/diagnostic', async (req, res) => {
+  const result: any = {
+    sqliteFileAccessible: false,
+    sqliteDbQueryable: false,
+    dbPath: path.join(process.cwd(), 'data', 'shindex.db'),
+    dbUrl: process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || ('file:' + path.join(process.cwd(), 'data', 'shindex.db')),
+    env: {
+      DATABASE_URL: !!process.env.DATABASE_URL,
+      TURSO_DATABASE_URL: !!process.env.TURSO_DATABASE_URL,
+    }
+  };
+
+  try {
+    if (!result.dbUrl.startsWith('libsql://') && !result.dbUrl.startsWith('https://')) {
+        const actualPath = result.dbUrl.replace('file:', '');
+        result.sqliteFileAccessible = fs.existsSync(actualPath);
+        if (result.sqliteFileAccessible) {
+          const stats = fs.statSync(actualPath);
+          result.fileStats = { size: stats.size, mtime: stats.mtime };
+        }
+    } else {
+        result.sqliteFileAccessible = true;
+    }
+  } catch (e: any) {
+    result.sqliteFileAccessibleError = e.message;
+  }
+
+  try {
+    const { sqliteDb } = require('./sqlite_db');
+    const rs = await sqliteDb.execute('SELECT count(*) as count FROM kv_store');
+    result.sqliteDbQueryable = true;
+    result.kvStoreCount = rs.rows[0].count;
+  } catch (e: any) {
+    result.sqliteDbQueryableError = e.message;
+  }
+
+  res.json(result);
+});
+
 // API: Openlist Proxy - Admin
 app.all('/api/admin/*', async (req, res) => {
   try {
