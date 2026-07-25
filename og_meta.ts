@@ -1,4 +1,15 @@
+import 'dotenv/config';
 import axios from 'axios';
+
+function getEnvVar(...keys: string[]): string {
+  for (const key of keys) {
+    const val = process.env[key];
+    if (val && val.trim() && val !== '""' && val !== "''") {
+      return val.trim().replace(/^["']|["']$/g, '');
+    }
+  }
+  return '';
+}
 
 function parseMediaName(rawName: string) {
   const baseName = rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
@@ -36,9 +47,9 @@ export async function getOgMetadataForUrl(
   hostUrl: string,
   tmdbCache: Record<string, any> = {}
 ): Promise<OgMeta> {
-  const defaultTitle = process.env.OG_TITLE || process.env.VITE_OG_TITLE || "SHUTTER! - Unlimited Movies, Series & Anime";
-  const defaultDesc = process.env.OG_DESCRIPTION || process.env.VITE_OG_DESCRIPTION || process.env.VITE_SITE_DESCRIPTION || "Stream and explore unlimited movies, TV series, and anime with rich metadata, posters, and high-speed streaming.";
-  const defaultImage = process.env.OG_IMAGE || process.env.VITE_OG_IMAGE || process.env.VITE_SITE_LOGO || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&h=630&fit=crop";
+  const defaultTitle = getEnvVar('OG_TITLE', 'VITE_OG_TITLE') || "SHUTTER! - Unlimited Movies, Series & Anime";
+  const defaultDesc = getEnvVar('OG_DESCRIPTION', 'VITE_OG_DESCRIPTION', 'VITE_SITE_DESCRIPTION') || "Stream and explore unlimited movies, TV series, and anime with rich metadata, posters, and high-speed streaming.";
+  const defaultImage = getEnvVar('OG_IMAGE', 'VITE_OG_IMAGE', 'VITE_SITE_LOGO') || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&h=630&fit=crop";
 
   const cleanHost = (hostUrl || process.env.APP_URL || '').replace(/\/$/, '');
   const canonicalUrl = `${cleanHost}${reqUrl}`;

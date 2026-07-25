@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { getRecentlyAdded, getLocalItems, initJellyfinCache } from './jellyfin';
 import { getOgMetadataForUrl, injectOgTags } from './og_meta';
