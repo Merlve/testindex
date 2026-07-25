@@ -477,6 +477,31 @@ export default function Details() {
       fileUrl = `${config.openlistUrl}/d/${itemPath}/${item.name}`;
     }
 
+    // Track download for analytics (For TV shows/episodes, only send the Show Title)
+    try {
+      let downloadTitle = '';
+      if (!isMovieCategory) {
+        // SHOW EPISODES -> Send Show Title
+        downloadTitle = tmdb?.name || tmdb?.title || parseMediaName(name).cleanName || name;
+      } else {
+        // MOVIES
+        downloadTitle = tmdb?.title || tmdb?.name || parseMediaName(item?.name || name).cleanName || item?.name || name;
+      }
+
+      if (downloadTitle) {
+        axios.post('/api/downloads/track', {
+          title: downloadTitle,
+          category,
+          isShow: !isMovieCategory,
+          fileName: item?.name
+        }, {
+          headers: { Authorization: token || '', 'x-user': user || '' }
+        }).catch(err => console.error('Failed to track download:', err));
+      }
+    } catch (e) {
+      console.error('Download tracking error:', e);
+    }
+
     const a = document.createElement('a');
     a.href = fileUrl;
     a.download = item.name || 'download';
@@ -500,6 +525,24 @@ export default function Details() {
   const handleCopyLinks = async () => {
     if (selectedItems.length === 0) return;
     try {
+      // Track bulk download link copies
+      let downloadTitle = '';
+      if (!isMovieCategory) {
+        downloadTitle = tmdb?.name || tmdb?.title || parseMediaName(name).cleanName || name;
+      } else {
+        downloadTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || name;
+      }
+      if (downloadTitle) {
+        axios.post('/api/downloads/track', {
+          title: downloadTitle,
+          category,
+          isShow: !isMovieCategory,
+          count: selectedItems.length
+        }, {
+          headers: { Authorization: token || '', 'x-user': user || '' }
+        }).catch(() => {});
+      }
+
       const links = await Promise.all(selectedItems.map(getSignedUrl));
       const textToCopy = links.join('\n');
       
@@ -782,7 +825,7 @@ export default function Details() {
               } else {
                 setShowMetadataModal(true);
               }
-            }} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white p-2 rounded-xl transition self-start mt-2 cursor-pointer" title="Fix Metadata">
+            }} className="bg-purple-500/10 dark:bg-white/10 border border-purple-500/20 dark:border-white/10 text-purple-700 dark:text-purple-300 hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white dark:hover:text-white p-2 rounded-xl transition self-start mt-2 cursor-pointer shadow-sm" title="Fix Metadata">
               <Edit2 size={16} />
             </button>
           </div>
@@ -801,7 +844,7 @@ export default function Details() {
               } else {
                 setShowMetadataModal(true);
               }
-            }} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white p-2 rounded-xl transition shrink-0 cursor-pointer" title="Fix Metadata">
+            }} className="bg-purple-500/10 dark:bg-white/10 border border-purple-500/20 dark:border-white/10 text-purple-700 dark:text-purple-300 hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white dark:hover:text-white p-2 rounded-xl transition shrink-0 cursor-pointer shadow-sm" title="Fix Metadata">
               <Edit2 size={16} />
             </button>
           </div>

@@ -140,8 +140,8 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       {item._jf && user === 'admin' && (
          <button
             onClick={(e) => { e.preventDefault(); setShowOverrideModal(true); }}
-            className="absolute bottom-2 right-2 bg-black/60 p-1 rounded hover:bg-black/80 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white z-30 transition opacity-100"
-            title="Fix Metadata"
+            className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 p-1.5 rounded-xl bg-purple-500/15 dark:bg-purple-500/20 hover:bg-purple-600 dark:hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white dark:hover:text-white border border-purple-500/30 hover:border-purple-600 shadow-sm backdrop-blur-sm z-30 transition-all hover:scale-110 cursor-pointer"
+            title="Fix Metadata Override"
          >
             <Edit3 size={14} />
          </button>

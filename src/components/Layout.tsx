@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Outlet, NavLink, useNavigate, Link, useLocation, useNavigationType, useOutlet } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles } from 'lucide-react';
+import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles, User } from 'lucide-react';
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import SearchModal from './SearchModal';
 import NavbarSearch from './NavbarSearch';
@@ -412,6 +412,9 @@ export default function Layout() {
             <NavLink to="/recommendations" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
               <Sparkles size={20} className="shrink-0" /> <span>For You</span>
             </NavLink>
+            <NavLink to="/profile" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <User size={20} className="shrink-0" /> <span>Profile & Stats</span>
+            </NavLink>
             
             <div className="text-gray-600 dark:text-gray-400 text-[10px] font-bold px-4 mb-2 mt-8 uppercase tracking-widest block">Categories</div>
             
@@ -449,10 +452,23 @@ export default function Layout() {
           <button onClick={() => { logout(); queryClient.clear(); navigate('/login'); }} className="w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer justify-start px-4">
             <LogOut size={20} className="shrink-0" /> <span>Logout</span>
           </button>
-          <div className="mt-4 flex items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 justify-start px-4">
-             <div className="w-8 h-8 rounded-full bg-purple-900 border border-purple-600/30 overflow-hidden shrink-0"><div className="w-full h-full bg-[#1e293b] flex items-center justify-center text-[10px] text-purple-400 font-bold">{user?.substring(0, 3).toUpperCase() || 'USR'}</div></div>
-             <div className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{user}</div>
-          </div>
+          <NavLink 
+            to="/profile" 
+            onClick={() => setSidebarOpen(false)}
+            className={({isActive}) => `mt-4 flex items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 justify-start px-3 py-2 rounded-2xl transition-all group hover:bg-black/5 dark:hover:bg-white/5 ${isActive ? 'bg-purple-600/10 border-purple-600/30' : ''}`}
+            title="View User Profile & Stats"
+          >
+             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 p-0.5 shadow-md shrink-0 group-hover:scale-105 transition-transform">
+               <div className="w-full h-full bg-[#1e293b] rounded-full flex items-center justify-center text-[10px] text-purple-300 font-bold uppercase">
+                 {user?.substring(0, 3).toUpperCase() || 'USR'}
+               </div>
+             </div>
+             <div className="flex-1 min-w-0 text-left">
+               <div className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate group-hover:text-purple-400 transition-colors">{user}</div>
+               <div className="text-[10px] text-gray-500 dark:text-gray-400">View Profile & Stats</div>
+             </div>
+             <ChevronRight size={16} className="text-gray-400 group-hover:text-purple-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+          </NavLink>
         </div>
       </aside>
 

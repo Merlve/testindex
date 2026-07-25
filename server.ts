@@ -264,6 +264,103 @@ async function saveUserWatchlist(user: string, list: any[]) {
   await writeSQLiteJSON(`watchlist_${user}`, list);
 }
 
+// Downloads Tracking Storage
+let downloadTracker: Record<string, {
+  title: string;
+  category?: string;
+  count: number;
+  lastDownloaded: number;
+  lastUser?: string;
+}> = {};
+
+app.post('/api/downloads/track', async (req, res) => {
+  try {
+    const userHeader = req.headers['x-user'];
+    const username = Array.isArray(userHeader) 
+      ? userHeader[0] 
+      : (typeof userHeader === 'string' && userHeader ? userHeader : 'Guest');
+
+    let { title, category, isShow, fileName, count } = req.body;
+    const addCount = typeof count === 'number' && count > 0 ? count : 1;
+
+    let rawTitle = (title || fileName || '').trim();
+    if (!rawTitle) {
+      return res.status(400).json({ error: 'Title or fileName required' });
+    }
+
+    const catUpper = (category || '').toUpperCase();
+    const isShowCategory = isShow || ['SERIES', 'TV', 'ANIME', 'KDRAMA', 'ADRAMA', 'SHOWS'].some(c => catUpper.includes(c));
+
+    let cleanTitle = rawTitle;
+
+    if (isShowCategory) {
+      // Remove episode numbers / seasons / extensions to keep ONLY the Show Title
+      cleanTitle = cleanTitle
+        .replace(/\b(s\d+e\d+|s\d+|\d+x\d+|season\s*\d+|episode\s*\d+|ep\s*\d+).*/i, '')
+        .replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, '')
+        .replace(/[._-]/g, ' ')
+        .trim();
+    } else {
+      cleanTitle = cleanTitle
+        .replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, '')
+        .replace(/[._-]/g, ' ')
+        .trim();
+    }
+
+    if (!cleanTitle) {
+      cleanTitle = rawTitle;
+    }
+
+    const key = cleanTitle.toLowerCase();
+
+    if (!downloadTracker[key]) {
+      downloadTracker[key] = {
+        title: cleanTitle,
+        category: category || (isShowCategory ? 'SHOW' : 'MOVIE'),
+        count: addCount,
+        lastDownloaded: Date.now(),
+        lastUser: username
+      };
+    } else {
+      downloadTracker[key].count += addCount;
+      downloadTracker[key].lastDownloaded = Date.now();
+      downloadTracker[key].lastUser = username;
+      if (cleanTitle.length > 0 && cleanTitle.toLowerCase() === key && downloadTracker[key].title !== cleanTitle) {
+        downloadTracker[key].title = cleanTitle;
+      }
+    }
+
+    await writeSQLiteJSON('download_tracker', downloadTracker);
+
+    res.json({ success: true, item: downloadTracker[key] });
+  } catch (err: any) {
+    console.error('Error tracking download:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/downloads/top', async (req, res) => {
+  try {
+    const list = Object.values(downloadTracker || {});
+    list.sort((a, b) => b.count - a.count || b.lastDownloaded - a.lastDownloaded);
+    const top15 = list.slice(0, 15);
+    res.json({ topDownloads: top15, totalTracked: list.length });
+  } catch (err: any) {
+    console.error('Error getting top downloads:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/downloads/clear', async (req, res) => {
+  try {
+    downloadTracker = {};
+    await writeSQLiteJSON('download_tracker', downloadTracker);
+    res.json({ success: true, message: 'Download tracking history cleared' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/watchlist', async (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1829,6 +1926,7 @@ export async function initSQLiteState() {
   activityLogs = (await readSQLiteJSON('activity_logs')) || [];
   genreBackdropsCache = (await readSQLiteJSON('genre_backdrops_cache')) || null;
   jfOverrides = (await readSQLiteJSON('jf_override')) || {};
+  downloadTracker = (await readSQLiteJSON('download_tracker')) || {};
 }
 
 // Attach the routes that were in startServer to the app globally
