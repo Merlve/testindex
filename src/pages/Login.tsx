@@ -29,45 +29,23 @@ export default function Login() {
 
   const handleGuestLogin = async () => {
     setError('');
-
-    // Check if the guest has logged in within the last 24 hours
-    const lastLogin = localStorage.getItem('qs_guest_last_login_date');
-    if (lastLogin) {
-      const timePassed = Date.now() - parseInt(lastLogin, 10);
-      const hoursPassed = timePassed / (1000 * 60 * 60);
-      if (hoursPassed < 24) {
-        const hoursLeft = Math.ceil(24 - hoursPassed);
-        setError(`Guest access is limited to once per 24 hours. Please try again in ${hoursLeft} hours, or sign up for an account.`);
-        return;
-      }
-    }
-
     setLoading(true);
     try {
-      const testRes = await fetch('/api/fs/list', {
-        method: 'POST',
-        headers: { 
-           'Content-Type': 'application/json',
-          'Authorization': 'guest-token' 
-         },
-        body: JSON.stringify({ reqPath: '/', password: '' })
-      });
-      const testData = await testRes.json();
-      
-      if ((testData.code === 401 || testData.code === 500) && (testData.message?.toLowerCase().includes('invalidated') || testData.message?.toLowerCase().includes('unauthorized'))) {
-        setError('Guest access is currently unavailable (Token Invalidated). Please check server configuration.');
-        setLoading(false);
-        return;
-      }
-      
-      login('guest', 'guest-token');
-      queryClient.clear();
-      sessionStorage.setItem('justLoggedIn', 'true');
+      const res = await axios.post('/api/auth/guest_login');
+      if (res.data.success) {
+        login('guest', res.data.token);
+        queryClient.clear();
+        sessionStorage.setItem('justLoggedIn', 'true');
         sessionStorage.setItem('showWhatsApp', 'true');
-      const from = location.state?.from || '/';
-      navigate(from);
+        const from = location.state?.from || '/';
+        navigate(from);
+      }
     } catch (err: any) {
-      setError('Guest access failed. Server might be offline.');
+      if (err.response?.status === 429) {
+        setError(err.response.data.error || 'Too many attempts.');
+      } else {
+        setError('Guest access failed. Server might be offline.');
+      }
     } finally {
       setLoading(false);
     }

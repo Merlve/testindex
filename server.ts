@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import { createRequire } from 'module';
 import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB } from './sqlite_db';
@@ -130,6 +131,24 @@ const PORT = Number(process.env.SERVER_PORT) || 3000;
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+const rateLimitCache = new Map<string, { count: number, resetAt: number }>();
+const rateLimitMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown') as string;
+  const now = Date.now();
+  let entry = rateLimitCache.get(ip);
+  if (!entry || entry.resetAt < now) {
+    entry = { count: 0, resetAt: now + 60000 };
+  }
+  entry.count++;
+  rateLimitCache.set(ip, entry);
+  if (entry.count > 300) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+  next();
+};
+
+app.use('/api', rateLimitMiddleware);
+
 // Simple file-based config storage
 let appConfig = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
@@ -141,6 +160,39 @@ let appConfig = {
 // Ensure env variables take precedence over saved config if provided
 const getOpenlistUrl = () => process.env.OPENLIST_SERVER_URL || appConfig.openlistUrl;
 const getOpenlistApiKey = () => process.env.OPENLIST_API_KEY;
+
+const adminRoleCache = new Map<string, { role: number, expiry: number }>();
+
+const adminMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const token = req.headers.authorization;
+  if (!token || isValidGuest(token) || token === 'null' || token === 'undefined') {
+    return res.status(401).json({ error: 'Unauthorized: Admin access required' });
+  }
+  
+  const masterApiKey = getOpenlistApiKey();
+  if (token === masterApiKey) {
+    return next();
+  }
+
+  const cached = adminRoleCache.get(token);
+  if (cached && Date.now() < cached.expiry) {
+    if (cached.role === 2) return next();
+    return res.status(403).json({ error: 'Forbidden: Admin access required' });
+  }
+
+  try {
+    const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/me`;
+    const response = await axios.get(url, { headers: { Authorization: token } });
+    const role = response.data?.data?.role;
+    if (response.data?.code === 200 && role !== undefined) {
+      adminRoleCache.set(token, { role, expiry: Date.now() + 5 * 60 * 1000 });
+      if (role === 2) return next();
+    }
+  } catch (err) {}
+
+  return res.status(403).json({ error: 'Forbidden: Admin access required' });
+};
+
 
 
 function parseMediaName(rawName: string) {
@@ -353,7 +405,7 @@ app.get('/api/downloads/top', async (req, res) => {
   }
 });
 
-app.post('/api/downloads/clear', async (req, res) => {
+app.post('/api/downloads/clear', adminMiddleware, async (req, res) => {
   try {
     downloadTracker = {};
     await writeSQLiteJSON('download_tracker', downloadTracker);
@@ -561,7 +613,7 @@ app.get('/api/config', (req, res) => {
     inactivityTimeout: appConfig.inactivityTimeout || 0
   });
 });
-app.post('/api/config', (req, res) => {
+app.post('/api/config', adminMiddleware, (req, res) => {
   if (req.body.openlistUrl !== undefined) appConfig.openlistUrl = req.body.openlistUrl;
   if (req.body.basePath !== undefined) appConfig.basePath = req.body.basePath;
   if (req.body.inactivityTimeout !== undefined) appConfig.inactivityTimeout = Number(req.body.inactivityTimeout) || 0;
@@ -614,12 +666,12 @@ async function checkAndEnforceExpirations() {
   }
 }
 
-app.get('/api/users/expirations', (req, res) => {
+app.get('/api/users/expirations', adminMiddleware, (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.json(userExpirations);
 });
 
-app.post('/api/users/expirations', async (req, res) => {
+app.post('/api/users/expirations', adminMiddleware, async (req, res) => {
   const { userId, expirationDate } = req.body;
   if (userId === undefined || userId === null) return res.status(400).json({ error: 'Missing userId' });
   
@@ -661,17 +713,17 @@ async function addLog(action: string, username: string, details: string) {
   await writeSQLiteJSON('activity_logs', activityLogs);
 }
 
-app.get('/api/admin/logs', (req, res) => {
+app.get('/api/admin/logs', adminMiddleware, (req, res) => {
   res.json(activityLogs);
 });
 
-app.post('/api/admin/log', async (req, res) => {
+app.post('/api/admin/log', adminMiddleware, async (req, res) => {
   const { action, username, details } = req.body;
   addLog(action, username || 'System/Admin', details);
   res.json({ success: true });
 });
 
-app.get('/api/admin/diagnostic', async (req, res) => {
+app.get('/api/admin/diagnostic', adminMiddleware, async (req, res) => {
   const result: any = {
     sqliteFileAccessible: false,
     sqliteDbQueryable: false,
@@ -711,12 +763,12 @@ app.get('/api/admin/diagnostic', async (req, res) => {
 });
 
 // API: Openlist Proxy - Admin
-app.all('/api/admin/*', async (req, res) => {
+app.all('/api/admin/*', adminMiddleware, async (req, res) => {
   try {
     const targetUrl = `${getOpenlistUrl().replace(/\/$/, '')}${req.originalUrl}`;
     let token = req.headers.authorization;
     const masterApiKey = getOpenlistApiKey();
-    if (!token || token === 'guest-token' || token === 'null' || token === 'undefined') {
+    if (!token || isValidGuest(token) || token === 'null' || token === 'undefined') {
       token = masterApiKey;
     }
 
@@ -829,11 +881,67 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+const guestLoginCache = new Map<string, number>();
+const guestSessions = new Map<string, { expiresAt: number, ip: string }>();
+
+function isValidGuest(token: string) {
+  if (!token || !token.startsWith('guest_')) return false;
+  const session = guestSessions.get(token);
+  if (session && session.expiresAt > Date.now()) {
+    return true;
+  }
+  guestSessions.delete(token);
+  return false;
+}
+
+app.post('/api/auth/guest_login', async (req, res) => {
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown') as string;
+  const lastLogin = guestLoginCache.get(ip);
+  if (lastLogin) {
+    const timePassed = Date.now() - lastLogin;
+    const hoursPassed = timePassed / (1000 * 60 * 60);
+    if (hoursPassed < 24) {
+      const hoursLeft = Math.ceil(24 - hoursPassed);
+      return res.status(429).json({ error: `Guest access is limited to once per 24 hours per IP. Please try again in ${hoursLeft} hours.` });
+    }
+  }
+
+  try {
+    const testRes = await axios.post(`${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`, 
+      { path: '/', password: '' },
+      { headers: { Authorization: getOpenlistApiKey() || '' } }
+    );
+    
+    if (testRes.data.code === 200) {
+      guestLoginCache.set(ip, Date.now());
+      const guestToken = `guest_${crypto.randomBytes(16).toString('hex')}`;
+      guestSessions.set(guestToken, { expiresAt: Date.now() + 24 * 60 * 60 * 1000, ip });
+      return res.json({ success: true, token: guestToken });
+    } else {
+      return res.status(500).json({ error: 'Guest access is currently unavailable.' });
+    }
+  } catch (error) {
+    return res.status(500).json({ error: 'Guest access is currently unavailable.' });
+  }
+});
+
 // API: Openlist Proxy - Check Auth
 app.get('/api/auth/me', async (req, res) => {
   try {
     let token = req.headers.authorization;
-    if (!token || token === 'guest-token') token = getOpenlistApiKey();
+    if (isValidGuest(token || '')) {
+       return res.json({
+           code: 200,
+           message: 'success',
+           data: {
+               id: 0,
+               username: 'guest',
+               role: 0,
+               base_path: appConfig.basePath,
+               permission: 0
+           }
+       });
+    }
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/me`;
     const response = await axios.get(url, {
       headers: { Authorization: token }
@@ -848,10 +956,17 @@ app.get('/api/auth/me', async (req, res) => {
 app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
   try {
     let token = req.headers.authorization;
-    if (!token || token === 'guest-token') token = getOpenlistApiKey();
+    const isGuest = isValidGuest(token || '');
+    if (isGuest) token = getOpenlistApiKey();
     let { reqPath, refresh } = req.body;
     reqPath = reqPath || appConfig.basePath;
     if (!reqPath.startsWith('/')) reqPath = '/' + reqPath;
+    
+    const normalizedPath = path.posix.normalize(reqPath);
+    const basePathNorm = path.posix.normalize(appConfig.basePath);
+    if (isGuest && !normalizedPath.startsWith(basePathNorm)) {
+       return res.status(403).json({ error: 'Forbidden' });
+    }
     
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`;
     const payload: any = { path: reqPath, password: "" };
@@ -880,10 +995,17 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
 app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
   try {
     let token = req.headers.authorization;
-    if (!token || token === 'guest-token') token = getOpenlistApiKey();
+    const isGuest = isValidGuest(token || '');
+    if (isGuest) token = getOpenlistApiKey();
     let { reqPath } = req.body;
     if (!reqPath) return res.status(400).json({ error: 'Path required' });
     if (!reqPath.startsWith('/')) reqPath = '/' + reqPath;
+
+    const normalizedPath = path.posix.normalize(reqPath);
+    const basePathNorm = path.posix.normalize(appConfig.basePath);
+    if (isGuest && !normalizedPath.startsWith(basePathNorm)) {
+       return res.status(403).json({ error: 'Forbidden' });
+    }
 
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/get`;
     const response = await axios.post(url, { path: reqPath, password: "" }, {
@@ -899,12 +1021,21 @@ app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
 app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
   try {
     let token = req.headers.authorization;
-    if (!token || token === 'guest-token') token = getOpenlistApiKey();
+    const isGuest = isValidGuest(token || '');
+    if (isGuest) token = getOpenlistApiKey();
     const { keywords, parent } = req.body;
+
+    const targetParent = parent || appConfig.basePath;
+    const normalizedPath = path.posix.normalize(targetParent);
+    const basePathNorm = path.posix.normalize(appConfig.basePath);
+    if (isGuest && !normalizedPath.startsWith(basePathNorm)) {
+       return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/search`;
     
     const reqBody1 = { 
-      parent: parent || appConfig.basePath, 
+      parent: targetParent, 
       keywords: keywords,
       scope: 0, // 0 = all, 1 = folder, 2 = file
       page: 1,
@@ -1106,7 +1237,7 @@ app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) =>
 });
 
 
-app.post('/api/meta/batch', async (req, res) => {
+app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
   const { items } = req.body;
   if (!Array.isArray(items)) return res.status(400).json({ error: 'Array required' });
 
@@ -1386,7 +1517,7 @@ app.get('/api/meta/genres/backdrops', cacheMiddleware(3600, true), async (req, r
   };
 
   let token = req.headers.authorization;
-  if (!token || token === 'guest-token') token = getOpenlistApiKey();
+  if (isValidGuest(token || '')) token = getOpenlistApiKey();
   
   if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -1449,7 +1580,7 @@ app.get('/api/meta/genre/:genreId', async (req, res) => {
   const genreId = parseInt(req.params.genreId, 10);
   
   let token = req.headers.authorization;
-  if (!token || token === 'guest-token') token = getOpenlistApiKey();
+  if (isValidGuest(token || '')) token = getOpenlistApiKey();
   
   if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -1505,7 +1636,7 @@ app.get('/api/meta/trending', cacheMiddleware(3600, true), async (req, res) => {
 });
 
 // Admin correction for TMDB
-app.post('/api/meta/correct', (req, res) => {
+app.post('/api/meta/correct', adminMiddleware, (req, res) => {
   const { query, type, year, data } = req.body;
   if (!query || !data) return res.status(400).json({ error: 'Invalid data' });
   const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
@@ -1520,7 +1651,7 @@ app.post('/api/meta/correct', (req, res) => {
 });
 
 // Admin override for TMDB by ID
-app.post('/api/meta/override', async (req, res) => {
+app.post('/api/meta/override', adminMiddleware, async (req, res) => {
   const { query, type, year, tmdbId, customTitle } = req.body;
   if (!query || (!tmdbId && !customTitle)) return res.status(400).json({ error: 'Invalid data' });
   
@@ -1605,7 +1736,7 @@ app.get('/api/meta/scan_collections/status', (req, res) => {
   res.json(collectionScanJob);
 });
 
-app.post('/api/meta/scan_collections/start', (req, res) => {
+app.post('/api/meta/scan_collections/start', adminMiddleware, (req, res) => {
   if (collectionScanJob.isRunning) {
     return res.json({ success: false, message: 'Already running' });
   }
@@ -1658,7 +1789,7 @@ app.post('/api/meta/scan_collections/start', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/meta/scan_collections/stop', (req, res) => {
+app.post('/api/meta/scan_collections/stop', adminMiddleware, (req, res) => {
   collectionScanJob.isRunning = false;
   collectionScanJob.message = 'Scan stopped.';
   res.json({ success: true, message: 'Stopped' });
@@ -1676,14 +1807,14 @@ app.get('/api/meta/autofetch/status', (req, res) => {
   res.json(autoFetchJob);
 });
 
-app.post('/api/meta/autofetch/start', (req, res) => {
+app.post('/api/meta/autofetch/start', adminMiddleware, (req, res) => {
   if (autoFetchJob.isRunning) {
     return res.json({ success: false, message: 'Already running' });
   }
 
   let token = req.headers.authorization;
   addLog("Autofetch Started", "Admin", "Started TMDB autofetch");
-  if (!token || token === 'guest-token') token = getOpenlistApiKey();
+  if (isValidGuest(token || '')) token = getOpenlistApiKey();
 
   let { targetPath } = req.body;
   targetPath = targetPath || appConfig.basePath || '/home';
@@ -1808,7 +1939,7 @@ app.post('/api/meta/autofetch/start', (req, res) => {
   res.json({ success: true, message: 'Started' });
 });
 
-app.post('/api/meta/autofetch/stop', (req, res) => {
+app.post('/api/meta/autofetch/stop', adminMiddleware, (req, res) => {
   autoFetchJob.isRunning = false;
   addLog("Autofetch Stopped", "Admin", "Stopped TMDB autofetch");
   autoFetchJob.message = 'Auto-fetch stopped.';
@@ -1971,9 +2102,9 @@ export async function initSQLiteState() {
 }
 
 // Attach the routes that were in startServer to the app globally
-app.post('/api/jellyfin/override', async (req, res) => {
+app.post('/api/jellyfin/override', adminMiddleware, async (req, res) => {
     let token = req.headers.authorization;
-    if (!token || token === 'guest-token') return res.status(401).json({ error: 'Unauthorized' });
+    if (isValidGuest(token || '')) return res.status(401).json({ error: 'Unauthorized' });
     
     const { jfName, openlistPath, category, year } = req.body;
     if (!jfName) return res.status(400).json({ error: 'Missing name' });
@@ -1986,7 +2117,7 @@ app.post('/api/jellyfin/override', async (req, res) => {
     res.json({ success: true, overrides: jfOverrides });
 });
 
-app.get('/api/jellyfin/overrides', (req, res) => {
+app.get('/api/jellyfin/overrides', adminMiddleware, (req, res) => {
     res.json(jfOverrides);
 });
 
