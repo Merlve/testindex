@@ -224,6 +224,60 @@ export default function Details() {
   const [tmdb, setTmdb] = useState<any>(null);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    let cleanName = '';
+    let parsedYear = '';
+    if (name) {
+      const parsed = parseMediaName(name);
+      cleanName = parsed.cleanName;
+      parsedYear = parsed.year;
+    }
+
+    if (tmdb) {
+      const mediaTitle = tmdb.title || tmdb.name || cleanName;
+      const releaseDate = tmdb.release_date || tmdb.first_air_date || '';
+      const releaseYear = (releaseDate || parsedYear || '').substring(0, 4);
+      const fullTitle = `${mediaTitle}${releaseYear ? ` (${releaseYear})` : ''} - SHUTTER!`;
+      document.title = fullTitle;
+
+      const overview = tmdb.overview ? tmdb.overview.trim() : `Watch ${mediaTitle} on SHUTTER!`;
+      const poster = tmdb.poster_path
+        ? (tmdb.poster_path.startsWith('http') ? tmdb.poster_path : `https://image.tmdb.org/t/p/w780${tmdb.poster_path}`)
+        : tmdb.backdrop_path
+          ? (tmdb.backdrop_path.startsWith('http') ? tmdb.backdrop_path : `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}`)
+          : '';
+
+      const setMetaTag = (attrName: string, attrVal: string, content: string) => {
+        let meta = document.querySelector(`meta[${attrName}="${attrVal}"]`) as HTMLMetaElement;
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute(attrName, attrVal);
+          document.head.appendChild(meta);
+        }
+        meta.content = content;
+      };
+
+      setMetaTag('property', 'og:title', fullTitle);
+      setMetaTag('name', 'twitter:title', fullTitle);
+      if (overview) {
+        setMetaTag('name', 'description', overview);
+        setMetaTag('property', 'og:description', overview);
+        setMetaTag('name', 'twitter:description', overview);
+      }
+      if (poster) {
+        setMetaTag('property', 'og:image', poster);
+        setMetaTag('property', 'og:image:secure_url', poster);
+        setMetaTag('name', 'twitter:image', poster);
+      }
+    } else if (cleanName) {
+      document.title = `${cleanName}${parsedYear ? ` (${parsedYear})` : ''} - SHUTTER!`;
+    }
+
+    return () => {
+      document.title = "SHUTTER! - Unlimited Movies, Series & Anime";
+    };
+  }, [tmdb, name]);
   
   // Active playing / modal state
   const [playingUrl, setPlayingUrl] = useState('');

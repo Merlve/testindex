@@ -1,5 +1,6 @@
 import express from 'express';
 import { getRecentlyAdded, getLocalItems, initJellyfinCache } from './jellyfin';
+import { getOgMetadataForUrl, injectOgTags } from './og_meta';
 
 import cors from 'cors';
 import fs from 'fs';
@@ -1960,11 +1961,47 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "spa",
     });
+
+    app.use(async (req, res, next) => {
+      const isHtmlRequest = req.method === 'GET' && 
+        !req.path.startsWith('/api') && 
+        !req.path.startsWith('/@') && 
+        !req.path.startsWith('/src') && 
+        !req.path.startsWith('/node_modules') &&
+        !/\.[a-zA-Z0-9]+$/.test(req.path);
+
+      if (isHtmlRequest) {
+        try {
+          let template = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf-8');
+          template = await vite.transformIndexHtml(req.originalUrl, template);
+          const hostUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+          const ogMeta = await getOgMetadataForUrl(req.originalUrl, hostUrl, tmdbCache);
+          const finalHtml = injectOgTags(template, ogMeta);
+          return res.status(200).set({ 'Content-Type': 'text/html' }).send(finalHtml);
+        } catch (e: any) {
+          vite.ssrFixStacktrace(e);
+          next(e);
+          return;
+        }
+      }
+      next();
+    });
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.use(express.static(distPath, { index: false }));
+    app.get('*', async (req, res) => {
+      try {
+        const templatePath = path.join(distPath, 'index.html');
+        if (fs.existsSync(templatePath)) {
+          let template = fs.readFileSync(templatePath, 'utf-8');
+          const hostUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+          const ogMeta = await getOgMetadataForUrl(req.originalUrl, hostUrl, tmdbCache);
+          const finalHtml = injectOgTags(template, ogMeta);
+          return res.status(200).set({ 'Content-Type': 'text/html' }).send(finalHtml);
+        }
+      } catch (e) {}
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
