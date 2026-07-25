@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import Loader from '../components/Loader';
+import { parseMediaName } from '../utils/nameParser';
 
 interface RecentlyBrowsedItem {
   item: { name: string };
@@ -249,6 +250,65 @@ export default function Profile() {
     return null;
   }, [user]);
 
+  const renderTextMediaList = (items: any[], limit?: number) => {
+    const displayItems = limit ? items.slice(0, limit) : items;
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+        {displayItems.map((entry, idx) => {
+          const item = entry.item || entry;
+          const rawName = item.name || entry.name || '';
+          const parentPath = entry.parentPath || (item && item.parent) || entry.parent || entry._parent || '';
+          const category = entry.category || entry._cat || '';
+          const tmdb = entry.tmdbData;
+
+          let searchName = rawName;
+          if (/^(s\d+|season\s*\d+)$/i.test(rawName)) {
+            const parentParts = parentPath.split('/').filter(Boolean);
+            if (parentParts.length > 0) {
+              searchName = parentParts[parentParts.length - 1];
+            }
+          }
+
+          const { cleanName, year: parsedYear } = parseMediaName(searchName);
+          let jfYear = '';
+          if (item._jf && item._jf.year) jfYear = String(item._jf.year);
+
+          const title = tmdb?.title || tmdb?.name || cleanName || rawName;
+          const year = tmdb?.release_date?.substring(0, 4) || tmdb?.first_air_date?.substring(0, 4) || jfYear || parsedYear || '';
+
+          const sanitizedPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+          const fullPath = `/${sanitizedPath}`;
+          const linkUrl = fullPath.split('/').map(p => encodeURIComponent(p)).join('/');
+
+          const catLower = category.toLowerCase();
+          const IconComponent = catLower.includes('series') || catLower.includes('tv') ? Tv : catLower.includes('anime') ? Clapperboard : Film;
+
+          return (
+            <Link 
+              key={idx}
+              to={linkUrl}
+              className="flex items-center justify-between gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-purple-500/10 dark:hover:bg-purple-500/20 border border-black/5 dark:border-white/5 hover:border-purple-500/30 transition-all group cursor-pointer shadow-sm"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <IconComponent size={15} className="text-purple-500 dark:text-purple-400 shrink-0" />
+                <span className="text-xs sm:text-sm font-bold text-black dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-300 transition">
+                  {title}
+                </span>
+                {year && (
+                  <span className="text-[11px] font-extrabold text-purple-700 dark:text-purple-300 bg-purple-500/15 dark:bg-purple-500/25 px-1.5 py-0.5 rounded-md shrink-0 border border-purple-500/20">
+                    {`{${year}}`}
+                  </span>
+                )}
+              </div>
+              <ChevronRight size={14} className="text-gray-400 group-hover:translate-x-0.5 group-hover:text-purple-500 transition shrink-0" />
+            </Link>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (loading) return <Loader />;
 
   return (
@@ -457,17 +517,7 @@ export default function Profile() {
 
             {/* Watchlist Items Preview Strip */}
             {watchlist.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 pt-1">
-                {watchlist.slice(0, 6).map((entry, idx) => (
-                  <ItemCard 
-                    key={idx}
-                    item={entry.item || entry}
-                    category={entry.category || entry._cat || ''}
-                    parentPath={entry.parentPath || (entry.item && entry.item.parent) || entry.parent || entry._parent || ''}
-                    viewMode="grid"
-                  />
-                ))}
-              </div>
+              renderTextMediaList(watchlist, 12)
             ) : (
               <div className="text-center py-10 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
                 <Bookmark size={32} className="mx-auto text-gray-400 mb-2 opacity-50" />
@@ -532,17 +582,7 @@ export default function Profile() {
             </div>
 
             {recentlyBrowsed.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
-                {recentlyBrowsed.slice(0, 6).map((entry, idx) => (
-                  <ItemCard 
-                    key={idx}
-                    item={entry.item}
-                    category={entry.category}
-                    parentPath={entry.parentPath}
-                    viewMode="grid"
-                  />
-                ))}
-              </div>
+              renderTextMediaList(recentlyBrowsed, 12)
             ) : (
               <div className="text-center py-8 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
                 <History size={28} className="mx-auto text-gray-400 mb-2 opacity-50" />
@@ -713,17 +753,7 @@ export default function Profile() {
               <p className="text-xs text-gray-500 mt-1">Click the bookmark icon on any item card to add it to your saved list.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
-              {watchlist.map((entry, idx) => (
-                <ItemCard 
-                  key={idx}
-                  item={entry.item || entry}
-                  category={entry.category || entry._cat || ''}
-                  parentPath={entry.parentPath || (entry.item && entry.item.parent) || entry.parent || entry._parent || ''}
-                  viewMode="grid"
-                />
-              ))}
-            </div>
+            renderTextMediaList(watchlist)
           )}
         </section>
       )}
@@ -756,17 +786,7 @@ export default function Profile() {
               <p className="text-xs text-gray-500 mt-1">Start browsing movies or series to see your viewing log here.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
-              {recentlyBrowsed.map((entry, idx) => (
-                <ItemCard 
-                  key={idx}
-                  item={entry.item}
-                  category={entry.category}
-                  parentPath={entry.parentPath}
-                  viewMode="grid"
-                />
-              ))}
-            </div>
+            renderTextMediaList(recentlyBrowsed)
           )}
         </section>
       )}
