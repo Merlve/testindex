@@ -302,8 +302,10 @@ export default function Details() {
 
   // Derived lists
   const isVideoFile = (filename: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(filename);
-  const videoItems = (isMovieCategory ? baseItems : seasonItems).filter(i => !i.is_dir && isVideoFile(i.name));
-  const dirItems = baseItems.filter(i => i.is_dir);
+  const videoItems = (isMovieCategory ? baseItems : seasonItems)
+    .filter(i => !i.is_dir && isVideoFile(i.name))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  const dirItems = baseItems.filter(i => i.is_dir).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
   // Season Tabs parsing for Shows
   const seasonFolders = dirItems.filter(dir => {
