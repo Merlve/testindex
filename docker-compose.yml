@@ -2,6 +2,7 @@ version: '3.8'
 services:
   app:
     container_name: shindex
+    restart: unless-stopped
     build: .
     ports:
       - "4344:4344"
