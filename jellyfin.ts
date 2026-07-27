@@ -100,7 +100,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
         params: {
           IncludeItemTypes: "Movie,Episode,Series",
           Limit: 30,
-          Fields: "ProviderIds,Overview,Genres,CommunityRating,ProductionYear,RunTimeTicks,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,OriginalLanguage,ProductionLocations,SeriesId,MediaSources,MediaStreams,DateCreated"
+          Fields: "ProviderIds,Overview,Genres,CommunityRating,ProductionYear,SeriesYear,RunTimeTicks,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,OriginalLanguage,ProductionLocations,SeriesId,MediaSources,MediaStreams,DateCreated"
         },
         headers: {
           'X-Emby-Token': apiKey
@@ -117,9 +117,11 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
     for (const item of items) {
       let name = item.Name;
       let isSeries = false;
+      let targetYear = item.ProductionYear || null;
       if (item.Type === 'Episode') {
         name = item.SeriesName || item.Name;
         isSeries = true;
+        if (item.SeriesYear) targetYear = item.SeriesYear;
       } else if (item.Type === 'Series') {
         isSeries = true;
       }
@@ -127,7 +129,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
       const lowerName = normalizeStr(name);
       if (!seenNames.has(lowerName) && name) {
         seenNames.add(lowerName);
-        toSearch.push({ name, year: item.ProductionYear || null, isSeries, jfItem: item });
+        toSearch.push({ name, year: targetYear, isSeries, jfItem: item });
       }
     }
 
@@ -184,31 +186,41 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
         const cleanSearchTitle = getCleanTitle(search.name);
         let searchKeywords = cleanSearchTitle || getSearchKeywords(search.name);
         
-        let searchRes = await axios.post(`${openlistUrl}/api/fs/search`, {
-          parent: basePath,
-          keywords: searchKeywords,
-          scope: 1, // folders only
-          page: 1,
-          per_page: 100,
-          password: ""
-        }, { headers: { Authorization: token } }).catch(() => null);
+        const base = basePath.replace(/\/$/, '');
+        const targetPaths = search.isSeries 
+            ? [`${base}/ANIME`, `${base}/SERIES`, `${base}/KDRAMA`]
+            : [`${base}/MOVIES`];
+        
+        let queriesToTry = [];
+        if (search.year && !searchKeywords.includes(String(search.year))) {
+            queriesToTry.push(`${searchKeywords} ${search.year}`);
+        }
+        queriesToTry.push(searchKeywords);
 
-        let content = searchRes?.data?.data?.content || [];
+        // Fallback to first word if necessary
+        if (searchKeywords.includes(' ')) {
+            const firstWord = searchKeywords.split(' ')[0];
+            if (firstWord.length >= 3) {
+                queriesToTry.push(firstWord);
+            }
+        }
 
-        // Fallback search if empty: try first word
-        if (content.length === 0 && searchKeywords.includes(' ')) {
-          const firstWord = searchKeywords.split(' ')[0];
-          if (firstWord.length >= 3) {
-            searchRes = await axios.post(`${openlistUrl}/api/fs/search`, {
-              parent: basePath,
-              keywords: firstWord,
-              scope: 1,
-              page: 1,
-              per_page: 100,
-              password: ""
-            }, { headers: { Authorization: token } }).catch(() => null);
-            content = searchRes?.data?.data?.content || [];
-          }
+        let content: any[] = [];
+        for (const query of queriesToTry) {
+            for (const targetPath of targetPaths) {
+                let searchRes = await axios.post(`${openlistUrl}/api/fs/search`, {
+                  parent: targetPath,
+                  keywords: query,
+                  scope: 1, // folders only
+                  page: 1,
+                  per_page: 100,
+                  password: ""
+                }, { headers: { Authorization: token } }).catch(() => null);
+                if (searchRes?.data?.data?.content) {
+                    content.push(...searchRes.data.data.content);
+                }
+            }
+            if (content.length > 0) break; // Stop if we found results for this query level
         }
 
         const cleanTitleNorm = normalizeStr(cleanSearchTitle);
@@ -224,7 +236,8 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
           const candNorm = normalizeStr(c.name);
           let score = 0;
 
-          if (candNorm === cleanTitleNorm || candNorm === rawTitleNorm) {
+          const expectedNormWithYear = yearStr ? cleanTitleNorm + yearStr : cleanTitleNorm;
+          if (candNorm === cleanTitleNorm || candNorm === rawTitleNorm || candNorm === expectedNormWithYear) {
             score += 10;
           } else if (candNorm.includes(cleanTitleNorm) || cleanTitleNorm.includes(candNorm)) {
             score += 5;
@@ -292,29 +305,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
           matchedItems.push(enrichedMatch);
           openlistSearchCache.set(search.name, enrichedMatch);
         } else {
-          // Fallback: Item exists on Jellyfin, create entry so it is shown in Recently Added even if OpenList folder matching was ambiguous
-          const fallbackCat = search.isSeries ? 'SERIES' : 'MOVIES';
-          const fallbackPath = `${basePath.replace(/\/$/, '')}/${fallbackCat}`;
-          const fallbackMatch = {
-             name: search.name,
-             parent: fallbackPath,
-             is_dir: true,
-             size: 0,
-             modified: search.jfItem.DateCreated || new Date().toISOString(),
-             _cat: fallbackCat,
-             _parent: fallbackPath,
-             _jf_name: search.name,
-             _jf: {
-                 tmdbId: search.jfItem.ProviderIds?.Tmdb || search.jfItem.ProviderIds?.tmdb || null,
-                 year: search.year,
-                 overview: search.jfItem.Overview,
-                 rating: search.jfItem.CommunityRating,
-                 resolution: null,
-                 genres: search.jfItem.Genres
-             }
-          };
-          matchedItems.push(fallbackMatch);
-          openlistSearchCache.set(search.name, fallbackMatch);
+          console.log(`[Jellyfin] No openlist match found for: ${search.name}`);
         }
       } catch (e: any) {
         console.error(`[Jellyfin] Error searching openlist for ${search.name}:`, e.response?.status, e.message);
