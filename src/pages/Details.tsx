@@ -334,7 +334,9 @@ export default function Details() {
       : [{ label: 'Season 1', seasonNum: 1, folderName: '' }];
 
   const activeSeasonTab = seasonTabs[activeSeasonIndex] || seasonTabs[0];
-  const activeSeasonPath = activeSeasonTab?.folderName ? `${fullPath}/${activeSeasonTab.folderName}` : fullPath;
+  const activeSeasonPath = activeSeasonTab?.folderName 
+    ? `${fullPath}/${activeSeasonTab.folderName}` 
+    : (isVideoFile(name) ? fullPath.split('/').slice(0, -1).join('/') : fullPath);
 
   // Refresh folder directly bypassing cache
   const handleRefreshFolder = async () => {
@@ -410,7 +412,10 @@ export default function Details() {
     const fetchSeasonList = async () => {
       setLoadingFiles(true);
       try {
-        if (token) {
+        const isFile = isVideoFile(name);
+        if (isFile) {
+          if (isMounted) setSeasonItems([{ name, is_dir: false }]);
+        } else if (token) {
           const res = await axios.post('/api/fs/list', { reqPath: `/${activeSeasonPath}` }, { headers: { Authorization: token } });
           if (isMounted && res.data.code === 200) {
             setSeasonItems(res.data.data?.content || []);
@@ -958,6 +963,7 @@ export default function Details() {
                   (() => {
                     const singleMovie = videoItems[0];
                     const meta = extractFileMetadata(singleMovie.name, singleMovie.size);
+                    const resolvedMoviePath = isVideoFile(name) ? fullPath.split('/').slice(0, -1).join('/') : fullPath;
                     return (
                       <div className="flex flex-col gap-3 max-w-xl">
                         <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -966,7 +972,7 @@ export default function Details() {
 
                         {/* Large Play Button */}
                         <button
-                          onClick={() => setIntentModalData({ item: singleMovie, path: fullPath })}
+                          onClick={() => setIntentModalData({ item: singleMovie, path: resolvedMoviePath })}
                           className="w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold shadow-xl shadow-purple-600/25 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                         >
                           <div className="flex items-center gap-3">
@@ -1001,7 +1007,7 @@ export default function Details() {
 
                         {/* Download Button Below */}
                         <button
-                          onClick={() => handleDirectDownload(singleMovie, fullPath)}
+                          onClick={() => handleDirectDownload(singleMovie, resolvedMoviePath)}
                           className="w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white font-extrabold transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                         >
                           <div className="flex items-center gap-3">
