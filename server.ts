@@ -1032,6 +1032,23 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
        return res.status(403).json({ error: 'Forbidden' });
     }
 
+    // Check if keywords might be a TMDB ID
+    let tmdbTitleForId: string | null = null;
+    const tmdbKey = process.env.TMDB_API_KEY;
+    if (keywords && typeof keywords === 'string' && /^\d+$/.test(keywords.trim()) && tmdbKey) {
+      try {
+        let tmdbRes = await axios.get(`https://api.themoviedb.org/3/movie/${keywords.trim()}?api_key=${tmdbKey}`).catch(() => null);
+        if (tmdbRes?.data?.title) {
+          tmdbTitleForId = tmdbRes.data.title;
+        } else {
+          tmdbRes = await axios.get(`https://api.themoviedb.org/3/tv/${keywords.trim()}?api_key=${tmdbKey}`).catch(() => null);
+          if (tmdbRes?.data?.name) {
+            tmdbTitleForId = tmdbRes.data.name;
+          }
+        }
+      } catch (e) {}
+    }
+
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/search`;
     
     const reqBody1 = { 
@@ -1079,18 +1096,43 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       }
     }
     
+    if (tmdbTitleForId) {
+      const reqBody3 = { ...reqBody1, keywords: tmdbTitleForId };
+      try {
+        const response3 = await axios.post(url, reqBody3, { headers: { Authorization: token } });
+        if (response3.data && response3.data.code === 200 && response3.data.data && response3.data.data.content) {
+          const content3 = response3.data.data.content;
+          const seen = new Set(content.map((item: any) => item.path || item.name));
+          for (const item of content3) {
+             if (!seen.has(item.path || item.name)) {
+                 content.push(item);
+                 seen.add(item.path || item.name);
+             }
+          }
+        }
+      } catch (err) {}
+    }
+    
     // NEW LOGIC: SEARCH TMDB CACHE for titles available on the app
     try {
       const cleanStr = (s: any) => String(s || '').replace(/[^a-z0-9\s]/ig, '').replace(/\s+/g, ' ').trim().toLowerCase();
       const q = cleanStr(keywords || '');
-      if (q.length >= 2) {
+      const qTitle = tmdbTitleForId ? cleanStr(tmdbTitleForId) : null;
+      if (q.length >= 2 || qTitle) {
         const matchingKeys = Object.keys(tmdbCache).filter(key => {
           const entry = tmdbCache[key];
           if (!entry) return false;
+          
+          if (/^\d+$/.test(q) && String(entry.id) === q) return true;
+          
           const title = cleanStr(entry.title || '');
           const name = cleanStr(entry.name || '');
           const orig = cleanStr(entry.original_name || entry.original_title || '');
-          return title.includes(q) || name.includes(q) || orig.includes(q);
+          
+          if (q.length >= 2 && (title.includes(q) || name.includes(q) || orig.includes(q))) return true;
+          if (qTitle && (title.includes(qTitle) || name.includes(qTitle) || orig.includes(qTitle))) return true;
+          
+          return false;
         });
 
         if (matchingKeys.length > 0) {

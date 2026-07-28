@@ -123,6 +123,11 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
             {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle">REC</span>}
             {displayTmdb?.title || displayTmdb?.name || item.name}
         </h3>
+        {item._jf?.addedText && (
+            <p className={`font-bold text-yellow-500 truncate ${viewMode === 'list' ? 'text-xs mb-1' : 'text-[10px] sm:text-xs'}`}>
+                {item._jf.addedText}
+            </p>
+        )}
         {viewMode === 'list' ? (
           <>
             <p className="uppercase tracking-wider font-bold mb-0.5 text-[10px] sm:text-xs text-purple-400">{category}</p>
@@ -133,7 +138,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
           </>
         ) : (
           <p className="truncate text-[10px] text-gray-600 dark:text-gray-400">
-             {displayTmdb?.release_date ? displayTmdb.release_date.substring(0, 4) : displayTmdb?.first_air_date ? displayTmdb.first_air_date.substring(0, 4) : ''}
+             {!item._jf?.addedText && (displayTmdb?.release_date ? displayTmdb.release_date.substring(0, 4) : displayTmdb?.first_air_date ? displayTmdb.first_air_date.substring(0, 4) : '')}
           </p>
         )}
       </div>

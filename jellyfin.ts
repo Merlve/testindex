@@ -112,16 +112,28 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
 
     const items = res.data || [];
     const seenNames = new Set<string>();
-    const toSearch: { name: string, year: number | null, isSeries: boolean, jfItem: any }[] = [];
+    const toSearch: { name: string, year: number | null, isSeries: boolean, jfItem: any, addedText: string }[] = [];
 
     for (const item of items) {
       let name = item.Name;
       let isSeries = false;
       let targetYear = item.ProductionYear || null;
+      let addedText = 'Added';
+      
       if (item.Type === 'Episode') {
         name = item.SeriesName || item.Name;
         isSeries = true;
         if (item.SeriesYear) targetYear = item.SeriesYear;
+        
+        const s = item.ParentIndexNumber !== undefined ? String(item.ParentIndexNumber).padStart(2, '0') : '';
+        const e = item.IndexNumber !== undefined ? String(item.IndexNumber).padStart(2, '0') : '';
+        if (s && e) {
+           addedText = `S${s}E${e} added`;
+        } else if (e) {
+           addedText = `Episode ${item.IndexNumber} added`;
+        } else {
+           addedText = 'Episode added';
+        }
       } else if (item.Type === 'Series') {
         isSeries = true;
       }
@@ -129,7 +141,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
       const lowerName = normalizeStr(name);
       if (!seenNames.has(lowerName) && name) {
         seenNames.add(lowerName);
-        toSearch.push({ name, year: targetYear, isSeries, jfItem: item });
+        toSearch.push({ name, year: targetYear, isSeries, jfItem: item, addedText });
       }
     }
 
@@ -175,7 +187,8 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
                    overview: search.jfItem.Overview,
                    rating: search.jfItem.CommunityRating,
                    resolution: null,
-                   genres: search.jfItem.Genres
+                   genres: search.jfItem.Genres,
+                   addedText: search.addedText
                }
             };
             matchedItems.push(enrichedMatch);
@@ -299,7 +312,8 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
                  overview: search.jfItem.Overview,
                  rating: search.jfItem.CommunityRating,
                  resolution,
-                 genres: search.jfItem.Genres
+                 genres: search.jfItem.Genres,
+                 addedText: search.addedText
              }
           };
           matchedItems.push(enrichedMatch);
