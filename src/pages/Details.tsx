@@ -933,7 +933,7 @@ export default function Details() {
                   <div className="text-center">
                     <p className="font-semibold text-lg mb-4">No official trailer found.</p>
                     <a 
-                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent((tmdb?.title || tmdb?.name || name) + ' trailer')}`} 
+                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${tmdb?.title || tmdb?.name || name}${releaseYear ? ` ${releaseYear}` : ''} trailer`)}`} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl font-bold transition shadow-lg shadow-red-600/20"
