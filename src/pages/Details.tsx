@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
@@ -301,16 +301,78 @@ export default function Details() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Watched state
+  const [watchedItems, setWatchedItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user && user !== 'guest') {
+      axios.get('/api/watched', { headers: { 'x-user': user } })
+        .then(res => setWatchedItems(res.data))
+        .catch(console.error);
+    }
+  }, [user]);
+
+  const toggleWatched = async (itemName: string, itemPath: string, currentStatus: boolean) => {
+    if (user === 'guest') {
+      setToast('Sign up for the website plan to use this feature');
+      setTimeout(() => setToast(''), 3000);
+      return;
+    }
+    
+    // Optimistic UI update
+    if (currentStatus) {
+      setWatchedItems(prev => prev.filter(i => !(i.name === itemName && i.parentPath === itemPath)));
+    } else {
+      setWatchedItems(prev => [...prev, { name: itemName, parentPath: itemPath }]);
+    }
+    
+    try {
+      await axios.post('/api/watched/toggle', { name: itemName, parentPath: itemPath }, { headers: { 'x-user': user } });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const bulkToggleWatched = async (items: {name: string, parentPath: string}[], watched: boolean) => {
+    if (user === 'guest') {
+      setToast('Sign up for the website plan to use this feature');
+      setTimeout(() => setToast(''), 3000);
+      return;
+    }
+    
+    // Optimistic
+    if (watched) {
+      setWatchedItems(prev => {
+        const newItems = [...prev];
+        for (const item of items) {
+          if (!newItems.some(i => i.name === item.name && i.parentPath === item.parentPath)) {
+            newItems.push({ name: item.name, parentPath: item.parentPath });
+          }
+        }
+        return newItems;
+      });
+    } else {
+      setWatchedItems(prev => prev.filter(i => !items.some(item => item.name === i.name && item.parentPath === i.parentPath)));
+    }
+    
+    try {
+      const payload = items.map(i => ({ ...i, watched }));
+      await axios.post('/api/watched/bulk-toggle', { items: payload }, { headers: { 'x-user': user } });
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
   // Trailer state
   const [showTrailerModal, setShowTrailerModal] = useState(false);
   const [trailerUrl, setTrailerUrl] = useState<string | null>(null);
   const [loadingTrailer, setLoadingTrailer] = useState(false);
 
   const handleWatchTrailer = async () => {
-    if (!tmdb?.id) return;
-    setLoadingTrailer(true);
     setShowTrailerModal(true);
     setTrailerUrl(null);
+    if (!tmdb?.id) return;
+    setLoadingTrailer(true);
     try {
       const type = category;
       const res = await axios.get(`/api/meta/videos?id=${tmdb.id}&type=${type}`);
@@ -868,9 +930,18 @@ export default function Details() {
                     <p className="font-semibold text-lg">Loading Trailer...</p>
                   </>
                 ) : (
-                  <>
-                    <p className="font-semibold text-lg">No official trailer found.</p>
-                  </>
+                  <div className="text-center">
+                    <p className="font-semibold text-lg mb-4">No official trailer found.</p>
+                    <a 
+                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent((tmdb?.title || tmdb?.name || name) + ' trailer')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl font-bold transition shadow-lg shadow-red-600/20"
+                    >
+                      <Youtube size={20} />
+                      Search on YouTube
+                    </a>
+                  </div>
                 )}
               </div>
             ) : (
@@ -1202,7 +1273,29 @@ export default function Details() {
                         />
                         <span>{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
                       </label>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {selectedItems.length > 0 && user && user !== 'guest' && (
+                          <>
+                            <button
+                              onClick={() => {
+                                bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: fullPath })), true);
+                                setSelectedItems([]);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-purple-600/20 hover:text-purple-600 dark:hover:text-purple-400 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                            >
+                              <Check size={13} /> <span className="hidden sm:inline">Mark Watched</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: fullPath })), false);
+                                setSelectedItems([]);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                            >
+                              <X size={13} /> <span className="hidden sm:inline">Mark Unwatched</span>
+                            </button>
+                          </>
+                        )}
                         {selectedItems.length > 0 && user === 'admin' && (
                           <button
                             onClick={handleDeleteFiles}
@@ -1231,10 +1324,17 @@ export default function Details() {
                               }}
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs sm:text-sm font-bold text-black dark:text-white line-clamp-2 break-words break-all" title={mItem.name}>
-                                {mItem.name}
+                              <div className="flex items-center gap-2">
+                                <div className="text-xs sm:text-sm font-bold text-black dark:text-white line-clamp-2 break-words break-all" title={mItem.name}>
+                                  {mItem.name}
+                                </div>
+                                {user && user !== 'guest' && watchedItems.some(i => i.name === mItem.name && i.parentPath === fullPath) && (
+                                  <div className="shrink-0 bg-purple-600 text-white rounded-full p-0.5 shadow-sm" title="Watched">
+                                    <Check size={12} strokeWidth={3} />
+                                  </div>
+                                )}
                               </div>
-                              <div className="flex items-center gap-1.5 mt-1.5">
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                 {meta.resolution && (
                                   <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-600/15 text-purple-700 dark:text-purple-300">
                                     {meta.resolution}
@@ -1255,6 +1355,24 @@ export default function Details() {
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
+                            {user && user !== 'guest' && (() => {
+                              const isWatched = watchedItems.some(i => i.name === mItem.name && i.parentPath === fullPath);
+                              return (
+                                <button
+                                  onClick={() => toggleWatched(mItem.name, fullPath, isWatched)}
+                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition cursor-pointer text-xs font-semibold ${
+                                    isWatched
+                                      ? 'bg-purple-600/10 border-purple-600/50 text-purple-700 dark:text-purple-300' 
+                                      : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-purple-600/50 text-gray-600 dark:text-gray-400'
+                                  }`}
+                                  title={isWatched ? "Mark as Unwatched" : "Mark as Watched"}
+                                >
+                                  {isWatched ? <Eye size={14} /> : <EyeOff size={14} />}
+                                  <span className="hidden sm:inline">{isWatched ? 'Watched' : 'Unwatched'}</span>
+                                </button>
+                              );
+                            })()}
+                            
                             <button
                               onClick={() => setIntentModalData({ item: mItem, path: fullPath })}
                               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition cursor-pointer"
@@ -1334,7 +1452,7 @@ export default function Details() {
                       <span>{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
                     </label>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {selectedItems.length > 0 && (
                         <>
                           <button
@@ -1343,6 +1461,28 @@ export default function Details() {
                           >
                             <Copy size={13} /> <span className="hidden sm:inline">Copy Links</span>
                           </button>
+                          {user && user !== 'guest' && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: activeSeasonPath })), true);
+                                  setSelectedItems([]);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-purple-600/20 hover:text-purple-600 dark:hover:text-purple-400 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                              >
+                                <Check size={13} /> <span className="hidden sm:inline">Mark Watched</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: activeSeasonPath })), false);
+                                  setSelectedItems([]);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                              >
+                                <X size={13} /> <span className="hidden sm:inline">Mark Unwatched</span>
+                              </button>
+                            </>
+                          )}
                           {user === 'admin' && (
                             <button
                               onClick={handleDeleteFiles}
@@ -1418,13 +1558,20 @@ export default function Details() {
                                 }}
                               />
 
-                              {epStill ? (
-                                <img src={epStill} alt={epTitle} className="w-20 h-13 sm:w-28 sm:h-16 object-cover rounded-xl shadow shrink-0 border border-black/5 dark:border-white/5" />
-                              ) : (
-                                <div className="w-20 h-13 sm:w-28 sm:h-16 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center shrink-0 text-gray-500">
-                                  <Tv size={18} />
-                                </div>
-                              )}
+                              <div className="relative shrink-0">
+                                {epStill ? (
+                                  <img src={epStill} alt={epTitle} className="w-20 h-13 sm:w-28 sm:h-16 object-cover rounded-xl shadow border border-black/5 dark:border-white/5" />
+                                ) : (
+                                  <div className="w-20 h-13 sm:w-28 sm:h-16 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center text-gray-500">
+                                    <Tv size={18} />
+                                  </div>
+                                )}
+                                {user && user !== 'guest' && watchedItems.some(i => i.name === epItem.name && i.parentPath === activeSeasonPath) && (
+                                  <div className="absolute -top-1.5 -right-1.5 bg-purple-600 text-white rounded-full p-0.5 shadow-md border-2 border-white dark:border-[#1a1a1a]" title="Watched">
+                                    <Check size={10} strokeWidth={3} />
+                                  </div>
+                                )}
+                              </div>
 
                               <div className="min-w-0 flex-1 overflow-hidden">
                                 <h4 className="text-xs sm:text-sm font-bold text-black dark:text-white line-clamp-2 break-words break-all leading-snug" title={epTitle}>
@@ -1457,8 +1604,27 @@ export default function Details() {
                               </div>
                             </div>
 
-                            {/* Right Action Buttons: Play & Download */}
+                            {/* Right Action Buttons: Play, Download, Watched */}
                             <div className="flex items-center gap-2 shrink-0 self-end sm:self-center w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-black/5 dark:border-white/5">
+                              
+                              {user && user !== 'guest' && (() => {
+                                const isWatched = watchedItems.some(i => i.name === epItem.name && i.parentPath === activeSeasonPath);
+                                return (
+                                  <button
+                                    onClick={() => toggleWatched(epItem.name, activeSeasonPath, isWatched)}
+                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition cursor-pointer text-xs font-semibold ${
+                                      isWatched
+                                        ? 'bg-purple-600/10 border-purple-600/50 text-purple-700 dark:text-purple-300' 
+                                        : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-purple-600/50 text-gray-600 dark:text-gray-400'
+                                    }`}
+                                    title={isWatched ? "Mark as Unwatched" : "Mark as Watched"}
+                                  >
+                                    {isWatched ? <Eye size={13} /> : <EyeOff size={13} />}
+                                    <span className="hidden sm:inline">{isWatched ? 'Watched' : 'Unwatched'}</span>
+                                  </button>
+                                );
+                              })()}
+
                               <button
                                 onClick={() => setIntentModalData({ item: epItem, path: activeSeasonPath })}
                                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition cursor-pointer"

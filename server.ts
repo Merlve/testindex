@@ -318,6 +318,14 @@ async function saveUserWatchlist(user: string, list: any[]) {
   await writeSQLiteJSON(`watchlist_${user}`, list);
 }
 
+// Watched storage
+async function loadUserWatched(user: string) {
+  return (await readSQLiteJSON(`watched_${user}`)) || [];
+}
+async function saveUserWatched(user: string, list: any[]) {
+  await writeSQLiteJSON(`watched_${user}`, list);
+}
+
 // Downloads Tracking Storage
 let downloadTracker: Record<string, {
   title: string;
@@ -447,6 +455,60 @@ app.get('/api/watchlist/check', async (req, res) => {
   const list = await loadUserWatchlist(user);
   const exists = list.some(i => i.item.name === name && i.parentPath === parentPath);
   res.json({ inWatchlist: exists });
+});
+
+app.get('/api/watched', async (req, res) => {
+  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  res.json(await loadUserWatched(user));
+});
+
+app.post('/api/watched/toggle', async (req, res) => {
+  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const { name, parentPath } = req.body;
+  if (!name || !parentPath) return res.status(400).json({ error: 'Missing name or parentPath' });
+
+  const list = await loadUserWatched(user);
+  
+  const existingIndex = list.findIndex(i => i.name === name && i.parentPath === parentPath);
+  
+  if (existingIndex >= 0) {
+    list.splice(existingIndex, 1);
+  } else {
+    list.push({ name, parentPath, timestamp: Date.now() });
+  }
+  
+  await saveUserWatched(user, list);
+  res.json({ success: true, watched: list, added: existingIndex < 0 });
+});
+
+app.post('/api/watched/bulk-toggle', async (req, res) => {
+  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const { items } = req.body; // Array of { name, parentPath }
+  if (!items || !Array.isArray(items)) return res.status(400).json({ error: 'Missing items array' });
+
+  const list = await loadUserWatched(user);
+  
+  let changed = false;
+  for (const item of items) {
+    const existingIndex = list.findIndex(i => i.name === item.name && i.parentPath === item.parentPath);
+    if (item.watched && existingIndex < 0) {
+      list.push({ name: item.name, parentPath: item.parentPath, timestamp: Date.now() });
+      changed = true;
+    } else if (!item.watched && existingIndex >= 0) {
+      list.splice(existingIndex, 1);
+      changed = true;
+    }
+  }
+  
+  if (changed) {
+    await saveUserWatched(user, list);
+  }
+  res.json({ success: true, watched: list });
 });
 
 app.get('/api/recommendations', async (req, res) => {
