@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles 
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
@@ -301,11 +301,47 @@ export default function Details() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Trailer state
+  const [showTrailerModal, setShowTrailerModal] = useState(false);
+  const [trailerUrl, setTrailerUrl] = useState<string | null>(null);
+  const [loadingTrailer, setLoadingTrailer] = useState(false);
+
+  const handleWatchTrailer = async () => {
+    if (!tmdb?.id) return;
+    setLoadingTrailer(true);
+    setShowTrailerModal(true);
+    setTrailerUrl(null);
+    try {
+      const type = category;
+      const res = await axios.get(`/api/meta/videos?id=${tmdb.id}&type=${type}`);
+      if (res.data && res.data.results) {
+        const videos = res.data.results;
+        // Find official trailer
+        const trailer = videos.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube') || videos.find((v: any) => v.site === 'YouTube');
+        if (trailer) {
+          setTrailerUrl(`https://www.youtube.com/embed/${trailer.key}?autoplay=1`);
+        }
+      }
+    } catch(e) {}
+    setLoadingTrailer(false);
+  };
+
   // Derived lists
   const isVideoFile = (filename: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(filename);
   const videoItems = (isMovieCategory ? baseItems : seasonItems)
     .filter(i => !i.is_dir && isVideoFile(i.name))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    .sort((a, b) => {
+      const metaA = extractFileMetadata(a.name);
+      const metaB = extractFileMetadata(b.name);
+      if (metaA.episodeNum !== null && metaB.episodeNum !== null) {
+        if (metaA.episodeNum !== metaB.episodeNum) {
+          return metaA.episodeNum - metaB.episodeNum;
+        }
+      }
+      const cleanA = a.name.replace(/^\[.*?\]\s*/, '').trim();
+      const cleanB = b.name.replace(/^\[.*?\]\s*/, '').trim();
+      return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+    });
   const dirItems = baseItems.filter(i => i.is_dir).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
   // Season Tabs parsing for Shows
@@ -347,7 +383,20 @@ export default function Details() {
     try {
       const isFile = isVideoFile(name);
       if (isFile) {
-        setBaseItems([{ name, is_dir: false }]);
+        const parentFolder = fullPath.split('/').slice(0, -1).join('/');
+        const reqPath = parentFolder ? `/${parentFolder}` : '/';
+        const res = await axios.post('/api/fs/list', { reqPath, refresh: true }, { headers: { Authorization: token } });
+        if (res.data?.code === 200) {
+          const content = res.data.data?.content || [];
+          const matchedFile = content.find((c: any) => c.name === name);
+          if (matchedFile) {
+            setBaseItems([matchedFile]);
+          } else {
+            setBaseItems([{ name, is_dir: false }]);
+          }
+        } else {
+          setBaseItems([{ name, is_dir: false }]);
+        }
       } else {
         // Refresh base directory list
         const baseRes = await axios.post(
@@ -356,7 +405,11 @@ export default function Details() {
           { headers: { Authorization: token } }
         );
         if (baseRes.data?.code === 200) {
-          setBaseItems(baseRes.data.data?.content || []);
+          const newBaseItems = baseRes.data.data?.content || [];
+          setBaseItems(newBaseItems);
+          if (!isMovieCategory && (!activeSeasonPath || activeSeasonPath === fullPath)) {
+            setSeasonItems(newBaseItems);
+          }
         }
 
         // If TV Show, also refresh active season directory list
@@ -379,6 +432,30 @@ export default function Details() {
     }
   };
 
+  const handleDeleteFiles = async () => {
+    if (!token || user !== 'admin' || selectedItems.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedItems.length} file(s)? This action cannot be undone.`)) return;
+    
+    try {
+      const dir = isMovieCategory ? fullPath : activeSeasonPath;
+      const res = await axios.post('/api/fs/remove', {
+        names: selectedItems,
+        dir: `/${dir}`
+      }, { headers: { Authorization: token } });
+      
+      if (res.data.code === 200) {
+        setToast('Files deleted successfully');
+        setTimeout(() => setToast(''), 3000);
+        setSelectedItems([]);
+        handleRefreshFolder();
+      } else {
+        alert('Failed to delete files: ' + res.data.message);
+      }
+    } catch (e: any) {
+      alert('Error deleting files: ' + (e.response?.data?.error || e.message));
+    }
+  };
+
   // Fetch Base Items
   useEffect(() => {
     let isMounted = true;
@@ -387,7 +464,24 @@ export default function Details() {
       try {
         const isFile = isVideoFile(name);
         if (isFile) {
-          if (isMounted) setBaseItems([{ name, is_dir: false }]);
+          if (token) {
+            const parentFolder = fullPath.split('/').slice(0, -1).join('/');
+            const reqPath = parentFolder ? `/${parentFolder}` : '/';
+            const res = await axios.post('/api/fs/list', { reqPath }, { headers: { Authorization: token } });
+            if (isMounted && res.data.code === 200) {
+              const content = res.data.data?.content || [];
+              const matchedFile = content.find((c: any) => c.name === name);
+              if (matchedFile) {
+                setBaseItems([matchedFile]);
+              } else {
+                setBaseItems([{ name, is_dir: false }]);
+              }
+            } else if (isMounted) {
+              setBaseItems([{ name, is_dir: false }]);
+            }
+          } else if (isMounted) {
+            setBaseItems([{ name, is_dir: false }]);
+          }
         } else if (token) {
           const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}` }, { headers: { Authorization: token } });
           if (isMounted && res.data.code === 200) {
@@ -752,6 +846,45 @@ export default function Details() {
         )}
       </AnimatePresence>
 
+      {/* Trailer Modal */}
+      {showTrailerModal && (
+        <div className="fixed inset-0 z-[120] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md px-4">
+          <button 
+            onClick={() => {
+              setShowTrailerModal(false);
+              setTrailerUrl(null);
+            }} 
+            className="absolute top-6 right-6 text-white/70 hover:text-white transition bg-white/10 p-2.5 rounded-full z-10 cursor-pointer"
+          >
+            <X size={24} />
+          </button>
+          
+          <div className="w-full max-w-5xl aspect-video bg-black rounded-2xl shadow-2xl overflow-hidden relative border border-white/10">
+            {!trailerUrl ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70">
+                {loadingTrailer ? (
+                  <>
+                    <Loader2 size={32} className="animate-spin mb-4" />
+                    <p className="font-semibold text-lg">Loading Trailer...</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-lg">No official trailer found.</p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <iframe 
+                src={trailerUrl} 
+                className="w-full h-full border-0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+              ></iframe>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Fix Metadata Modal */}
       {showMetadataModal && (
         <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center backdrop-blur-sm px-4">
@@ -929,7 +1062,7 @@ export default function Details() {
 
           <p className="text-gray-700 dark:text-gray-300 max-w-3xl leading-relaxed text-sm md:text-base mb-6 line-clamp-4 md:line-clamp-none">{tmdb?.overview}</p>
 
-          {/* Action Row: Watchlist */}
+          {/* Action Row: Watchlist & Trailer */}
           <div className="flex flex-wrap items-center gap-3 mb-6">
             <button 
               onClick={handleToggleWatchlist}
@@ -941,6 +1074,14 @@ export default function Details() {
             >
               {inWatchlist ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
               {inWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
+            </button>
+            <button
+              onClick={handleWatchTrailer}
+              disabled={loadingTrailer}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm cursor-pointer bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20 disabled:opacity-50"
+            >
+              {loadingTrailer ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
+              Watch Trailer
             </button>
           </div>
 
@@ -954,24 +1095,38 @@ export default function Details() {
                     Log In
                   </button>
                 </div>
-              ) : loadingFiles ? (
-                <div className="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 animate-pulse flex items-center justify-center">
-                  <div className="h-6 w-1/3 bg-gray-300/30 dark:bg-gray-700/30 rounded"></div>
-                </div>
-              ) : videoItems.length > 0 ? (
-                videoItems.length === 1 ? (
-                  /* Single Movie File Layout */
-                  (() => {
-                    const singleMovie = videoItems[0];
-                    const meta = extractFileMetadata(singleMovie.name, singleMovie.size);
-                    const resolvedMoviePath = isVideoFile(name) ? fullPath.split('/').slice(0, -1).join('/') : fullPath;
-                    return (
-                      <div className="flex flex-col gap-3 max-w-xl">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                          <Film size={15} /> Movie File Available
-                        </div>
-
-                        {/* Large Play Button */}
+              ) : (
+                <div className="flex flex-col gap-3 max-w-2xl">
+                  {/* Always visible header with Refresh button */}
+                  <div className="flex items-center justify-between gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                    <div className="flex items-center gap-2">
+                      <Film size={15} /> Movie File{videoItems.length !== 1 ? 's' : ''} Available {videoItems.length > 1 ? `(${videoItems.length})` : ''}
+                    </div>
+                    <button
+                      onClick={handleRefreshFolder}
+                      disabled={refreshing || loadingFiles}
+                      title="Refresh folder directory from OpenList"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
+                    >
+                      <RefreshCw size={13} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+                      <span className="hidden sm:inline">{refreshing ? "Refreshing..." : "Refresh Folder"}</span>
+                    </button>
+                  </div>
+                  
+                  {loadingFiles ? (
+                    <div className="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 animate-pulse flex items-center justify-center h-32">
+                      <div className="h-6 w-1/3 bg-gray-300/30 dark:bg-gray-700/30 rounded"></div>
+                    </div>
+                  ) : videoItems.length > 0 ? (
+                    videoItems.length === 1 ? (
+                      /* Single Movie File Layout */
+                      (() => {
+                        const singleMovie = videoItems[0];
+                        const meta = extractFileMetadata(singleMovie.name, singleMovie.size);
+                        const resolvedMoviePath = isVideoFile(name) ? fullPath.split('/').slice(0, -1).join('/') : fullPath;
+                        return (
+                          <div className="flex flex-col gap-3 max-w-xl">
+                            {/* Large Play Button */}
                         <button
                           onClick={() => setIntentModalData({ item: singleMovie, path: resolvedMoviePath })}
                           className="w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold shadow-xl shadow-purple-600/25 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
@@ -999,7 +1154,7 @@ export default function Details() {
                               </span>
                             )}
                             {meta.formattedSize && (
-                              <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-white/20 text-white backdrop-blur-sm hidden sm:inline-block">
+                              <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-white/20 text-white backdrop-blur-sm">
                                 {meta.formattedSize}
                               </span>
                             )}
@@ -1033,44 +1188,69 @@ export default function Details() {
                 ) : (
                   /* Multiple Movie Variants Layout */
                   <div className="space-y-3 max-w-2xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        Available Movie Editions ({videoItems.length})
+                    <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2.5 rounded-xl gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-purple-600 rounded disabled:opacity-40 cursor-pointer"
+                          disabled={videoItems.length === 0}
+                          checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedItems(videoItems.map(v => v.name));
+                            else setSelectedItems([]);
+                          }}
+                        />
+                        <span>{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {selectedItems.length > 0 && user === 'admin' && (
+                          <button
+                            onClick={handleDeleteFiles}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/90 hover:bg-red-600 text-white text-xs font-bold transition cursor-pointer shrink-0"
+                          >
+                            <Trash2 size={13} /> <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        )}
                       </div>
-                      <button
-                        onClick={handleRefreshFolder}
-                        disabled={refreshing || loadingFiles}
-                        title="Refresh folder directory from OpenList"
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
-                      >
-                        <RefreshCw size={13} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
-                        <span>{refreshing ? "Refreshing..." : "Refresh Folder"}</span>
-                      </button>
                     </div>
                     {videoItems.map((mItem, idx) => {
                       const meta = extractFileMetadata(mItem.name, mItem.size);
+                      const isSelected = selectedItems.includes(mItem.name);
                       return (
-                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl gap-3 hover:border-purple-600/50 transition w-full min-w-0 overflow-hidden">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs sm:text-sm font-bold text-black dark:text-white line-clamp-2 break-words break-all" title={mItem.name}>
-                              {mItem.name}
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                              {meta.resolution && (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-600/15 text-purple-700 dark:text-purple-300">
-                                  {meta.resolution}
-                                </span>
-                              )}
-                              {meta.codec && (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-600/15 text-blue-700 dark:text-blue-300">
-                                  {meta.codec}
-                                </span>
-                              )}
-                              {meta.formattedSize && (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-mono text-gray-500 dark:text-gray-400">
-                                  {meta.formattedSize}
-                                </span>
-                              )}
+                        <div key={idx} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 border rounded-2xl gap-3 transition w-full min-w-0 overflow-hidden ${
+                          isSelected ? 'bg-purple-600/10 border-purple-600/50 dark:bg-purple-600/15' : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-purple-600/50'
+                        }`}>
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <input 
+                              type="checkbox"
+                              className="w-4 h-4 accent-purple-600 rounded shrink-0 cursor-pointer"
+                              checked={isSelected}
+                              onChange={() => {
+                                if (isSelected) setSelectedItems(prev => prev.filter(n => n !== mItem.name));
+                                else setSelectedItems(prev => [...prev, mItem.name]);
+                              }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs sm:text-sm font-bold text-black dark:text-white line-clamp-2 break-words break-all" title={mItem.name}>
+                                {mItem.name}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                {meta.resolution && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-600/15 text-purple-700 dark:text-purple-300">
+                                    {meta.resolution}
+                                  </span>
+                                )}
+                                {meta.codec && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-600/15 text-blue-700 dark:text-blue-300">
+                                    {meta.codec}
+                                  </span>
+                                )}
+                                {meta.formattedSize && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-mono text-gray-500 dark:text-gray-400">
+                                    {meta.formattedSize}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1095,7 +1275,11 @@ export default function Details() {
                   </div>
                 )
               ) : (
-                <div className="text-gray-500 text-sm font-medium">No video files found in this movie folder.</div>
+                <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
+                  <div className="text-gray-500 text-sm font-medium">No video files found in this movie folder.</div>
+                </div>
+              )}
+                </div>
               )}
             </div>
           )}
@@ -1152,12 +1336,22 @@ export default function Details() {
 
                     <div className="flex items-center gap-2">
                       {selectedItems.length > 0 && (
-                        <button
-                          onClick={handleCopyLinks}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer shrink-0"
-                        >
-                          <Copy size={13} /> <span className="hidden sm:inline">Copy Links</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={handleCopyLinks}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer shrink-0"
+                          >
+                            <Copy size={13} /> <span className="hidden sm:inline">Copy Links</span>
+                          </button>
+                          {user === 'admin' && (
+                            <button
+                              onClick={handleDeleteFiles}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/90 hover:bg-red-600 text-white text-xs font-bold transition cursor-pointer shrink-0"
+                            >
+                              <Trash2 size={13} /> <span className="hidden sm:inline">Delete</span>
+                            </button>
+                          )}
+                        </>
                       )}
 
                       <button

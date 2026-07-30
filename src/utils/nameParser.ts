@@ -61,7 +61,11 @@ export function extractFileMetadata(filename: string, fileSize?: number) {
   let episodeNum: number | null = null;
   let episodeNumEnd: number | null = null;
 
-  const sEPattern = /[sS](\d{1,2})[eE](\d{1,3})(?:-[eE]?(\d{1,3}))?/i.exec(name);
+  let sEPattern = /[sS](\d{1,2})[eE](\d{1,3})(?:-[eE]?(\d{1,3}))?/i.exec(name);
+  if (!sEPattern) {
+    sEPattern = /[sS](\d{1,2})[\s\-]+(?:[eE][pP]?)?\s*(\d{1,3})(?!\d)/i.exec(name);
+  }
+
   if (sEPattern) {
     seasonNum = parseInt(sEPattern[1], 10);
     episodeNum = parseInt(sEPattern[2], 10);
@@ -74,6 +78,16 @@ export function extractFileMetadata(filename: string, fileSize?: number) {
       episodeNum = parseInt(ePattern[1], 10);
       if (ePattern[2]) {
         episodeNumEnd = parseInt(ePattern[2], 10);
+      }
+    } else {
+      // Fallback for standalone episode numbers: " - 02", "02 - Title"
+      const regex = /(?<=^|\s-\s)0*(\d{1,4})(?=\s|v\d+|$|-)/g;
+      let match;
+      while ((match = regex.exec(name)) !== null) {
+          const num = parseInt(match[1], 10);
+          if (num < 1900 || num > 2100) {
+              episodeNum = num;
+          }
       }
     }
   }

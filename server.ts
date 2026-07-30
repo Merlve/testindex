@@ -1088,6 +1088,27 @@ app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
   }
 });
 
+// API: Openlist Proxy - FS Remove
+app.post('/api/fs/remove', async (req, res) => {
+  try {
+    let token = req.headers.authorization;
+    const isGuest = isValidGuest(token || '');
+    if (isGuest) {
+       return res.status(403).json({ error: 'Guests cannot remove files' });
+    }
+    const { names, dir } = req.body;
+    if (!names || !dir) return res.status(400).json({ error: 'Names and dir required' });
+
+    const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/remove`;
+    const response = await axios.post(url, { names, dir }, {
+      headers: { Authorization: token }
+    });
+    res.json(response.data);
+  } catch (error: any) {
+    res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to remove files' });
+  }
+});
+
 // API: Openlist Proxy - FS Search
 app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
   try {
@@ -1547,6 +1568,21 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     }
     res.json(null);
   } catch (error: any) {
+    res.json(null);
+  }
+});
+
+app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
+  const { id, type } = req.query;
+  if (!id || !type) return res.status(400).json({ error: 'id and type required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json(null);
+
+  try {
+    const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(String(type).toUpperCase()) ? 'tv' : 'movie';
+    const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/videos?api_key=${tmdbKey}`);
+    res.json(response.data);
+  } catch (err: any) {
     res.json(null);
   }
 });
