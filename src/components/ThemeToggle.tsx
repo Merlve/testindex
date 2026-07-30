@@ -110,6 +110,7 @@ export default function ThemeToggle({ isUnderlyingDark = false, align = 'left', 
     <div className={`inline-flex items-center ${className}`} ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
+        style={{ WebkitTapHighlightColor: 'transparent' }}
         className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current cursor-pointer flex items-center justify-center focus:outline-none"
         title={`Theme options (${themeMode})`}
         aria-label="Toggle theme options"
@@ -131,7 +132,7 @@ export default function ThemeToggle({ isUnderlyingDark = false, align = 'left', 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className={`absolute ${alignClasses} top-full mt-3 w-36 p-1.5 rounded-2xl border backdrop-blur-3xl backdrop-saturate-[200%] shadow-2xl z-50 text-xs font-semibold space-y-1 transition-all duration-300 ${
+            className={`absolute ${alignClasses} top-full mt-3 w-36 p-1.5 rounded-2xl border backdrop-blur-3xl backdrop-saturate-[200%] shadow-2xl z-50 text-xs font-semibold space-y-1 transform-gpu will-change-transform ${
               isUnderlyingDark
                 ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_12px_40px_0_rgba(0,0,0,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.25)] dark:bg-black/60 dark:border-white/20 dark:text-white'
                 : 'bg-white/60 border-white/70 text-gray-900 shadow-[0_12px_40px_0_rgba(31,38,135,0.2),inset_0_1px_1px_0_rgba(255,255,255,0.8)] dark:bg-black/60 dark:border-white/20 dark:text-white'
