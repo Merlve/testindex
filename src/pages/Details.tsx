@@ -1259,11 +1259,12 @@ export default function Details() {
                 ) : (
                   /* Multiple Movie Variants Layout */
                   <div className="space-y-3 max-w-2xl">
-                    <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2.5 rounded-xl gap-2">
-                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                    {/* Bulk Select & Actions Bar */}
+                    <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-3.5 py-2.5 rounded-2xl gap-2 min-w-0">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300 select-none shrink-0">
                         <input
                           type="checkbox"
-                          className="w-4 h-4 accent-purple-600 rounded disabled:opacity-40 cursor-pointer"
+                          className="w-4 h-4 accent-purple-600 rounded disabled:opacity-40 cursor-pointer shrink-0"
                           disabled={videoItems.length === 0}
                           checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
                           onChange={(e) => {
@@ -1271,9 +1272,10 @@ export default function Details() {
                             else setSelectedItems([]);
                           }}
                         />
-                        <span>{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
+                        <span className="whitespace-nowrap">{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
                       </label>
-                      <div className="flex flex-wrap items-center gap-2">
+
+                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         {selectedItems.length > 0 && user && user !== 'guest' && (
                           <>
                             <button
@@ -1281,27 +1283,30 @@ export default function Details() {
                                 bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: fullPath })), true);
                                 setSelectedItems([]);
                               }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-purple-600/20 hover:text-purple-600 dark:hover:text-purple-400 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-xs font-bold transition cursor-pointer shrink-0"
+                              title="Mark Selected as Watched"
                             >
-                              <Check size={13} /> <span className="hidden sm:inline">Mark Watched</span>
+                              <Check size={14} /> <span className="hidden sm:inline">Mark Watched</span>
                             </button>
                             <button
                               onClick={() => {
                                 bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: fullPath })), false);
                                 setSelectedItems([]);
                               }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white border border-black/10 dark:border-white/10 text-xs font-bold transition cursor-pointer shrink-0"
+                              title="Mark Selected as Unwatched"
                             >
-                              <X size={13} /> <span className="hidden sm:inline">Mark Unwatched</span>
+                              <X size={14} /> <span className="hidden sm:inline">Mark Unwatched</span>
                             </button>
                           </>
                         )}
                         {selectedItems.length > 0 && user === 'admin' && (
                           <button
                             onClick={handleDeleteFiles}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/90 hover:bg-red-600 text-white text-xs font-bold transition cursor-pointer shrink-0"
+                            className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition cursor-pointer shrink-0 shadow-sm"
+                            title="Delete Selected Files"
                           >
-                            <Trash2 size={13} /> <span className="hidden sm:inline">Delete</span>
+                            <Trash2 size={14} /> <span className="hidden sm:inline">Delete</span>
                           </button>
                         )}
                       </div>
@@ -1437,11 +1442,11 @@ export default function Details() {
                   )}
 
                   {/* Bulk Select & Actions Bar */}
-                  <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2.5 rounded-xl gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                  <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-3.5 py-2.5 rounded-2xl gap-2 min-w-0">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300 select-none shrink-0">
                       <input
                         type="checkbox"
-                        className="w-4 h-4 accent-purple-600 rounded disabled:opacity-40 cursor-pointer"
+                        className="w-4 h-4 accent-purple-600 rounded disabled:opacity-40 cursor-pointer shrink-0"
                         disabled={videoItems.length === 0}
                         checked={videoItems.length > 0 && selectedItems.length === videoItems.length}
                         onChange={(e) => {
@@ -1449,17 +1454,18 @@ export default function Details() {
                           else setSelectedItems([]);
                         }}
                       />
-                      <span>{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
+                      <span className="whitespace-nowrap">{selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select All'}</span>
                     </label>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                       {selectedItems.length > 0 && (
                         <>
                           <button
                             onClick={handleCopyLinks}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer shrink-0"
+                            className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer shrink-0 shadow-sm"
+                            title="Copy Direct Links"
                           >
-                            <Copy size={13} /> <span className="hidden sm:inline">Copy Links</span>
+                            <Copy size={14} /> <span className="hidden sm:inline">Copy Links</span>
                           </button>
                           {user && user !== 'guest' && (
                             <>
@@ -1468,27 +1474,30 @@ export default function Details() {
                                   bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: activeSeasonPath })), true);
                                   setSelectedItems([]);
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-purple-600/20 hover:text-purple-600 dark:hover:text-purple-400 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                                className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-xs font-bold transition cursor-pointer shrink-0"
+                                title="Mark Selected as Watched"
                               >
-                                <Check size={13} /> <span className="hidden sm:inline">Mark Watched</span>
+                                <Check size={14} /> <span className="hidden sm:inline">Mark Watched</span>
                               </button>
                               <button
                                 onClick={() => {
                                   bulkToggleWatched(selectedItems.map(name => ({ name, parentPath: activeSeasonPath })), false);
                                   setSelectedItems([]);
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0"
+                                className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white border border-black/10 dark:border-white/10 text-xs font-bold transition cursor-pointer shrink-0"
+                                title="Mark Selected as Unwatched"
                               >
-                                <X size={13} /> <span className="hidden sm:inline">Mark Unwatched</span>
+                                <X size={14} /> <span className="hidden sm:inline">Mark Unwatched</span>
                               </button>
                             </>
                           )}
                           {user === 'admin' && (
                             <button
                               onClick={handleDeleteFiles}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/90 hover:bg-red-600 text-white text-xs font-bold transition cursor-pointer shrink-0"
+                              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition cursor-pointer shrink-0 shadow-sm"
+                              title="Delete Selected Files"
                             >
-                              <Trash2 size={13} /> <span className="hidden sm:inline">Delete</span>
+                              <Trash2 size={14} /> <span className="hidden sm:inline">Delete</span>
                             </button>
                           )}
                         </>
@@ -1498,10 +1507,10 @@ export default function Details() {
                         onClick={handleRefreshFolder}
                         disabled={refreshing || loadingFiles}
                         title="Refresh folder directory from OpenList"
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
+                        className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white border border-black/10 dark:border-white/10 text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
                       >
-                        <RefreshCw size={13} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
-                        <span>{refreshing ? "Refreshing..." : "Refresh Folder"}</span>
+                        <RefreshCw size={14} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+                        <span className="hidden sm:inline">{refreshing ? "Refreshing..." : "Refresh Folder"}</span>
                       </button>
                     </div>
                   </div>
