@@ -113,7 +113,7 @@ export default function Login() {
         id="floating-top-right-nav"
         className="fixed top-4 right-4 md:right-6 z-40 flex items-center gap-3 px-3.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white transition-all duration-300"
       >
-        <ThemeToggle align="left" />
+        <ThemeToggle align="right" />
       </div>
 
       <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 backdrop-blur p-8 rounded-2xl shadow-2xl w-full max-w-md border border-black/5 dark:border-white/5">

@@ -320,7 +320,7 @@ export default function Layout() {
           isIdle && !sidebarOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >
-        <ThemeToggle isUnderlyingDark={isUnderlyingDark} align="center" />
+        <ThemeToggle isUnderlyingDark={isUnderlyingDark} align="right" />
         <button 
           onClick={() => setSearchOpen(true)} 
           className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current flex items-center gap-1.5 cursor-pointer"
