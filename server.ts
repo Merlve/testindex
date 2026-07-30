@@ -701,6 +701,77 @@ setInterval(() => {
     console.error('[Jellyfin Auto-Fetch Interval Error]', err.message || err);
   });
 }, 3 * 60 * 1000);
+
+let isSyncingLibrary = false;
+async function syncLibraryToDatabase() {
+  if (isSyncingLibrary) return;
+  const tmdbKey = process.env.TMDB_API_KEY;
+  const openlistKey = getOpenlistApiKey();
+  if (!tmdbKey || !openlistKey) return;
+  
+  isSyncingLibrary = true;
+  try {
+    const items = await getLibraryIndex(openlistKey, true);
+    let newItemsAdded = false;
+    
+    for (const item of items) {
+      if (!item.cleanName || !item.category) continue;
+      
+      const type = item.category;
+      const baseQuery = item.cleanName.toLowerCase().trim();
+      const year = item.year;
+      const baseKey = `${type}-${baseQuery}`;
+      const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+      
+      const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+      
+      if (!overriddenKey && !tmdbCache[cacheKey] && !tmdbCache[baseKey] && tmdbCache[cacheKey] !== null) {
+          let searchType = 'multi';
+          const typeLower = type.toLowerCase();
+          if (typeLower.includes('movie')) searchType = 'movie';
+          else if (typeLower.includes('show') || typeLower.includes('series') || typeLower.includes('anime')) searchType = 'tv';
+          
+          let url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(item.cleanName)}`;
+          if (year && searchType === 'movie') url += `&primary_release_year=${year}`;
+          else if (year && searchType === 'tv') url += `&first_air_date_year=${year}`;
+          
+          try {
+             const response = await axios.get(url);
+             if (response.data && response.data.results && response.data.results.length > 0) {
+                 tmdbCache[cacheKey] = response.data.results[0];
+                 newItemsAdded = true;
+             } else {
+                 tmdbCache[cacheKey] = null;
+                 newItemsAdded = true;
+             }
+             await new Promise(r => setTimeout(r, 200));
+          } catch (e) {
+             console.error(`Error syncing ${item.cleanName} to DB`, e);
+          }
+      }
+    }
+    
+    if (newItemsAdded) {
+      await writeSQLiteJSON('db', tmdbCache);
+      console.log('TMDB Database sync complete, new items added.');
+    }
+  } catch (e) {
+    console.error('Error in library sync job', e);
+  } finally {
+    isSyncingLibrary = false;
+  }
+}
+
+// Run initial sync after 30 seconds
+setTimeout(() => {
+  syncLibraryToDatabase().catch(console.error);
+}, 30 * 1000);
+
+// Run sync every 15 minutes
+setInterval(() => {
+  syncLibraryToDatabase().catch(console.error);
+}, 15 * 60 * 1000);
+
 // ------------------------
 
 // --- Activity Logs ---

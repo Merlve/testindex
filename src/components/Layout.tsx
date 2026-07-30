@@ -1,13 +1,14 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Outlet, NavLink, useNavigate, Link, useLocation, useNavigationType, useOutlet } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles, User } from 'lucide-react';
+import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles, User, Monitor } from 'lucide-react';
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import SearchModal from './SearchModal';
 import NavbarSearch from './NavbarSearch';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import ScrollToTopButton from './ScrollToTopButton';
+import ThemeToggle from './ThemeToggle';
 
 
 
@@ -161,15 +162,6 @@ export default function Layout() {
   const [isIdle, setIsIdle] = useState(false);
   const [isUnderlyingDark, setIsUnderlyingDark] = useState(false);
 
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('theme');
-      if (saved) return saved === 'dark';
-      return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return true;
-  });
-
   const checkLuminance = useCallback(() => {
     if (typeof window === 'undefined') return;
     const navElement = document.getElementById('floating-search-btn') || document.getElementById('floating-top-right-nav');
@@ -238,19 +230,6 @@ export default function Layout() {
       sessionStorage.removeItem('justLoggedIn');
     }
   }, []);
-
-  useEffect(() => {
-    const themeMeta = document.querySelector('meta[name="theme-color"]');
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-      if (themeMeta) themeMeta.setAttribute('content', '#08080a');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-      if (themeMeta) themeMeta.setAttribute('content', '#fffcf9');
-    }
-  }, [isDark]);
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
@@ -341,13 +320,7 @@ export default function Layout() {
           isIdle && !sidebarOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >
-        <button 
-          onClick={() => setIsDark(!isDark)} 
-          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current cursor-pointer"
-          title="Toggle theme"
-        >
-          {isDark ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+        <ThemeToggle isUnderlyingDark={isUnderlyingDark} align="center" />
         <button 
           onClick={() => setSearchOpen(true)} 
           className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current flex items-center gap-1.5 cursor-pointer"

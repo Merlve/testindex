@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { Eye, EyeOff } from 'lucide-react';
 import { useQueryClient } from "@tanstack/react-query";
 import axios from 'axios';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -106,7 +107,15 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] flex items-center justify-center p-4 relative">
+      {/* Floating Top Right Theme Action Pill */}
+      <div 
+        id="floating-top-right-nav"
+        className="fixed top-4 right-4 md:right-6 z-40 flex items-center gap-3 px-3.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white transition-all duration-300"
+      >
+        <ThemeToggle align="left" />
+      </div>
+
       <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 backdrop-blur p-8 rounded-2xl shadow-2xl w-full max-w-md border border-black/5 dark:border-white/5">
         <div className="flex flex-col items-center mb-8">
           {logoUrl ? (
