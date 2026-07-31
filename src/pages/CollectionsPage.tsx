@@ -678,6 +678,20 @@ export default function CollectionsPage() {
         )}
       </AnimatePresence>
 
+      {/* Floating Liquid Glass + Create Collection Button */}
+      <motion.button
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileHover={{ scale: 1.06 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setShowCreateModal(true)}
+        className="fixed bottom-[88px] right-6 md:bottom-[112px] md:right-8 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/50 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-[180%] border border-white/60 dark:border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] text-gray-900 dark:text-white font-bold text-xs hover:border-purple-500/50 transition-all cursor-pointer"
+        title="Create New Collection"
+      >
+        <Plus size={18} className="text-purple-500 dark:text-purple-400" />
+        <span>Create Collection</span>
+      </motion.button>
+
       {/* Create Collection Modal */}
       <AnimatePresence>
         {showCreateModal && (
