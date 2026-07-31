@@ -823,7 +823,7 @@ export default function Details() {
       }
       const { cleanName, year } = parseMediaName(searchName);
       
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
@@ -848,7 +848,7 @@ export default function Details() {
         searchName = pathParts[pathParts.length - 2];
       }
       const { cleanName, year } = parseMediaName(searchName);
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);

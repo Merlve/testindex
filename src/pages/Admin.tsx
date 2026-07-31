@@ -75,7 +75,7 @@ export default function Admin() {
 
   const handleConfigSave = async () => {
     try {
-      await axios.post('/api/config', config);
+      await axios.post('/api/config', config, { headers: { Authorization: token } });
       setMsg('Config saved!');
       setTimeout(() => setMsg(''), 3000);
     } catch (e) {
@@ -87,7 +87,7 @@ export default function Admin() {
     try {
       const parsed = JSON.parse(tmdbData);
       const { cleanName, year } = parseMediaName(tmdbQuery);
-      await axios.post('/api/meta/correct', { query: cleanName, type: tmdbType, year, data: parsed });
+      await axios.post('/api/meta/correct', { query: cleanName, type: tmdbType, year, data: parsed }, { headers: { Authorization: token } });
       alert('TMDB Metadata corrected!');
     } catch (e) {
       alert('Invalid JSON or server error');
@@ -97,7 +97,7 @@ export default function Admin() {
   const handleAutoFetch = async () => {
     if (autoFetchLoading) {
       // Stop it
-      await axios.post('/api/meta/autofetch/stop');
+      await axios.post('/api/meta/autofetch/stop', {}, { headers: { Authorization: token } });
       setAutoFetchLoading(false);
       return;
     }
@@ -325,7 +325,7 @@ export default function Admin() {
               <button 
                 onClick={async () => {
                   if (confirm('Clear all download tracking statistics?')) {
-                    await axios.post('/api/downloads/clear');
+                    await axios.post('/api/downloads/clear', {}, { headers: { Authorization: token } });
                     fetchTopDownloads();
                   }
                 }}
