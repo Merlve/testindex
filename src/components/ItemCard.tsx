@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
-import { Film, Edit3, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
@@ -45,6 +45,54 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     } catch (err) {
       console.error(err);
       alert('Failed to update watchlist');
+    }
+  };
+
+  const { data: watchedList = [] } = useQuery<any[]>({
+    queryKey: ['watched-list', user],
+    queryFn: async () => {
+      if (!user || user === 'guest') return [];
+      try {
+        const res = await axios.get('/api/watched', { headers: { Authorization: token, 'x-user': user } });
+        return Array.isArray(res.data) ? res.data : (res.data?.watched || []);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!user && user !== 'guest',
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const isWatched = Array.isArray(watchedList) && watchedList.some((w: any) => {
+    const wRaw = w.name || w.title || '';
+    const itemRaw = item.name || item.title || '';
+    if (!wRaw || !itemRaw) return false;
+    const wLower = wRaw.toLowerCase().trim();
+    const itemLower = itemRaw.toLowerCase().trim();
+    if (wLower === itemLower) return true;
+    const wClean = parseMediaName(wRaw).cleanName.toLowerCase().trim();
+    const itemClean = parseMediaName(itemRaw).cleanName.toLowerCase().trim();
+    return wClean && itemClean && wClean === itemClean;
+  });
+
+  const handleToggleWatched = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (user === 'guest') {
+      alert('Sign up for the website plan to use this feature');
+      return;
+    }
+    try {
+      const res = await axios.post('/api/watched/toggle', {
+        name: item.name || item.title || '',
+        parentPath: parentPath
+      }, { headers: { Authorization: token, 'x-user': user } });
+      if (res.data?.success) {
+        queryClient.setQueryData(['watched-list', user], res.data.watched || []);
+        queryClient.invalidateQueries({ queryKey: ['watched-list', user] });
+      }
+    } catch (err) {
+      console.error('Failed to toggle watched status', err);
     }
   };
 
@@ -105,17 +153,32 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
         {displayTmdb?.vote_average && (
-          <div className={`absolute top-2 right-2 ${viewMode === 'grid' ? 'sm:top-3 sm:right-3' : ''} px-1.5 py-0.5 bg-black/60 backdrop-blur rounded text-[10px] font-bold text-yellow-500 z-20`}>
+          <div className={`absolute top-1 right-1 ${viewMode === 'grid' ? 'sm:top-2 sm:right-2' : ''} px-1 sm:px-1.5 py-0.5 bg-black/70 backdrop-blur rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20`}>
             {Number(displayTmdb.vote_average).toFixed(1)}
           </div>
         )}
         <button
           onClick={handleToggleWatchlist}
-          className={`absolute top-2 left-2 ${viewMode === 'grid' ? 'sm:top-3 sm:left-3' : ''} p-1.5 rounded-full bg-black/60 backdrop-blur z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+          className={`absolute top-1 left-1 ${viewMode === 'grid' ? 'sm:top-2 sm:left-2' : ''} p-1 sm:p-1.5 rounded-full bg-black/60 backdrop-blur z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
           title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
         >
-          {inWatchlist ? <BookmarkCheck size={14} className="sm:w-4 sm:h-4" /> : <Bookmark size={14} className="sm:w-4 sm:h-4" />}
+          {inWatchlist ? <BookmarkCheck size={12} className="sm:w-3.5 sm:h-3.5" /> : <Bookmark size={12} className="sm:w-3.5 sm:h-3.5" />}
         </button>
+
+        <button
+          onClick={handleToggleWatched}
+          className={`absolute top-1 left-7 ${viewMode === 'grid' ? 'sm:top-2 sm:left-9' : ''} p-1 sm:p-1.5 rounded-full bg-black/60 backdrop-blur z-30 transition-all hover:scale-110 ${isWatched ? 'text-purple-400 bg-purple-950/80 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'text-white/70 hover:text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+          title={isWatched ? "Mark as unwatched" : "Mark as watched"}
+        >
+          {isWatched ? <Eye size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400 fill-purple-400/20" /> : <EyeOff size={12} className="sm:w-3.5 sm:h-3.5" />}
+        </button>
+
+        {isWatched && (
+          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600/95 backdrop-blur text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
+            <CheckCircle size={9} className="fill-current text-white flex-shrink-0" />
+            <span className="truncate">Watched</span>
+          </div>
+        )}
 
       </div>
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>

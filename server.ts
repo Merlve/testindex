@@ -141,7 +141,7 @@ const rateLimitMiddleware = (req: express.Request, res: express.Response, next: 
   }
   entry.count++;
   rateLimitCache.set(ip, entry);
-  if (entry.count > 300) {
+  if (entry.count > 3000) {
     return res.status(429).json({ error: 'Too many requests' });
   }
   next();
@@ -1707,6 +1707,328 @@ app.get('/api/meta/collections', cacheMiddleware(3600, true), (req, res) => {
   }));
   
   res.json({ success: true, collections: result });
+});
+
+// User Custom Collections Persistence
+async function loadUserCollections() {
+  const cols = await readSQLiteJSON('user_collections');
+  if (cols && Array.isArray(cols)) return cols;
+
+  const initial = [
+    {
+      id: 'col_epic_historical',
+      name: 'Epic Historical & Period Adventures',
+      description: 'Sweeping stories from the great eras of war, royalty, exploration and honour, on the grandest scale.',
+      authorName: 'PF-Admin',
+      createdBy: 'admin',
+      isPublic: true,
+      categoryTag: 'Lists',
+      upvotes: ['admin', 'guest', 'user1', 'cinema_fan'],
+      createdAt: Date.now() - 30 * 86400000,
+      updatedAt: Date.now() - 2 * 86400000,
+      items: [
+        {
+          id: 'item_lawrence',
+          name: 'Lawrence of Arabia (1962).mkv',
+          title: 'Lawrence of Arabia',
+          year: 1962,
+          runtime: '3h 47m',
+          mediaType: 'movie',
+          overview: 'The story of T.E. Lawrence, the English officer who successfully united and led the diverse Arab tribes during World War I.',
+          rating: 8.3,
+          voteCount: 12500,
+          contentRating: 'PG',
+          genres: ['Adventure', 'Biography', 'Drama', 'History'],
+          posterPath: '/a1DO7TstXj6V3D17d7bZlZc1eE4.jpg',
+          backdropPath: '/a1DO7TstXj6V3D17d7bZlZc1eE4.jpg'
+        },
+        {
+          id: 'item_braveheart',
+          name: 'Braveheart (1995).mkv',
+          title: 'Braveheart',
+          year: 1995,
+          runtime: '2h 58m',
+          mediaType: 'movie',
+          overview: 'Scottish warrior William Wallace leads his countrymen in a rebellion to free his homeland from the tyranny of King Edward I of England.',
+          rating: 8.3,
+          voteCount: 15400,
+          contentRating: 'R',
+          genres: ['Action', 'Biography', 'Drama', 'History', 'War'],
+          posterPath: '/or1gYi8j31qch1GvY2P9ych09VI.jpg',
+          backdropPath: '/or1gYi8j31qch1GvY2P9ych09VI.jpg'
+        },
+        {
+          id: 'item_gladiator',
+          name: 'Gladiator (2000).mkv',
+          title: 'Gladiator',
+          year: 2000,
+          runtime: '2h 35m',
+          mediaType: 'movie',
+          overview: 'A former Roman General sets out to exact vengeance against the corrupt emperor who murdered his family and sent him into slavery.',
+          rating: 8.5,
+          voteCount: 19200,
+          contentRating: 'R',
+          genres: ['Action', 'Adventure', 'Drama'],
+          posterPath: '/ty8TTH2rmRxc2wTVBxfs02UkF6E.jpg',
+          backdropPath: '/ty8TTH2rmRxc2wTVBxfs02UkF6E.jpg'
+        },
+        {
+          id: 'item_mohicans',
+          name: 'The Last of the Mohicans (1992).mkv',
+          title: 'The Last of the Mohicans',
+          year: 1992,
+          runtime: '1h 52m',
+          mediaType: 'movie',
+          overview: 'Three trappers protect the daughters of a British Colonel in the midst of the French and Indian War.',
+          rating: 7.7,
+          voteCount: 8900,
+          contentRating: 'R',
+          genres: ['Action', 'Adventure', 'Drama', 'History', 'Romance'],
+          posterPath: '/e4u1xP38tL618C5Xj2e6F7m5f7a.jpg',
+          backdropPath: '/e4u1xP38tL618C5Xj2e6F7m5f7a.jpg'
+        },
+        {
+          id: 'item_kingdom_heaven',
+          name: 'Kingdom of Heaven (2005).mkv',
+          title: 'Kingdom of Heaven',
+          year: 2005,
+          runtime: '2h 24m',
+          mediaType: 'movie',
+          overview: 'Balian of Ibelin travels to Jerusalem during the Crusades of the 12th century, where he finds himself as the defender of the city.',
+          rating: 7.3,
+          voteCount: 11000,
+          contentRating: 'R',
+          genres: ['Action', 'Adventure', 'Drama', 'History', 'War'],
+          posterPath: '/z6o6G1lF5p46hJ3b7R0Pq2vLg7j.jpg',
+          backdropPath: '/z6o6G1lF5p46hJ3b7R0Pq2vLg7j.jpg'
+        }
+      ]
+    },
+    {
+      id: 'col_scifi_cyberpunk',
+      name: 'Mind-Bending Sci-Fi & Cyberpunk',
+      description: 'Futuristic visionaries, dystopian realities, time paradoxes, and deep space philosophical journeys.',
+      authorName: 'NeonRider',
+      createdBy: 'admin',
+      isPublic: true,
+      categoryTag: 'Lists',
+      upvotes: ['admin', 'guest', 'user2'],
+      createdAt: Date.now() - 20 * 86400000,
+      updatedAt: Date.now() - 1 * 86400000,
+      items: [
+        {
+          id: 'item_blade_runner',
+          name: 'Blade Runner 2049 (2017).mkv',
+          title: 'Blade Runner 2049',
+          year: 2017,
+          runtime: '2h 44m',
+          mediaType: 'movie',
+          overview: 'Young Blade Runner K discovers a long-buried secret that leads him to track down former Blade Runner Rick Deckard.',
+          rating: 8.0,
+          voteCount: 14200,
+          contentRating: 'R',
+          genres: ['Sci-Fi', 'Drama', 'Mystery'],
+          posterPath: '/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg'
+        },
+        {
+          id: 'item_interstellar',
+          name: 'Interstellar (2014).mkv',
+          title: 'Interstellar',
+          year: 2014,
+          runtime: '2h 49m',
+          mediaType: 'movie',
+          overview: 'A team of explorers travel through a wormhole in space in an attempt to ensure humanity\'s survival.',
+          rating: 8.7,
+          voteCount: 35000,
+          contentRating: 'PG-13',
+          genres: ['Adventure', 'Drama', 'Sci-Fi'],
+          posterPath: '/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg'
+        },
+        {
+          id: 'item_matrix',
+          name: 'The Matrix (1999).mkv',
+          title: 'The Matrix',
+          year: 1999,
+          runtime: '2h 16m',
+          mediaType: 'movie',
+          overview: 'When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth.',
+          rating: 8.7,
+          voteCount: 26000,
+          contentRating: 'R',
+          genres: ['Action', 'Sci-Fi'],
+          posterPath: '/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg'
+        },
+        {
+          id: 'item_inception',
+          name: 'Inception (2010).mkv',
+          title: 'Inception',
+          year: 2010,
+          runtime: '2h 28m',
+          mediaType: 'movie',
+          overview: 'A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea.',
+          rating: 8.8,
+          voteCount: 38000,
+          contentRating: 'PG-13',
+          genres: ['Action', 'Sci-Fi', 'Adventure'],
+          posterPath: '/ljs26ipKGh9u9sR4GFxWsgiojTe.jpg'
+        }
+      ]
+    }
+  ];
+  await writeSQLiteJSON('user_collections', initial);
+  return initial;
+}
+
+async function saveUserCollections(collections: any[]) {
+  await writeSQLiteJSON('user_collections', collections);
+}
+
+// User Custom Collections API Routes
+app.get('/api/user-collections', async (req, res) => {
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || '';
+    const collections = await loadUserCollections();
+    
+    // Filter out private collections that don't belong to current user
+    const filtered = collections.filter(col => {
+      if (col.isPublic) return true;
+      if (!user) return false;
+      return col.createdBy === user || user === 'admin';
+    });
+    
+    res.json({ success: true, collections: filtered });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/user-collections', async (req, res) => {
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || 'guest';
+    const { name, description, authorName, isPublic, categoryTag, items } = req.body;
+    
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Collection name is required' });
+    }
+    if (!authorName || typeof authorName !== 'string' || !authorName.trim()) {
+      return res.status(400).json({ error: 'Author name is required' });
+    }
+
+    const collections = await loadUserCollections();
+    const newCol = {
+      id: `col_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: name.trim(),
+      description: (description || '').trim(),
+      authorName: authorName.trim(),
+      createdBy: user,
+      isPublic: isPublic !== false, // default true unless false
+      categoryTag: categoryTag || 'Lists',
+      items: Array.isArray(items) ? items : [],
+      upvotes: [user],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    collections.unshift(newCol);
+    await saveUserCollections(collections);
+    res.json({ success: true, collection: newCol });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/user-collections/:id', async (req, res) => {
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || '';
+    const { id } = req.params;
+    const collections = await loadUserCollections();
+    const col = collections.find(c => c.id === id);
+    
+    if (!col) return res.status(404).json({ error: 'Collection not found' });
+    if (!col.isPublic && col.createdBy !== user && user !== 'admin') {
+      return res.status(403).json({ error: 'Private collection' });
+    }
+
+    res.json({ success: true, collection: col });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/user-collections/:id', async (req, res) => {
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || '';
+    const { id } = req.params;
+    const { name, description, authorName, isPublic, categoryTag, items } = req.body;
+
+    const collections = await loadUserCollections();
+    const index = collections.findIndex(c => c.id === id);
+    if (index < 0) return res.status(404).json({ error: 'Collection not found' });
+
+    const col = collections[index];
+    if (col.createdBy !== user && user !== 'admin') {
+      return res.status(403).json({ error: 'Only author can modify this collection' });
+    }
+
+    if (name !== undefined) col.name = name.trim();
+    if (description !== undefined) col.description = description.trim();
+    if (authorName !== undefined) col.authorName = authorName.trim();
+    if (isPublic !== undefined) col.isPublic = !!isPublic;
+    if (categoryTag !== undefined) col.categoryTag = categoryTag;
+    if (items !== undefined && Array.isArray(items)) col.items = items;
+    col.updatedAt = Date.now();
+
+    collections[index] = col;
+    await saveUserCollections(collections);
+    res.json({ success: true, collection: col });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/user-collections/:id', async (req, res) => {
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || '';
+    const { id } = req.params;
+
+    let collections = await loadUserCollections();
+    const col = collections.find(c => c.id === id);
+    if (!col) return res.status(404).json({ error: 'Collection not found' });
+    
+    if (col.createdBy !== user && user !== 'admin') {
+      return res.status(403).json({ error: 'Only author can delete this collection' });
+    }
+
+    collections = collections.filter(c => c.id !== id);
+    await saveUserCollections(collections);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/user-collections/:id/upvote', async (req, res) => {
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || 'guest';
+    const { id } = req.params;
+
+    const collections = await loadUserCollections();
+    const col = collections.find(c => c.id === id);
+    if (!col) return res.status(404).json({ error: 'Collection not found' });
+
+    if (!Array.isArray(col.upvotes)) col.upvotes = [];
+    const idx = col.upvotes.indexOf(user);
+    if (idx >= 0) {
+      col.upvotes.splice(idx, 1);
+    } else {
+      col.upvotes.push(user);
+    }
+
+    await saveUserCollections(collections);
+    res.json({ success: true, upvotesCount: col.upvotes.length, isUpvoted: col.upvotes.includes(user) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Genre Backdrops Cache

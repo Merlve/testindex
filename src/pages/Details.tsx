@@ -958,8 +958,8 @@ export default function Details() {
 
       {/* Fix Metadata Modal */}
       {showMetadataModal && (
-        <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center backdrop-blur-sm px-4">
-          <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] p-6 rounded-2xl border border-black/10 dark:border-white/10 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center backdrop-blur-md px-4">
+          <div className="bg-white/80 dark:bg-[#1a1a22]/80 backdrop-blur-2xl p-6 rounded-2xl border border-black/10 dark:border-white/10 w-full max-w-md shadow-2xl">
             <h3 className="text-xl font-bold text-black dark:text-white mb-2">Fix Metadata</h3>
             <p className="text-xs font-mono text-gray-600 dark:text-gray-400 mb-4 break-words break-all">{fullPath}</p>
             <div className="mb-4">
@@ -1175,7 +1175,7 @@ export default function Details() {
                     </div>
                     <button
                       onClick={handleRefreshFolder}
-                      disabled={refreshing || loadingFiles}
+                      disabled={refreshing}
                       title="Refresh folder directory from OpenList"
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
                     >
@@ -1505,7 +1505,7 @@ export default function Details() {
 
                       <button
                         onClick={handleRefreshFolder}
-                        disabled={refreshing || loadingFiles}
+                        disabled={refreshing}
                         title="Refresh folder directory from OpenList"
                         className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white border border-black/10 dark:border-white/10 text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
                       >

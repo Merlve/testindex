@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Outlet, NavLink, useNavigate, Link, useLocation, useNavigationType, useOutlet } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles, User, Monitor } from 'lucide-react';
+import { Film, Tv, Folder, Clapperboard, Home, Compass, Settings, LogOut, Sun, Moon, Search, Menu, ChevronLeft, ChevronRight, X, Bookmark, Users, WifiOff, Activity, Sparkles, User, Monitor, Library } from 'lucide-react';
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import SearchModal from './SearchModal';
 import NavbarSearch from './NavbarSearch';
@@ -161,10 +161,11 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
   const [isUnderlyingDark, setIsUnderlyingDark] = useState(false);
+  const [isNavExpanded, setIsNavExpanded] = useState(true);
 
   const checkLuminance = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const navElement = document.getElementById('floating-search-btn') || document.getElementById('floating-top-right-nav');
+    const navElement = document.getElementById('bottom-nav-bar') || document.getElementById('floating-top-right-nav');
     if (!navElement) return;
 
     const rect = navElement.getBoundingClientRect();
@@ -281,6 +282,27 @@ export default function Layout() {
     return () => clearTimeout(timer);
   }, [location.pathname, location.search, checkLuminance]);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      if (mainRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = mainRef.current;
+        const isTop = scrollTop < 50;
+        const isBottom = scrollHeight - scrollTop - clientHeight < 50;
+        setIsNavExpanded(isTop || isBottom);
+      }
+    };
+    const mainEl = mainRef.current;
+    if (mainEl) {
+      mainEl.addEventListener('scroll', handleScroll, { passive: true });
+      handleScroll();
+    }
+    return () => {
+      if (mainEl) {
+        mainEl.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, []);
+
   const { data: categories = [] } = useQuery({
     queryKey: ['layout-categories'],
     queryFn: async () => {
@@ -294,6 +316,7 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-[#fffcf9] dark:bg-[#08080a] text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
+
       {/* Floating Top Left Brand Pill (Persistent) */}
       <div 
         id="floating-top-left-nav"
@@ -308,6 +331,7 @@ export default function Layout() {
           <span className="font-bold tracking-tight text-sm">SHUTTER!</span>
         </Link>
       </div>
+
 
       {/* Floating Top Right Action Pill (Hides on idle) */}
       <div 
@@ -379,6 +403,9 @@ export default function Layout() {
             <button onClick={() => { setSearchOpen(true); setSidebarOpen(false); }} className="w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer justify-start px-4">
               <Search size={20} className="shrink-0" /> <span>Search</span>
             </button>
+            <NavLink to="/collections" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
+              <Library size={20} className="shrink-0" /> <span>Collections</span>
+            </NavLink>
             <NavLink to="/watchlist" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
               <Bookmark size={20} className="shrink-0" /> <span>Watchlist</span>
             </NavLink>
@@ -469,20 +496,52 @@ export default function Layout() {
         <ScrollToTopButton scrollRef={mainRef} />
       </main>
 
-        {/* Floating Search Circle Button (All Devices) */}
-        <button
-          id="floating-search-btn"
-          onClick={() => setSearchOpen(true)}
-          title="Search"
-          aria-label="Search"
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 md:bottom-8 z-50 w-12 h-12 md:w-14 md:h-14 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 flex items-center justify-center cursor-pointer ${
-            isUnderlyingDark 
-              ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
-              : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
-          } ${sidebarOpen || isIdle ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
-        >
-          <Search size={22} />
-        </button>
+        {/* Dynamic Bottom Navigation Bar (Home Page Only) */}
+        {location.pathname === '/' && (
+          <div id="bottom-nav-bar" className={`fixed bottom-6 left-6 md:bottom-8 md:left-8 z-50 flex items-center transition-all duration-300 ${sidebarOpen || isIdle ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}>
+            <motion.div 
+              layout
+              className={`flex items-center gap-1 overflow-hidden transition-all duration-500 ease-in-out rounded-full border backdrop-blur-xl backdrop-saturate-[180%] ${
+                 isUnderlyingDark
+                   ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
+                   : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
+              }`}
+              style={{
+                padding: isNavExpanded ? '6px' : '4px',
+              }}
+            >
+               <button 
+                 onClick={() => { if(!isNavExpanded){ mainRef.current?.scrollTo({top:0, behavior:'smooth'}) } else { navigate('/'); } }} 
+                 className={`flex items-center justify-center rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 ${isNavExpanded ? 'w-10 h-10 md:w-12 md:h-12' : 'w-10 h-10 md:w-12 md:h-12'} shrink-0`} 
+                 title="Home"
+               >
+                 <Home size={isNavExpanded ? 20 : 22} />
+               </button>
+
+               <AnimatePresence>
+                 {isNavExpanded && (
+                   <motion.div
+                     initial={{ width: 0, opacity: 0 }}
+                     animate={{ width: "auto", opacity: 1 }}
+                     exit={{ width: 0, opacity: 0 }}
+                     transition={{ duration: 0.3 }}
+                     className="flex items-center gap-1 overflow-hidden"
+                   >
+                     <button onClick={() => navigate('/collections')} className="flex items-center justify-center h-10 px-3.5 md:h-12 md:px-4 rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 shrink-0 gap-2 font-semibold text-sm" title="Collections">
+                       <Library size={20} />
+                       <span>Collections</span>
+                     </button>
+                     <button onClick={() => setSearchOpen(true)} className="flex items-center justify-center h-10 px-3.5 md:h-12 md:px-4 rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 shrink-0 gap-2 font-semibold text-sm" title="Search">
+                       <Search size={20} />
+                       <span>Search</span>
+                     </button>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
+            </motion.div>
+          </div>
+        )}
+
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
     </div>
   );
