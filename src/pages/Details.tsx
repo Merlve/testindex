@@ -1314,10 +1314,11 @@ export default function Details() {
                     {videoItems.map((mItem, idx) => {
                       const meta = extractFileMetadata(mItem.name, mItem.size);
                       const isSelected = selectedItems.includes(mItem.name);
+                      const isMovieWatched = user && user !== 'guest' && watchedItems.some(i => i.name === mItem.name && i.parentPath === fullPath);
                       return (
-                        <div key={idx} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 border rounded-2xl gap-3 transition w-full min-w-0 overflow-hidden ${
+                        <div key={idx} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 border rounded-2xl gap-3 transition-all duration-300 w-full min-w-0 overflow-hidden ${
                           isSelected ? 'bg-purple-600/10 border-purple-600/50 dark:bg-purple-600/15' : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-purple-600/50'
-                        }`}>
+                        } ${isMovieWatched ? 'opacity-40 grayscale saturate-0 hover:opacity-100 hover:grayscale-0 hover:saturate-100' : ''}`}>
                           <div className="flex items-center gap-3 min-w-0 flex-1">
                             <input 
                               type="checkbox"
@@ -1333,11 +1334,6 @@ export default function Details() {
                                 <div className="text-xs sm:text-sm font-bold text-black dark:text-white line-clamp-2 break-words break-all" title={mItem.name}>
                                   {mItem.name}
                                 </div>
-                                {user && user !== 'guest' && watchedItems.some(i => i.name === mItem.name && i.parentPath === fullPath) && (
-                                  <div className="shrink-0 bg-purple-600 text-white rounded-full p-0.5 shadow-sm" title="Watched">
-                                    <Check size={12} strokeWidth={3} />
-                                  </div>
-                                )}
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                 {meta.resolution && (
@@ -1543,17 +1539,17 @@ export default function Details() {
 
                         const epStill = epTmdb?.still_path ? `https://image.tmdb.org/t/p/w500${epTmdb.still_path}` : null;
                         const epOverview = epTmdb?.overview;
-
                         const isSelected = selectedItems.includes(epItem.name);
+                        const isEpWatched = user && user !== 'guest' && watchedItems.some(i => i.name === epItem.name && i.parentPath === activeSeasonPath);
 
                         return (
                           <div 
                             key={epIdx}
-                            className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 rounded-2xl border transition-all gap-3.5 w-full min-w-0 overflow-hidden ${
+                            className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 rounded-2xl border transition-all duration-300 gap-3.5 w-full min-w-0 overflow-hidden ${
                               isSelected 
                                 ? 'bg-purple-600/10 border-purple-600/50 dark:bg-purple-600/15' 
                                 : 'bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/40'
-                            }`}
+                            } ${isEpWatched ? 'opacity-40 grayscale saturate-0 hover:opacity-100 hover:grayscale-0 hover:saturate-100' : ''}`}
                           >
                             {/* Left: Checkbox + Thumbnail + Episode Meta */}
                             <div className="flex items-start sm:items-center gap-2.5 sm:gap-3.5 min-w-0 w-full flex-1">
@@ -1573,11 +1569,6 @@ export default function Details() {
                                 ) : (
                                   <div className="w-20 h-13 sm:w-28 sm:h-16 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center text-gray-500">
                                     <Tv size={18} />
-                                  </div>
-                                )}
-                                {user && user !== 'guest' && watchedItems.some(i => i.name === epItem.name && i.parentPath === activeSeasonPath) && (
-                                  <div className="absolute -top-1.5 -right-1.5 bg-purple-600 text-white rounded-full p-0.5 shadow-md border-2 border-white dark:border-[#1a1a1a]" title="Watched">
-                                    <Check size={10} strokeWidth={3} />
                                   </div>
                                 )}
                               </div>
