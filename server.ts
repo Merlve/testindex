@@ -303,27 +303,99 @@ async function getLibraryIndex(token: string, forceRefresh = false) {
 // Recommendations storage
 
 async function loadUserRecommendations(user: string) {
-  return (await readSQLiteJSON(`recommendations_${user}`)) || [];
+  const userKey = (user || 'guest').toLowerCase().trim();
+  return (await readSQLiteJSON(`recommendations_${userKey}`)) || [];
 }
 
 async function saveUserRecommendations(user: string, list: any[]) {
-  await writeSQLiteJSON(`recommendations_${user}`, list);
+  const userKey = (user || 'guest').toLowerCase().trim();
+  await writeSQLiteJSON(`recommendations_${userKey}`, list);
 }
 
 // Watchlists storage
 async function loadUserWatchlist(user: string) {
-  return (await readSQLiteJSON(`watchlist_${user}`)) || [];
+  const userKey = (user || 'guest').toLowerCase().trim();
+  const dbData = await readSQLiteJSON(`watchlist_${userKey}`);
+  if (dbData && Array.isArray(dbData)) return dbData;
+
+  const filePaths = [
+    path.join(process.cwd(), 'data', 'watchlists', `${userKey}.json`),
+    path.join(process.cwd(), 'watchlists', `${userKey}.json`)
+  ];
+  for (const fp of filePaths) {
+    if (fs.existsSync(fp)) {
+      try {
+        const raw = fs.readFileSync(fp, 'utf8').trim();
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            await writeSQLiteJSON(`watchlist_${userKey}`, list);
+            return list;
+          }
+        }
+      } catch(e) {}
+    }
+  }
+
+  return [];
 }
+
 async function saveUserWatchlist(user: string, list: any[]) {
-  await writeSQLiteJSON(`watchlist_${user}`, list);
+  const userKey = (user || 'guest').toLowerCase().trim();
+  await writeSQLiteJSON(`watchlist_${userKey}`, list);
+
+  try {
+    const dataDir = path.join(process.cwd(), 'data', 'watchlists');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(path.join(dataDir, `${userKey}.json`), JSON.stringify(list, null, 2), 'utf8');
+
+    const legacyDir = path.join(process.cwd(), 'watchlists');
+    if (!fs.existsSync(legacyDir)) fs.mkdirSync(legacyDir, { recursive: true });
+    fs.writeFileSync(path.join(legacyDir, `${userKey}.json`), JSON.stringify(list, null, 2), 'utf8');
+  } catch(e) {}
 }
 
 // Watched storage
 async function loadUserWatched(user: string) {
-  return (await readSQLiteJSON(`watched_${user}`)) || [];
+  const userKey = (user || 'guest').toLowerCase().trim();
+  const dbData = await readSQLiteJSON(`watched_${userKey}`);
+  if (dbData && Array.isArray(dbData)) return dbData;
+
+  const filePaths = [
+    path.join(process.cwd(), 'data', 'watched', `${userKey}.json`),
+    path.join(process.cwd(), 'watched', `${userKey}.json`)
+  ];
+  for (const fp of filePaths) {
+    if (fs.existsSync(fp)) {
+      try {
+        const raw = fs.readFileSync(fp, 'utf8').trim();
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            await writeSQLiteJSON(`watched_${userKey}`, list);
+            return list;
+          }
+        }
+      } catch(e) {}
+    }
+  }
+
+  return [];
 }
+
 async function saveUserWatched(user: string, list: any[]) {
-  await writeSQLiteJSON(`watched_${user}`, list);
+  const userKey = (user || 'guest').toLowerCase().trim();
+  await writeSQLiteJSON(`watched_${userKey}`, list);
+
+  try {
+    const dataDir = path.join(process.cwd(), 'data', 'watched');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(path.join(dataDir, `${userKey}.json`), JSON.stringify(list, null, 2), 'utf8');
+
+    const legacyDir = path.join(process.cwd(), 'watched');
+    if (!fs.existsSync(legacyDir)) fs.mkdirSync(legacyDir, { recursive: true });
+    fs.writeFileSync(path.join(legacyDir, `${userKey}.json`), JSON.stringify(list, null, 2), 'utf8');
+  } catch(e) {}
 }
 
 // Downloads Tracking Storage

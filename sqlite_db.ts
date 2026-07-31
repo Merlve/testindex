@@ -88,6 +88,33 @@ export async function initSQLiteDB() {
     console.error(`Failed to migrate recommendations:`, e);
   }
 
+  const watchedDirs = [
+    path.join(process.cwd(), 'watched'),
+    path.join(process.cwd(), 'data', 'watched')
+  ];
+  for (const wDir of watchedDirs) {
+    try {
+      if (fs.existsSync(wDir) && fs.statSync(wDir).isDirectory()) {
+        const files = fs.readdirSync(wDir);
+        for (const f of files) {
+          if (f.endsWith('.json')) {
+            const userId = f.replace('.json', '').toLowerCase().trim();
+            const p = path.join(wDir, f);
+            if (fs.statSync(p).isFile()) {
+              const data = JSON.parse(fs.readFileSync(p, 'utf8').trim() || '[]');
+              if (Array.isArray(data)) {
+                await writeSQLiteJSON(`watched_${userId}`, data);
+              }
+            }
+          }
+        }
+        console.log(`Migrated watched items from ${wDir} to SQLite`);
+      }
+    } catch(e) {
+      console.error(`Failed to migrate watched items from ${wDir}:`, e);
+    }
+  }
+
   await writeSQLiteJSON('_migration_complete', true);
 }
 

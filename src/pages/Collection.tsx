@@ -176,7 +176,20 @@ export default function Collection() {
   const [minRating, setMinRating] = useState<string>('Any');
   const [minVotes, setMinVotes] = useState<string>('Any');
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'title' | 'year' | 'runtime'>('default');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('collection_view_mode');
+      if (saved === 'grid' || saved === 'list') return saved;
+    }
+    return 'grid';
+  });
+
+  const handleSetViewMode = (mode: 'list' | 'grid') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('collection_view_mode', mode);
+    } catch (e) {}
+  };
   const [dimWatched, setDimWatched] = useState(false);
 
   // Provider Search Modal State
@@ -693,17 +706,17 @@ export default function Collection() {
           <div className="flex items-center gap-3">
             
             {/* Layout Toggle (List vs Grid) */}
-            <div className="flex items-center bg-white dark:bg-neutral-900 rounded-xl p-1 border border-black/10 dark:border-white/10">
+            <div className="flex items-center bg-black/5 dark:bg-white/10 backdrop-blur-md rounded-xl p-1 border border-black/10 dark:border-white/10 shadow-sm">
               <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-black dark:hover:text-white'}`}
+                onClick={() => handleSetViewMode('list')}
+                className={`p-1.5 rounded-lg transition-all duration-200 ${viewMode === 'list' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10'}`}
                 title="List View"
               >
                 <List size={16} />
               </button>
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-black dark:hover:text-white'}`}
+                onClick={() => handleSetViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-all duration-200 ${viewMode === 'grid' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10'}`}
                 title="Grid View"
               >
                 <Grid size={16} />
