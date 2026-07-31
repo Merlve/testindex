@@ -531,9 +531,8 @@ export default function Layout() {
                        <Library size={20} />
                        <span>Collections</span>
                      </button>
-                     <button onClick={() => setSearchOpen(true)} className="flex items-center justify-center h-10 px-3.5 md:h-12 md:px-4 rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 shrink-0 gap-2 font-semibold text-sm" title="Search">
+                     <button onClick={() => setSearchOpen(true)} className="flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 shrink-0" title="Search">
                        <Search size={20} />
-                       <span>Search</span>
                      </button>
                    </motion.div>
                  )}
