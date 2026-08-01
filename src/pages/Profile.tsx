@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
   User, 
@@ -28,11 +29,15 @@ import {
   Clock3,
   Download,
   Trophy,
-  Flame
+  Flame,
+  Search,
+  X,
+  Check,
+  Eye
 } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import Loader from '../components/Loader';
-import { parseMediaName } from '../utils/nameParser';
+import { parseMediaName, extractFileMetadata } from '../utils/nameParser';
 
 interface RecentlyBrowsedItem {
   item: { name: string };
@@ -45,15 +50,19 @@ interface RecentlyBrowsedItem {
 export default function Profile() {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [watchedList, setWatchedList] = useState<any[]>([]);
   const [recentlyBrowsed, setRecentlyBrowsed] = useState<RecentlyBrowsedItem[]>([]);
   const [expirationDate, setExpirationDate] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'top_downloads' | 'watchlist' | 'history' | 'account'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'top_downloads' | 'watchlist' | 'watched' | 'history' | 'account'>('overview');
+  const [watchedFilter, setWatchedFilter] = useState<'all' | 'movie' | 'show' | 'episode'>('all');
+  const [watchedSearchQuery, setWatchedSearchQuery] = useState('');
   const [inactivityTimeout, setInactivityTimeout] = useState<number>(0);
   const [topDownloads, setTopDownloads] = useState<any[]>([]);
   const [totalTracked, setTotalTracked] = useState<number>(0);
@@ -63,19 +72,23 @@ export default function Profile() {
     setRefreshing(true);
     try {
       // Parallel requests for all user metrics
-      const [watchlistRes, recsRes, configRes, expirationsRes, meRes, topDownloadsRes] = await Promise.all([
+      const [watchlistRes, recsRes, configRes, expirationsRes, meRes, topDownloadsRes, watchedRes] = await Promise.all([
         axios.get('/api/watchlist', { headers: { 'x-user': user || '', Authorization: token || '' } }).catch(() => ({ data: [] })),
         axios.get('/api/recommendations', { headers: { Authorization: token || '', 'x-user': user || '' } }).catch(() => ({ data: [] })),
         axios.get('/api/config').catch(() => ({ data: {} })),
         axios.get(`/api/users/expirations?t=${Date.now()}`, { headers: { Authorization: token || '' } }).catch(() => ({ data: {} })),
         axios.get('/api/auth/me', { headers: { Authorization: token || '' } }).catch(() => ({ data: null })),
-        axios.get('/api/downloads/top').catch(() => ({ data: { topDownloads: [], totalTracked: 0 } }))
+        axios.get('/api/downloads/top').catch(() => ({ data: { topDownloads: [], totalTracked: 0 } })),
+        axios.get('/api/watched', { headers: { 'x-user': user || '', Authorization: token || '' } }).catch(() => ({ data: [] }))
       ]);
 
       setWatchlist(watchlistRes.data || []);
       setRecommendations(recsRes.data?.results || []);
       setTopDownloads(topDownloadsRes.data?.topDownloads || []);
       setTotalTracked(topDownloadsRes.data?.totalTracked || 0);
+
+      const rawWatched = Array.isArray(watchedRes.data) ? watchedRes.data : (watchedRes.data?.watched || []);
+      setWatchedList(rawWatched);
 
       if (configRes.data && configRes.data.inactivityTimeout) {
         setInactivityTimeout(configRes.data.inactivityTimeout);
@@ -250,6 +263,254 @@ export default function Profile() {
     return null;
   }, [user]);
 
+  const handleRemoveWatched = async (item: { rawName: string; parentPath: string }) => {
+    try {
+      const res = await axios.post('/api/watched/toggle', {
+        name: item.rawName,
+        parentPath: item.parentPath
+      }, {
+        headers: { Authorization: token || '', 'x-user': user || '' }
+      });
+      const updated = Array.isArray(res.data) ? res.data : (res.data?.watched || []);
+      setWatchedList(updated);
+      queryClient.setQueryData(['watched-list', user], updated);
+      queryClient.invalidateQueries({ queryKey: ['watched-list', user] });
+    } catch (err) {
+      console.error('Failed to toggle watched item:', err);
+    }
+  };
+
+  const [episodeTmdbMap, setEpisodeTmdbMap] = useState<Record<string, { episodes: any[]; poster_path?: string }>>({});
+
+  const classifiedWatchedList = useMemo(() => {
+    if (!Array.isArray(watchedList)) return [];
+
+    return watchedList.map((entry) => {
+      const rawName = entry.name || '';
+      const parentPath = entry.parentPath || '';
+      const fullPathLower = `${parentPath}/${rawName}`.toLowerCase();
+
+      const isEpisodePattern = /s\d+e\d+|\be\d+\b|\bep\d+|episode/i.test(rawName) || /season\s*\d+/i.test(parentPath);
+      const isShowFolder = fullPathLower.includes('series') || fullPathLower.includes('tv') || fullPathLower.includes('show') || fullPathLower.includes('anime');
+
+      let type: 'movie' | 'show' | 'episode' = 'movie';
+      if (isEpisodePattern) {
+        type = 'episode';
+      } else if (isShowFolder) {
+        type = 'show';
+      } else {
+        type = 'movie';
+      }
+
+      const parentParts = parentPath.split('/').filter(Boolean);
+      let subtitle = '';
+      if (type === 'episode') {
+        if (parentParts.length >= 2) {
+          subtitle = parentParts.slice(-2).join(' • ');
+        } else if (parentParts.length === 1) {
+          subtitle = parentParts[0];
+        }
+      } else if (parentParts.length > 0 && parentParts[parentParts.length - 1] !== 'Movies') {
+        subtitle = parentParts[parentParts.length - 1];
+      }
+
+      const { cleanName, year: parsedYear } = parseMediaName(rawName);
+      const title = cleanName || rawName;
+
+      // Extract detailed episode info for TMDB matching
+      let episodeInfo: { showTitle: string; seasonNum: number; episodeNum: number | null } | null = null;
+      if (type === 'episode') {
+        const fileMeta = extractFileMetadata(rawName);
+        let seasonNum = fileMeta.seasonNum;
+        let episodeNum = fileMeta.episodeNum;
+
+        // 1. Try extracting show title directly from filename before SxxExx pattern
+        let extractedShowTitle = '';
+        const sEPattern = /[sS](\d{1,2})[eE](\d{1,3})/i.exec(rawName) || /[sS](\d{1,2})[\s\-]+[eE]?\s*(\d{1,3})/i.exec(rawName) || /\b(\d{1,2})x(\d{1,3})\b/i.exec(rawName);
+        if (sEPattern) {
+          if (seasonNum === null) seasonNum = parseInt(sEPattern[1], 10);
+          if (episodeNum === null) episodeNum = parseInt(sEPattern[2], 10);
+          const prefix = rawName.substring(0, sEPattern.index).trim();
+          if (prefix.length >= 2) {
+            const { cleanName } = parseMediaName(prefix);
+            if (cleanName && cleanName !== 'Unknown') {
+              extractedShowTitle = cleanName;
+            }
+          }
+        }
+
+        // 2. If not found in filename prefix, check parent directory structure
+        if (!extractedShowTitle) {
+          let seasonFolderIdx = -1;
+          for (let i = parentParts.length - 1; i >= 0; i--) {
+            const part = parentParts[i];
+            const match = /^(season\s*(\d+)|s(\d+)|specials?)$/i.exec(part);
+            if (match) {
+              seasonFolderIdx = i;
+              if (seasonNum === null) {
+                if (match[2]) seasonNum = parseInt(match[2], 10);
+                else if (match[3]) seasonNum = parseInt(match[3], 10);
+                else if (/special/i.test(part)) seasonNum = 0;
+              }
+              break;
+            }
+          }
+
+          let rawShowName = '';
+          if (seasonFolderIdx > 0) {
+            rawShowName = parentParts[seasonFolderIdx - 1];
+          } else if (parentParts.length > 0) {
+            const lastPart = parentParts[parentParts.length - 1];
+            if (!['movies', 'downloads', 'tv shows', 'shows'].includes(lastPart.toLowerCase())) {
+              rawShowName = lastPart;
+            }
+          }
+
+          if (rawShowName) {
+            const { cleanName } = parseMediaName(rawShowName);
+            extractedShowTitle = cleanName;
+          }
+        }
+
+        if (seasonNum === null) seasonNum = 1;
+
+        if (!extractedShowTitle) {
+          const { cleanName } = parseMediaName(rawName);
+          extractedShowTitle = cleanName;
+        }
+
+        episodeInfo = {
+          showTitle: extractedShowTitle || 'TV Show',
+          seasonNum,
+          episodeNum
+        };
+      }
+
+      const sanitizedPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+      const linkUrl = `/${sanitizedPath.split('/').map(p => encodeURIComponent(p)).join('/')}`;
+
+      return {
+        rawName,
+        parentPath,
+        title,
+        subtitle,
+        year: parsedYear,
+        type,
+        episodeInfo,
+        timestamp: entry.timestamp,
+        linkUrl
+      };
+    });
+  }, [watchedList]);
+
+  // Async effect to fetch TMDB episode metadata for watched episodes
+  useEffect(() => {
+    if (!classifiedWatchedList || classifiedWatchedList.length === 0) return;
+
+    const episodeItems = classifiedWatchedList.filter(
+      (i) => i.type === 'episode' && i.episodeInfo?.showTitle && i.episodeInfo?.seasonNum !== null
+    );
+
+    if (episodeItems.length === 0) return;
+
+    const neededKeys = Array.from(
+      new Set(episodeItems.map((i) => `${i.episodeInfo!.showTitle.toLowerCase()}::${i.episodeInfo!.seasonNum}`))
+    );
+
+    neededKeys.forEach(async (key) => {
+      if (episodeTmdbMap[key]) return;
+
+      const [showTitleLower, seasonStr] = key.split('::');
+      const seasonNum = parseInt(seasonStr, 10);
+      const matchItem = episodeItems.find(
+        (i) => i.episodeInfo!.showTitle.toLowerCase() === showTitleLower && i.episodeInfo!.seasonNum === seasonNum
+      );
+      if (!matchItem) return;
+
+      try {
+        const searchRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(matchItem.episodeInfo!.showTitle)}&type=tv`);
+        const showObj = searchRes.data?.results ? searchRes.data.results[0] : searchRes.data;
+        if (showObj?.id) {
+          const tvId = showObj.id;
+          const seasonRes = await axios.get(`/api/meta/tv_season?tvId=${tvId}&season=${seasonNum}`);
+          if (seasonRes.data && Array.isArray(seasonRes.data.episodes)) {
+            setEpisodeTmdbMap((prev) => ({
+              ...prev,
+              [key]: {
+                episodes: seasonRes.data.episodes,
+                poster_path: seasonRes.data.poster_path || showObj.poster_path
+              }
+            }));
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to fetch TMDB season metadata for ${key}`, err);
+      }
+    });
+  }, [classifiedWatchedList]);
+
+  // Helper to resolve TMDB metadata with filename fallback for a watched item
+  const getWatchedDisplayItem = (item: any) => {
+    if (item.type === 'episode' && item.episodeInfo) {
+      const key = `${item.episodeInfo.showTitle.toLowerCase()}::${item.episodeInfo.seasonNum}`;
+      const seasonTmdb = episodeTmdbMap[key];
+      let epTmdb = seasonTmdb?.episodes?.find((e: any) => e.episode_number === item.episodeInfo.episodeNum);
+      if (!epTmdb && item.episodeInfo.episodeNum && seasonTmdb?.episodes && seasonTmdb.episodes[item.episodeInfo.episodeNum - 1]) {
+        epTmdb = seasonTmdb.episodes[item.episodeInfo.episodeNum - 1];
+      }
+
+      if (epTmdb) {
+        const epNumStr = item.episodeInfo.episodeNum ? `E${item.episodeInfo.episodeNum < 10 ? '0' : ''}${item.episodeInfo.episodeNum}` : '';
+        const seasonNumStr = item.episodeInfo.seasonNum !== null ? `S${item.episodeInfo.seasonNum < 10 ? '0' : ''}${item.episodeInfo.seasonNum}` : '';
+        const codePrefix = seasonNumStr && epNumStr ? `${seasonNumStr}${epNumStr}` : (epNumStr || seasonNumStr);
+
+        const episodeTitle = epTmdb.name ? (codePrefix ? `${codePrefix} - ${epTmdb.name}` : epTmdb.name) : item.title;
+
+        return {
+          ...item,
+          displayTitle: episodeTitle,
+          displaySubtitle: `${item.episodeInfo.showTitle}${item.episodeInfo.seasonNum !== null ? ` • Season ${item.episodeInfo.seasonNum}` : ''}`,
+          stillUrl: epTmdb.still_path ? `https://image.tmdb.org/t/p/w500${epTmdb.still_path}` : (seasonTmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${seasonTmdb.poster_path}` : null),
+          overview: epTmdb.overview || null,
+          airDate: epTmdb.air_date || null,
+          hasTmdbMeta: true
+        };
+      }
+    }
+
+    // Fallback if no TMDB metadata or for non-episodes
+    return {
+      ...item,
+      displayTitle: item.type === 'episode' ? item.rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "") : item.title,
+      displaySubtitle: item.subtitle,
+      stillUrl: null,
+      overview: null,
+      airDate: null,
+      hasTmdbMeta: false
+    };
+  };
+
+  const watchedStats = useMemo(() => {
+    const total = classifiedWatchedList.length;
+    const movies = classifiedWatchedList.filter(i => i.type === 'movie').length;
+    const shows = classifiedWatchedList.filter(i => i.type === 'show').length;
+    const episodes = classifiedWatchedList.filter(i => i.type === 'episode').length;
+    return { total, movies, shows, episodes };
+  }, [classifiedWatchedList]);
+
+  const filteredWatchedList = useMemo(() => {
+    return classifiedWatchedList.filter((item) => {
+      const displayItem = getWatchedDisplayItem(item);
+      const matchesFilter = watchedFilter === 'all' || item.type === watchedFilter;
+      const q = watchedSearchQuery.toLowerCase().trim();
+      const matchesSearch = !q || 
+        displayItem.displayTitle.toLowerCase().includes(q) || 
+        displayItem.displaySubtitle.toLowerCase().includes(q) || 
+        item.rawName.toLowerCase().includes(q);
+      return matchesFilter && matchesSearch;
+    });
+  }, [classifiedWatchedList, watchedFilter, watchedSearchQuery, episodeTmdbMap]);
+
   const renderTextMediaList = (items: any[], limit?: number) => {
     const displayItems = limit ? items.slice(0, limit) : items;
 
@@ -309,7 +570,30 @@ export default function Profile() {
     );
   };
 
-  if (loading) return <Loader />;
+  if (loading) {
+    return (
+      <div className="p-3 sm:p-6 md:p-10 max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-28 animate-pulse">
+        {/* Top Banner Skeleton */}
+        <div className="rounded-2xl sm:rounded-3xl border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 p-4 sm:p-7 md:p-9 h-32 sm:h-40" />
+
+        {/* Tabs Skeleton */}
+        <div className="flex gap-2 py-1 border-b border-black/5 dark:border-white/10 mb-6 overflow-x-auto no-scrollbar">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-9 w-24 bg-black/10 dark:bg-white/10 rounded-xl shrink-0" />
+          ))}
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="space-y-6">
+          <div className="h-64 rounded-2xl sm:rounded-3xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            <div className="h-48 rounded-2xl sm:rounded-3xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10" />
+            <div className="h-48 rounded-2xl sm:rounded-3xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div 
@@ -435,6 +719,16 @@ export default function Profile() {
             </button>
           )}
           <button 
+            onClick={() => setActiveTab('watched')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap min-h-[38px] ${
+              activeTab === 'watched' 
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' 
+                : 'bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-black/10 dark:hover:bg-white/20'
+            }`}
+          >
+            <CheckCircle2 size={15} /> Watched ({classifiedWatchedList.length})
+          </button>
+          <button 
             onClick={() => setActiveTab('watchlist')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap min-h-[38px] ${
               activeTab === 'watchlist' 
@@ -523,6 +817,95 @@ export default function Profile() {
                 <Bookmark size={32} className="mx-auto text-gray-400 mb-2 opacity-50" />
                 <p className="text-sm font-bold text-black dark:text-white">Your watchlist is currently empty</p>
                 <p className="text-xs text-gray-500 mt-1">Bookmark movies and shows while browsing to save them here.</p>
+              </div>
+            )}
+          </section>
+
+          {/* Watched Media Overview */}
+          <section className="bg-white/80 dark:bg-[#12121a]/80 border border-black/5 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white flex items-center gap-2">
+                  <CheckCircle2 className="text-emerald-500 dark:text-emerald-400 shrink-0" size={20} />
+                  <span>My Watched Media</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  You have marked <span className="font-bold text-emerald-500 dark:text-emerald-400">{watchedStats.total} items</span> as watched.
+                </p>
+              </div>
+              <button 
+                onClick={() => setActiveTab('watched')} 
+                className="px-3.5 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 transition shadow-lg shadow-purple-600/20 flex items-center gap-1.5 self-start sm:self-auto min-h-[36px] cursor-pointer"
+              >
+                <span>View All Watched</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+            {/* Watched Breakdown Pills */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="bg-black/5 dark:bg-white/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-black/5 dark:border-white/5">
+                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-500 font-semibold mb-0.5">
+                  <Film size={14} className="text-purple-400 shrink-0" /> Movies
+                </div>
+                <div className="text-xl sm:text-2xl font-bold text-black dark:text-white">{watchedStats.movies}</div>
+              </div>
+              <div className="bg-black/5 dark:bg-white/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-black/5 dark:border-white/5">
+                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-500 font-semibold mb-0.5">
+                  <Tv size={14} className="text-blue-400 shrink-0" /> TV Shows
+                </div>
+                <div className="text-xl sm:text-2xl font-bold text-black dark:text-white">{watchedStats.shows}</div>
+              </div>
+              <div className="bg-black/5 dark:bg-white/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-black/5 dark:border-white/5">
+                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-500 font-semibold mb-0.5">
+                  <Clapperboard size={14} className="text-emerald-400 shrink-0" /> Episodes
+                </div>
+                <div className="text-xl sm:text-2xl font-bold text-black dark:text-white">{watchedStats.episodes}</div>
+              </div>
+            </div>
+
+            {/* Watched Items Preview Strip */}
+            {classifiedWatchedList.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                {classifiedWatchedList.slice(0, 6).map((rawItem, idx) => {
+                  const item = getWatchedDisplayItem(rawItem);
+                  return (
+                    <div key={idx} className="flex items-center justify-between gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 hover:border-purple-500/30 transition">
+                      <Link to={item.linkUrl} className="flex items-center gap-2.5 min-w-0 flex-1 group">
+                        {item.stillUrl ? (
+                          <img src={item.stillUrl} alt={item.displayTitle} className="w-12 h-8 rounded-lg object-cover shrink-0 border border-black/10 dark:border-white/10" />
+                        ) : item.type === 'movie' ? (
+                          <Film size={15} className="text-purple-500 dark:text-purple-400 shrink-0" />
+                        ) : item.type === 'show' ? (
+                          <Tv size={15} className="text-blue-500 dark:text-blue-400 shrink-0" />
+                        ) : (
+                          <Clapperboard size={15} className="text-emerald-500 dark:text-emerald-400 shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs sm:text-sm font-bold text-black dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-300 transition">
+                            {item.displayTitle}
+                          </div>
+                          {item.displaySubtitle && (
+                            <div className="text-[10px] text-gray-500 truncate">{item.displaySubtitle}</div>
+                          )}
+                        </div>
+                      </Link>
+                      <button
+                        onClick={() => handleRemoveWatched(item)}
+                        title="Mark as unwatched"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition shrink-0 cursor-pointer"
+                      >
+                        <CheckCircle2 size={16} className="text-emerald-500 hover:opacity-75" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+                <CheckCircle2 size={32} className="mx-auto text-gray-400 mb-2 opacity-50" />
+                <p className="text-sm font-bold text-black dark:text-white">No watched items yet</p>
+                <p className="text-xs text-gray-500 mt-1">Mark items as watched while browsing to track your progress here.</p>
               </div>
             )}
           </section>
@@ -718,6 +1101,205 @@ export default function Profile() {
                         />
                       </div>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* TAB CONTENT: WATCHED TAB */}
+      {activeTab === 'watched' && (
+        <section className="bg-white/80 dark:bg-[#12121a]/80 border border-black/5 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-500 dark:text-emerald-400 shrink-0" size={22} />
+                <span>Watched Library ({classifiedWatchedList.length})</span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Movies, TV shows, and episodes you have marked as watched.
+              </p>
+            </div>
+
+            {/* Summary Chips */}
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold">
+                {watchedStats.movies} Movies
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
+                {watchedStats.shows} Shows
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
+                {watchedStats.episodes} Episodes
+              </span>
+            </div>
+          </div>
+
+          {/* Filter & Search Bar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2 border-t border-black/5 dark:border-white/5">
+            {/* Category Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
+              <button
+                onClick={() => setWatchedFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  watchedFilter === 'all'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                    : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                All ({watchedStats.total})
+              </button>
+              <button
+                onClick={() => setWatchedFilter('movie')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  watchedFilter === 'movie'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                    : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <Film size={13} /> Movies ({watchedStats.movies})
+              </button>
+              <button
+                onClick={() => setWatchedFilter('show')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  watchedFilter === 'show'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                    : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <Tv size={13} /> Shows ({watchedStats.shows})
+              </button>
+              <button
+                onClick={() => setWatchedFilter('episode')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  watchedFilter === 'episode'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                    : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <Clapperboard size={13} /> Episodes ({watchedStats.episodes})
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative w-full md:w-64">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={watchedSearchQuery}
+                onChange={(e) => setWatchedSearchQuery(e.target.value)}
+                placeholder="Search watched media..."
+                className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-black dark:text-white focus:outline-none focus:border-purple-500/50 transition"
+              />
+              {watchedSearchQuery && (
+                <button
+                  onClick={() => setWatchedSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white p-0.5 rounded-full"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Items List Grid */}
+          {filteredWatchedList.length === 0 ? (
+            <div className="text-center py-16 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5 space-y-2">
+              <CheckCircle2 size={36} className="mx-auto text-gray-400 opacity-50" />
+              <h4 className="text-sm font-bold text-black dark:text-white">
+                {watchedSearchQuery ? 'No matching watched items found' : 'No watched items in this category'}
+              </h4>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                {watchedSearchQuery
+                  ? 'Try adjusting your search query or clear filters.'
+                  : 'Mark items as watched while browsing movies, TV shows, and episodes.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredWatchedList.map((rawItem, idx) => {
+                const item = getWatchedDisplayItem(rawItem);
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-start justify-between gap-3 p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 hover:border-purple-500/30 hover:bg-purple-500/5 transition-all group shadow-sm"
+                  >
+                    <Link to={item.linkUrl} className="flex items-start gap-3 min-w-0 flex-1">
+                      {item.stillUrl ? (
+                        <div className="relative shrink-0 w-20 h-14 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/20">
+                          <img src={item.stillUrl} alt={item.displayTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition" />
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5">
+                          {item.type === 'movie' ? (
+                            <Film size={18} />
+                          ) : item.type === 'show' ? (
+                            <Tv size={18} />
+                          ) : (
+                            <Clapperboard size={18} />
+                          )}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs sm:text-sm font-bold text-black dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-300 transition line-clamp-1">
+                            {item.displayTitle}
+                          </span>
+                          {item.year && !item.hasTmdbMeta && (
+                            <span className="text-[10px] font-extrabold text-purple-700 dark:text-purple-300 bg-purple-500/15 px-1.5 py-0.2 rounded shrink-0">
+                              {`{${item.year}}`}
+                            </span>
+                          )}
+                          {item.hasTmdbMeta && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.2 rounded shrink-0">
+                              TMDB
+                            </span>
+                          )}
+                        </div>
+                        {item.displaySubtitle && (
+                          <div className="text-[11px] text-gray-500 truncate mt-0.5">
+                            {item.displaySubtitle}
+                          </div>
+                        )}
+                        {item.overview && (
+                          <p className="text-[11px] text-gray-400 line-clamp-2 mt-1 leading-relaxed">
+                            {item.overview}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                            item.type === 'movie'
+                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                              : item.type === 'show'
+                              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                          }`}>
+                            {item.type}
+                          </span>
+                          {item.airDate && (
+                            <span className="text-[10px] text-gray-400">
+                              Aired {new Date(item.airDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
+                          {item.timestamp && (
+                            <span className="text-[10px] text-gray-400 font-mono">
+                              Watched {new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+
+                    <button
+                      onClick={() => handleRemoveWatched(item)}
+                      title="Mark as unwatched"
+                      className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-red-500/10 text-emerald-500 hover:text-red-500 transition shrink-0 cursor-pointer border border-transparent hover:border-red-500/20"
+                    >
+                      <CheckCircle2 size={18} />
+                    </button>
                   </div>
                 );
               })}

@@ -1447,7 +1447,8 @@ app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) =>
 
   try {
     const typeStr = (type as string || '').toUpperCase();
-    let searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(typeStr) ? 'tv' : 'movie';
+    const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t) || t.includes('TV') || t.includes('SHOW') || t.includes('SERIES');
+    let searchType = isTvType(typeStr) ? 'tv' : 'movie';
     if (forceType && (forceType === 'movie' || forceType === 'tv')) {
        searchType = forceType;
     }
@@ -1623,7 +1624,8 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
 
   try {
     const typeStr = (type as string || '').toUpperCase();
-    const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(typeStr) ? 'tv' : 'movie';
+    const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t) || t.includes('TV') || t.includes('SHOW') || t.includes('SERIES');
+    const searchType = isTvType(typeStr) ? 'tv' : 'movie';
     
     let data: any = { results: [] };
     if (tmdbId) {

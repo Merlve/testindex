@@ -400,9 +400,6 @@ export default function Layout() {
             <NavLink to="/" end onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
               <Home size={20} className="shrink-0" /> <span>Home</span>
             </NavLink>
-            <button onClick={() => { setSearchOpen(true); setSidebarOpen(false); }} className="w-full flex items-center gap-3 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent transition-all cursor-pointer justify-start px-4">
-              <Search size={20} className="shrink-0" /> <span>Search</span>
-            </button>
             <NavLink to="/collections" onClick={() => setSidebarOpen(false)} className={({isActive}) => `flex items-center gap-3 py-3 rounded-xl transition-all justify-start px-4 ${isActive ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-transparent'}`}>
               <Library size={20} className="shrink-0" /> <span>Collections</span>
             </NavLink>
