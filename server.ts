@@ -22,21 +22,22 @@ const _dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(_fi
 
 
 // --- In-Memory Cache Implementation ---
-import { LRUCache } from 'lru-cache';
-
 class MemoryCache {
-  private cache: LRUCache<string, any>;
+  private cache = new Map<string, { data: any, expiry: number }>();
+  private sweepInterval: any;
 
   constructor() {
-    this.cache = new LRUCache({
-      max: 500, // Maximum number of items in cache
-      ttl: 1000 * 60 * 60, // Default TTL (1 hour)
-    });
+    this.sweepInterval = setInterval(() => this.sweep(), 60000);
   }
 
   get(key: string): any | null {
-    const data = this.cache.get(key);
-    return data !== undefined ? data : null;
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiry) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.data;
   }
 
   clear() {
@@ -44,11 +45,31 @@ class MemoryCache {
   }
 
   set(key: string, data: any, ttlSeconds: number) {
-    this.cache.set(key, data, { ttl: ttlSeconds * 1000 });
+    this.cache.set(key, {
+      data,
+      expiry: Date.now() + ttlSeconds * 1000
+    });
+    
+    // Max items limit (naive LRU-ish behavior)
+    if (this.cache.size > 500) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) {
+         this.cache.delete(firstKey);
+      }
+    }
   }
 
   delete(key: string) {
     this.cache.delete(key);
+  }
+  
+  private sweep() {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expiry) {
+        this.cache.delete(key);
+      }
+    }
   }
 }
 
