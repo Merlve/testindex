@@ -869,6 +869,7 @@ export default function Details() {
         setSearchResults([]);
         clearRecommendationsCache();
         queryClient.invalidateQueries();
+        queryClient.resetQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }
@@ -894,6 +895,7 @@ export default function Details() {
         setCustomTitle('');
         clearRecommendationsCache();
         queryClient.invalidateQueries();
+        queryClient.resetQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }

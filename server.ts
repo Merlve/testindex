@@ -251,6 +251,45 @@ async function saveDb() {
   await writeSQLiteJSON('db', tmdbCache);
 }
 
+function findOverriddenMetadata(query?: string, type?: string, tmdbId?: string | number): any | null {
+  if (!query && !tmdbId) return null;
+  const cleanQuery = (query || '').toLowerCase().trim();
+  const tmdbIdStr = tmdbId ? String(tmdbId) : null;
+  
+  for (const k of Object.keys(tmdbCache)) {
+    const item = tmdbCache[k];
+    if (!item || !item._overridden) continue;
+    
+    // 1. Match by explicit TMDB ID
+    if (tmdbIdStr && item.id && String(item.id) === tmdbIdStr) {
+      return item;
+    }
+    
+    if (cleanQuery) {
+      // 2. Match by stored _override_query
+      if (item._override_query && item._override_query === cleanQuery) {
+        return item;
+      }
+      
+      // 3. Match by key substring or suffix or prefix
+      const kLower = k.toLowerCase();
+      if (kLower.endsWith(`-${cleanQuery}`) || 
+          kLower.includes(`-${cleanQuery}-`) || 
+          kLower === cleanQuery || 
+          kLower.includes(cleanQuery)) {
+        return item;
+      }
+      
+      // 4. Match by title or name
+      if ((item.title && item.title.toLowerCase().trim() === cleanQuery) ||
+          (item.name && item.name.toLowerCase().trim() === cleanQuery)) {
+        return item;
+      }
+    }
+  }
+  return null;
+}
+
 
 // Library Index Cache for fast genre searching
 let libraryIndex: any[] = [];
@@ -1641,9 +1680,9 @@ app.get('/api/meta/search', cacheMiddleware(3600, false), async (req, res) => {
   const baseKey = `${type}-${baseQuery}`;
   
   // ALWAYS prioritize manually overridden items
-  const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
-  if (overriddenKey) {
-    return res.json(tmdbCache[overriddenKey]);
+  const overridden = findOverriddenMetadata(baseQuery, type as string, tmdbId as string);
+  if (overridden) {
+    return res.json(overridden);
   }
 
   const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
@@ -2463,24 +2502,32 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
   if (!query || (!tmdbId && !customTitle)) return res.status(400).json({ error: 'Invalid data' });
   
   try {
-    const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
-    const baseKey = `${type}-${query.toLowerCase().trim()}`;
+    const cleanQ = query.toLowerCase().trim();
+    const cacheKey = `${type}-${cleanQ}${year ? `-${year}` : ''}`;
+    const baseKey = `${type}-${cleanQ}`;
 
     // Clear server response cache so all GET queries get fresh data immediately
     apiCache.clear();
 
     if (customTitle && !tmdbId) {
       // Just override title in existing cache or create a mock
-      let data = tmdbCache[cacheKey] || {};
+      let data = tmdbCache[cacheKey] || tmdbCache[baseKey] || {};
       data.title = customTitle;
       data.name = customTitle; // tv uses name
       data._overridden = true;
+      data._override_query = cleanQ;
+      
       tmdbCache[cacheKey] = data;
       tmdbCache[baseKey] = data;
+      tmdbCache[`SERIES-${cleanQ}`] = data;
+      tmdbCache[`MOVIES-${cleanQ}`] = data;
+      tmdbCache[`tv-${cleanQ}`] = data;
+      tmdbCache[`movie-${cleanQ}`] = data;
+
       for (const key of Object.keys(tmdbCache)) {
-           if (key.startsWith(baseKey) || key.includes(query.toLowerCase().trim())) {
-               tmdbCache[key] = data;
-           }
+        if (key.startsWith(baseKey) || key.includes(cleanQ)) {
+          tmdbCache[key] = data;
+        }
       }
       saveDb();
       addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle})`);
@@ -2513,12 +2560,20 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
          data.name = customTitle;
        }
        data._overridden = true;
+       data._override_query = cleanQ;
+
        tmdbCache[cacheKey] = data;
        tmdbCache[baseKey] = data;
+       tmdbCache[`SERIES-${cleanQ}`] = data;
+       tmdbCache[`MOVIES-${cleanQ}`] = data;
+       tmdbCache[`tv-${cleanQ}`] = data;
+       tmdbCache[`movie-${cleanQ}`] = data;
+       if (data.id) tmdbCache[`id-${data.id}`] = data;
+
        for (const key of Object.keys(tmdbCache)) {
-           if (key.startsWith(baseKey) || key.includes(query.toLowerCase().trim())) {
-               tmdbCache[key] = data;
-           }
+         if (key.startsWith(baseKey) || key.includes(cleanQ) || (data.id && key.includes(String(data.id)))) {
+           tmdbCache[key] = data;
+         }
        }
        saveDb();
        addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
