@@ -2498,11 +2498,16 @@ app.post('/api/meta/correct', adminMiddleware, (req, res) => {
 
 // Admin override for TMDB by ID
 app.post('/api/meta/override', adminMiddleware, async (req, res) => {
-  const { query, type, year, tmdbId, customTitle } = req.body;
-  if (!query || (!tmdbId && !customTitle)) return res.status(400).json({ error: 'Invalid data' });
+  const { query, type, year, tmdbId, customTitle, rawName, jfName } = req.body;
+  if (!query && !rawName && !jfName) return res.status(400).json({ error: 'Invalid data' });
+  if (!tmdbId && !customTitle) return res.status(400).json({ error: 'Invalid data' });
   
   try {
-    const cleanQ = query.toLowerCase().trim();
+    const mainQ = query || jfName || rawName;
+    const cleanQ = mainQ.toLowerCase().trim();
+    const rawQ = (rawName || '').toLowerCase().trim();
+    const jfQ = (jfName || '').toLowerCase().trim();
+
     const cacheKey = `${type}-${cleanQ}${year ? `-${year}` : ''}`;
     const baseKey = `${type}-${cleanQ}`;
 
@@ -2517,20 +2522,37 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       data._overridden = true;
       data._override_query = cleanQ;
       
-      tmdbCache[cacheKey] = data;
-      tmdbCache[baseKey] = data;
-      tmdbCache[`SERIES-${cleanQ}`] = data;
-      tmdbCache[`MOVIES-${cleanQ}`] = data;
-      tmdbCache[`tv-${cleanQ}`] = data;
-      tmdbCache[`movie-${cleanQ}`] = data;
+      const targets = [cleanQ, rawQ, jfQ].filter(Boolean);
+      for (const qStr of targets) {
+        tmdbCache[`${type}-${qStr}`] = data;
+        tmdbCache[`SERIES-${qStr}`] = data;
+        tmdbCache[`MOVIES-${qStr}`] = data;
+        tmdbCache[`tv-${qStr}`] = data;
+        tmdbCache[`movie-${qStr}`] = data;
+      }
 
       for (const key of Object.keys(tmdbCache)) {
-        if (key.startsWith(baseKey) || key.includes(cleanQ)) {
+        if (targets.some(qStr => key.includes(qStr))) {
           tmdbCache[key] = data;
         }
       }
+
+      // Update recently added items in memory
+      try {
+        const recent = getLocalItems();
+        if (Array.isArray(recent)) {
+          for (const item of recent) {
+            const itemClean = (item.name || item._jf_name || '').toLowerCase();
+            if (targets.some(qStr => qStr && itemClean.includes(qStr))) {
+              if (item._jf) item._jf.title = customTitle;
+              item._tmdbData = data;
+            }
+          }
+        }
+      } catch (e) {}
+
       saveDb();
-      addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle})`);
+      addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${mainQ} (Custom title: ${customTitle})`);
       return res.json({ success: true, data });
     }
 
@@ -2562,21 +2584,44 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
        data._overridden = true;
        data._override_query = cleanQ;
 
-       tmdbCache[cacheKey] = data;
-       tmdbCache[baseKey] = data;
-       tmdbCache[`SERIES-${cleanQ}`] = data;
-       tmdbCache[`MOVIES-${cleanQ}`] = data;
-       tmdbCache[`tv-${cleanQ}`] = data;
-       tmdbCache[`movie-${cleanQ}`] = data;
-       if (data.id) tmdbCache[`id-${data.id}`] = data;
+       const targets = Array.from(new Set([cleanQ, rawQ, jfQ].filter(Boolean)));
+       for (const qStr of targets) {
+         tmdbCache[`${type}-${qStr}`] = data;
+         tmdbCache[`SERIES-${qStr}`] = data;
+         tmdbCache[`MOVIES-${qStr}`] = data;
+         tmdbCache[`tv-${qStr}`] = data;
+         tmdbCache[`movie-${qStr}`] = data;
+         if (year) tmdbCache[`${type}-${qStr}-${year}`] = data;
+       }
+       if (data.id) {
+         tmdbCache[`id-${data.id}`] = data;
+         tmdbCache[`id-${tmdbId}`] = data;
+       }
 
        for (const key of Object.keys(tmdbCache)) {
-         if (key.startsWith(baseKey) || key.includes(cleanQ) || (data.id && key.includes(String(data.id)))) {
+         if (targets.some(qStr => qStr && key.includes(qStr)) || (data.id && key.includes(String(data.id)))) {
            tmdbCache[key] = data;
          }
        }
+
+       // Update recently added items in memory so they reflect the new TMDB ID & poster immediately
+       try {
+         const recent = getLocalItems();
+         if (Array.isArray(recent)) {
+           for (const item of recent) {
+             const iName = (item.name || '').toLowerCase();
+             const iJfName = (item._jf_name || '').toLowerCase();
+             if (targets.some(qStr => qStr && (iName.includes(qStr) || iJfName.includes(qStr) || qStr.includes(iName) || qStr.includes(iJfName)))) {
+               if (!item._jf) item._jf = {};
+               item._jf.tmdbId = data.id || tmdbId;
+               item._tmdbData = data;
+             }
+           }
+         }
+       } catch (e) {}
+
        saveDb();
-       addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
+       addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${mainQ} with ID: ${tmdbId}`);
        return res.json({ success: true, data });
     }
     res.status(404).json({ error: 'Not found' });

@@ -25,9 +25,11 @@ export default function Watchlist() {
     const fetchWatchlist = async () => {
       try {
         const res = await axios.get('/api/watchlist', { headers: { 'x-user': user } });
-        setWatchlist(res.data || []);
+        const data = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.watchlist) ? res.data.watchlist : []);
+        setWatchlist(data);
       } catch (err) {
         console.error('Failed to load watchlist', err);
+        setWatchlist([]);
       } finally {
         setLoading(false);
       }
