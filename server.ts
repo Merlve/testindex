@@ -22,44 +22,33 @@ const _dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(_fi
 
 
 // --- In-Memory Cache Implementation ---
+import { LRUCache } from 'lru-cache';
+
 class MemoryCache {
-  private cache = new Map<string, { data: any, expiry: number }>();
-  private sweepInterval: NodeJS.Timeout;
+  private cache: LRUCache<string, any>;
 
   constructor() {
-    this.sweepInterval = setInterval(() => this.sweep(), 60000);
+    this.cache = new LRUCache({
+      max: 500, // Maximum number of items in cache
+      ttl: 1000 * 60 * 60, // Default TTL (1 hour)
+    });
   }
 
   get(key: string): any | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (Date.now() > entry.expiry) {
-      this.cache.delete(key);
-      return null;
-    }
-    return entry.data;
+    const data = this.cache.get(key);
+    return data !== undefined ? data : null;
   }
 
-  clear() { this.cache.clear(); }
+  clear() {
+    this.cache.clear();
+  }
 
   set(key: string, data: any, ttlSeconds: number) {
-    this.cache.set(key, {
-      data,
-      expiry: Date.now() + ttlSeconds * 1000
-    });
+    this.cache.set(key, data, { ttl: ttlSeconds * 1000 });
   }
 
   delete(key: string) {
     this.cache.delete(key);
-  }
-
-  private sweep() {
-    const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.expiry) {
-        this.cache.delete(key);
-      }
-    }
   }
 }
 
@@ -72,7 +61,9 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
     // Do not cache if client explicitly asks for refresh
     const forceRefresh = req.body?.refresh === true || req.query?.refresh === 'true' || req.query?.force === 'true';
 
-    const token = req.headers.authorization || '';
+    const authToken = req.headers.authorization || '';
+    const xUser = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || '';
+    const token = `${authToken}-${xUser}`;
 
     // Create normal body without refresh flags for standard cache key matching
     const normalBody = req.body ? { ...req.body } : {};
@@ -105,8 +96,12 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
     }
 
     const cachedData = forceRefresh ? null : apiCache.get(normalKey);
+    const cacheControlHeader = req.method === 'GET' 
+      ? `${isPrivate ? 'private' : 'public'}, max-age=${ttlSeconds}` 
+      : 'no-store';
+
     if (cachedData) {
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Cache-Control', cacheControlHeader);
       return res.json(cachedData);
     }
 
@@ -115,7 +110,7 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         apiCache.set(key, body, ttlSeconds);
         apiCache.set(normalKey, body, ttlSeconds);
-        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Cache-Control', cacheControlHeader);
       }
       return originalJson(body);
     });
@@ -473,7 +468,7 @@ app.post('/api/downloads/track', async (req, res) => {
   }
 });
 
-app.get('/api/downloads/top', async (req, res) => {
+app.get('/api/downloads/top', cacheMiddleware(120, false), async (req, res) => {
   try {
     const list = Object.values(downloadTracker || {});
     list.sort((a, b) => b.count - a.count || b.lastDownloaded - a.lastDownloaded);
@@ -506,6 +501,9 @@ app.post('/api/watchlist/toggle', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { item, category, parentPath } = req.body;
+  if (!item || typeof item !== 'object' || !item.name) return res.status(400).json({ error: 'Missing or invalid item object' });
+  if (typeof parentPath !== 'string') return res.status(400).json({ error: 'Missing or invalid parentPath' });
+
   const list = await loadUserWatchlist(user);
   
   const existingIndex = list.findIndex(i => i.item.name === item.name && i.parentPath === parentPath);
@@ -540,7 +538,8 @@ app.post('/api/watched/toggle', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { name, parentPath } = req.body;
-  if (!name || !parentPath) return res.status(400).json({ error: 'Missing name or parentPath' });
+  if (!name || typeof name !== 'string') return res.status(400).json({ error: 'Invalid or missing name' });
+  if (typeof parentPath !== 'string') return res.status(400).json({ error: 'Invalid or missing parentPath' });
 
   const list = await loadUserWatched(user);
   
@@ -562,6 +561,7 @@ app.post('/api/watched/bulk-toggle', async (req, res) => {
   
   const { items } = req.body; // Array of { name, parentPath }
   if (!items || !Array.isArray(items)) return res.status(400).json({ error: 'Missing items array' });
+  if (items.some(i => !i || typeof i.name !== 'string' || typeof i.parentPath !== 'string')) return res.status(400).json({ error: 'Invalid items in array' });
 
   const list = await loadUserWatched(user);
   
@@ -740,7 +740,7 @@ app.get('/api/recommendations', async (req, res) => {
 });
 
 // API: Config
-app.get('/api/config', (req, res) => {
+app.get('/api/config', cacheMiddleware(300, false), (req, res) => {
   res.json({
     openlistUrl: getOpenlistUrl(),
     basePath: appConfig.basePath,
@@ -752,6 +752,7 @@ app.post('/api/config', adminMiddleware, (req, res) => {
   if (req.body.basePath !== undefined) appConfig.basePath = req.body.basePath;
   if (req.body.inactivityTimeout !== undefined) appConfig.inactivityTimeout = Number(req.body.inactivityTimeout) || 0;
   saveConfig();
+  apiCache.clear();
   addLog('Config Updated', 'Admin', 'Updated application configuration settings.');
   res.json({ success: true, config: appConfig });
 });
@@ -872,7 +873,14 @@ async function syncLibraryToDatabase() {
           try {
              const response = await axios.get(url);
              if (response.data && response.data.results && response.data.results.length > 0) {
-                 tmdbCache[cacheKey] = response.data.results[0];
+                 let topResult = response.data.results[0];
+                 try {
+                     const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${topResult.id}?api_key=${tmdbKey}&append_to_response=credits`);
+                     if (detailRes.data) {
+                         topResult = detailRes.data;
+                     }
+                 } catch (err) {}
+                 tmdbCache[cacheKey] = topResult;
                  newItemsAdded = true;
              } else {
                  tmdbCache[cacheKey] = null;
@@ -924,6 +932,7 @@ app.get('/api/admin/logs', adminMiddleware, (req, res) => {
 
 app.post('/api/admin/log', adminMiddleware, async (req, res) => {
   const { action, username, details } = req.body;
+  if (!action || typeof action !== 'string' || !details || typeof details !== 'string') return res.status(400).json({ error: 'Invalid action or details' });
   addLog(action, username || 'System/Admin', details);
   res.json({ success: true });
 });
@@ -1041,6 +1050,7 @@ app.all('/api/admin/*', adminMiddleware, async (req, res) => {
 // API: Openlist Proxy - Login
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
+  if (!username || typeof username !== 'string' || !password || typeof password !== 'string') return res.status(400).json({ error: 'Username and password required' });
   try {
     await checkAndEnforceExpirations();
 
@@ -1164,6 +1174,7 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
     const isGuest = isValidGuest(token || '');
     if (isGuest) token = getOpenlistApiKey();
     let { reqPath, refresh } = req.body;
+    if (reqPath !== undefined && typeof reqPath !== 'string') return res.status(400).json({ error: 'Invalid reqPath' });
     reqPath = reqPath || appConfig.basePath;
     if (!reqPath.startsWith('/')) reqPath = '/' + reqPath;
     
@@ -1203,7 +1214,7 @@ app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
     const isGuest = isValidGuest(token || '');
     if (isGuest) token = getOpenlistApiKey();
     let { reqPath } = req.body;
-    if (!reqPath) return res.status(400).json({ error: 'Path required' });
+    if (!reqPath || typeof reqPath !== 'string') return res.status(400).json({ error: 'Path required and must be a string' });
     if (!reqPath.startsWith('/')) reqPath = '/' + reqPath;
 
     const normalizedPath = path.posix.normalize(reqPath);
@@ -1250,7 +1261,8 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
     const isGuest = isValidGuest(token || '');
     if (isGuest) token = getOpenlistApiKey();
     const { keywords, parent } = req.body;
-
+    if (!keywords || typeof keywords !== 'string') return res.status(400).json({ error: 'Keywords required' });
+    if (parent !== undefined && typeof parent !== 'string') return res.status(400).json({ error: 'Invalid parent path' });
     const targetParent = parent || appConfig.basePath;
     const normalizedPath = path.posix.normalize(targetParent);
     const basePathNorm = path.posix.normalize(appConfig.basePath);
@@ -1436,7 +1448,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
 });
 
 // API: TMDB Proxy with Cache
-app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) => {
+app.get('/api/meta/search_all', cacheMiddleware(3600, false), async (req, res) => {
   const { query, type, year, forceType } = req.query;
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
@@ -1576,8 +1588,15 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
         }
         
         if (data.results && data.results.length > 0) {
-           tmdbCache[item.cacheKey] = data.results[0];
-           results[item.originalName] = data.results[0];
+           let topResult = data.results[0];
+           try {
+               const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${topResult.id}?api_key=${tmdbKey}&append_to_response=credits`);
+               if (detailRes.data) {
+                   topResult = detailRes.data;
+               }
+           } catch (err) {}
+           tmdbCache[item.cacheKey] = topResult;
+           results[item.originalName] = topResult;
         } else {
            tmdbCache[item.cacheKey] = null;
            results[item.originalName] = null;
@@ -1593,7 +1612,7 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
   res.json(results);
 });
 
-app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
+app.get('/api/meta/search', cacheMiddleware(3600, false), async (req, res) => {
   const { query, type, year, tmdbId } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
@@ -1630,7 +1649,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     let data: any = { results: [] };
     if (tmdbId) {
         try {
-            const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${tmdbId}?api_key=${tmdbKey}`);
+            const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=credits`);
             if (idRes.data) {
                 data = { results: [idRes.data] };
             }
@@ -1698,9 +1717,16 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     }
     
     if (data.results && data.results.length > 0) {
-       tmdbCache[cacheKey] = data.results[0];
+       let topResult = data.results[0];
+       try {
+           const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${topResult.id}?api_key=${tmdbKey}&append_to_response=credits`);
+           if (detailRes.data) {
+               topResult = detailRes.data;
+           }
+       } catch (err) {}
+       tmdbCache[cacheKey] = topResult;
        saveDb();
-       return res.json(data.results[0]);
+       return res.json(topResult);
     }
     res.json(null);
   } catch (error: any) {
@@ -1708,7 +1734,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   }
 });
 
-app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
+app.get('/api/meta/videos', cacheMiddleware(3600, false), async (req, res) => {
   const { id, type } = req.query;
   if (!id || !type) return res.status(400).json({ error: 'id and type required' });
   const tmdbKey = process.env.TMDB_API_KEY;
@@ -1723,7 +1749,156 @@ app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
   }
 });
 
-app.get('/api/meta/tv_details', cacheMiddleware(3600, true), async (req, res) => {
+
+
+app.get('/api/meta/person', cacheMiddleware(3600, false), async (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ error: 'id required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json(null);
+  
+  let userToken = req.headers.authorization as string | undefined;
+  if (userToken && userToken.startsWith('Bearer ')) userToken = userToken.substring(7);
+  const token = process.env.OPENLIST_API_KEY || userToken || '';
+
+  try {
+    const response = await axios.get(`https://api.themoviedb.org/3/person/${id}?api_key=${tmdbKey}&append_to_response=combined_credits`);
+    const person = response.data;
+
+    const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const openlistMediaByTmdbId = new Map();
+    const openlistMediaByTitle = new Map();
+
+    if (token) {
+      try {
+        const libraryItems = await getLibraryIndex(token);
+        for (const item of libraryItems) {
+          const cat = item.category || '';
+          const baseQuery = (item.cleanName || '').toLowerCase().trim();
+          const year = item.year;
+          const itemPath = `${cat}/${item.name}`;
+          const isTvCat = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW'].some(t => cat.toUpperCase().includes(t));
+          const mediaType = isTvCat ? 'tv' : 'movie';
+
+          const baseKey = `${cat}-${baseQuery}`;
+          const cacheKey = `${cat}-${baseQuery}${year ? `-${year}` : ''}`;
+          
+          const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+          let tmdbItem = null;
+          if (overriddenKey) {
+            tmdbItem = tmdbCache[overriddenKey];
+          } else if (tmdbCache[cacheKey]) {
+            tmdbItem = tmdbCache[cacheKey];
+          } else if (year && tmdbCache[baseKey]) {
+            tmdbItem = tmdbCache[baseKey];
+          }
+
+          if (tmdbItem && tmdbItem.id) {
+            const tmdbType = tmdbItem.title ? 'movie' : (tmdbItem.name ? 'tv' : mediaType);
+            openlistMediaByTmdbId.set(`${tmdbType}-${tmdbItem.id}`, { path: itemPath, cached: tmdbItem });
+          }
+
+          const normTitle = normalize(item.cleanName || item.name);
+          if (normTitle) {
+            if (year) {
+              openlistMediaByTitle.set(`${mediaType}-${normTitle}-${year}`, { path: itemPath, cached: tmdbItem });
+            }
+            openlistMediaByTitle.set(`${mediaType}-${normTitle}`, { path: itemPath, cached: tmdbItem });
+          }
+        }
+      } catch(e) {
+        console.error("Error matching library index in person endpoint:", e);
+      }
+    }
+
+    const rawCast = person.combined_credits?.cast || [];
+    const matchedCast: any[] = [];
+
+    for (const credit of rawCast) {
+      const mediaType = credit.media_type; // 'movie' or 'tv'
+      const otherType = mediaType === 'tv' ? 'movie' : 'tv';
+      const keyId = `${mediaType}-${credit.id}`;
+      
+      let matched = openlistMediaByTmdbId.get(keyId) || openlistMediaByTmdbId.get(`${otherType}-${credit.id}`);
+
+      if (!matched) {
+        const title = (mediaType === 'tv' ? (credit.name || credit.original_name) : (credit.title || credit.original_title)) || '';
+        const normTitle = normalize(title);
+        const dateStr = credit.release_date || credit.first_air_date || '';
+        const creditYear = dateStr.substring(0, 4);
+
+        if (normTitle) {
+          if (creditYear) {
+            matched = openlistMediaByTitle.get(`${mediaType}-${normTitle}-${creditYear}`) || openlistMediaByTitle.get(`${otherType}-${normTitle}-${creditYear}`);
+          }
+          if (!matched) {
+            matched = openlistMediaByTitle.get(`${mediaType}-${normTitle}`) || openlistMediaByTitle.get(`${otherType}-${normTitle}`);
+          }
+        }
+      }
+
+      if (matched && matched.path) {
+        const cached = matched.cached || {};
+        const item = { ...credit, ...cached, media_type: mediaType, _path: matched.path };
+        if (mediaType === 'tv') {
+          item.name = credit.name || credit.original_name || cached.name || 'TV Show';
+          delete item.title;
+          delete item.original_title;
+        } else {
+          item.title = credit.title || credit.original_title || cached.title || 'Movie';
+          delete item.name;
+          delete item.original_name;
+        }
+        matchedCast.push(item);
+      }
+    }
+
+    // Deduplicate by media_type + ID
+    const uniqueMap = new Map();
+    for (const c of matchedCast) {
+      const uniqueKey = `${c.media_type}-${c.id}`;
+      if (!uniqueMap.has(uniqueKey)) {
+        uniqueMap.set(uniqueKey, c);
+      }
+    }
+    person.available_credits = Array.from(uniqueMap.values());
+
+    res.json(person);
+  } catch (err: any) {
+    res.json(null);
+  }
+});
+
+app.get('/api/meta/credits', cacheMiddleware(3600, false), async (req, res) => {
+  const { id, type } = req.query;
+  if (!id || !type) return res.status(400).json({ error: 'id and type required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json(null);
+
+  try {
+    const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(String(type).toUpperCase()) ? 'tv' : 'movie';
+    const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/credits?api_key=${tmdbKey}`);
+    
+    // Save to tmdbCache if we find the matching item
+    let found = false;
+    for (const key in tmdbCache) {
+       if (tmdbCache[key] && String(tmdbCache[key].id) === String(id)) {
+           tmdbCache[key].credits = response.data;
+           found = true;
+       }
+    }
+    if (found) {
+       saveDb();
+    }
+    
+    res.json(response.data);
+  } catch (err: any) {
+    res.json(null);
+  }
+});
+
+app.get('/api/meta/tv_details', cacheMiddleware(3600, false), async (req, res) => {
   const { tvId } = req.query;
   if (!tvId) return res.status(400).json({ error: 'tvId required' });
   const tmdbKey = process.env.TMDB_API_KEY;
@@ -1737,7 +1912,7 @@ app.get('/api/meta/tv_details', cacheMiddleware(3600, true), async (req, res) =>
   }
 });
 
-app.get('/api/meta/tv_season', cacheMiddleware(3600, true), async (req, res) => {
+app.get('/api/meta/tv_season', cacheMiddleware(3600, false), async (req, res) => {
   const { tvId, season } = req.query;
   if (!tvId || !season) return res.status(400).json({ error: 'tvId and season required' });
   const tmdbKey = process.env.TMDB_API_KEY;
@@ -1751,7 +1926,7 @@ app.get('/api/meta/tv_season', cacheMiddleware(3600, true), async (req, res) => 
   }
 });
 
-app.get('/api/meta/collections', cacheMiddleware(3600, true), (req, res) => {
+app.get('/api/meta/collections', cacheMiddleware(3600, false), (req, res) => {
   const collections: Record<number, any> = {};
   for (const key in tmdbCache) {
     const item = tmdbCache[key];
@@ -2033,7 +2208,11 @@ app.put('/api/user-collections/:id', async (req, res) => {
   try {
     const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'] || '';
     const { id } = req.params;
+    if (!id || typeof id !== 'string') return res.status(400).json({ error: 'Invalid id' });
     const { name, description, authorName, isPublic, categoryTag, items } = req.body;
+    
+    if (name !== undefined && (typeof name !== 'string' || !name.trim())) return res.status(400).json({ error: 'Invalid name' });
+    if (authorName !== undefined && (typeof authorName !== 'string' || !authorName.trim())) return res.status(400).json({ error: 'Invalid authorName' });
 
     const collections = await loadUserCollections();
     const index = collections.findIndex(c => c.id === id);
@@ -2108,7 +2287,7 @@ app.post('/api/user-collections/:id/upvote', async (req, res) => {
 // Genre Backdrops Cache
 let genreBackdropsCache: { time: number, data: any[] } | null = null;
 
-app.get('/api/meta/genres/backdrops', cacheMiddleware(3600, true), async (req, res) => {
+app.get('/api/meta/genres/backdrops', cacheMiddleware(3600, false), async (req, res) => {
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
   if (genreBackdropsCache && (Date.now() - genreBackdropsCache.time < SEVEN_DAYS)) {
       return res.json({ success: true, genres: genreBackdropsCache.data });
@@ -2183,7 +2362,7 @@ app.get('/api/meta/genres/backdrops', cacheMiddleware(3600, true), async (req, r
   res.json({ success: true, genres: genreBackdrops });
 });
 
-app.get('/api/meta/genre/:genreId', async (req, res) => {
+app.get('/api/meta/genre/:genreId', cacheMiddleware(3600, false), async (req, res) => {
   const genreId = parseInt(req.params.genreId, 10);
   
   let token = req.headers.authorization;
@@ -2228,7 +2407,7 @@ app.get('/api/meta/genre/:genreId', async (req, res) => {
   res.json({ success: true, genreId, items: matchedItems });
 });
 
-app.get('/api/meta/trending', cacheMiddleware(3600, true), async (req, res) => {
+app.get('/api/meta/trending', cacheMiddleware(3600, false), async (req, res) => {
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return res.json({ results: [] });
   
@@ -2296,11 +2475,11 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     
     let data = null;
     try {
-      const response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}`);
+      const response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=credits`);
       data = response.data;
     } catch (e) {
       try {
-        const response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}`);
+        const response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=credits`);
         data = response.data;
       } catch (e2) {
         return res.status(404).json({ error: 'Not found on TMDB' });
@@ -2503,7 +2682,14 @@ app.post('/api/meta/autofetch/start', adminMiddleware, (req, res) => {
               }
 
               if (data.results && data.results.length > 0) {
-                tmdbCache[cacheKey] = data.results[0];
+                let topResult = data.results[0];
+                try {
+                    const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${topResult.id}?api_key=${tmdbKey}&append_to_response=credits`);
+                    if (detailRes.data) {
+                        topResult = detailRes.data;
+                    }
+                } catch (err) {}
+                tmdbCache[cacheKey] = topResult;
                 saveDb();
               } else {
                 autoFetchJob.failedItems.push({ name: item.name, path: catPath });
@@ -2627,17 +2813,38 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
                     
                     const response = await axios.get(url);
                     if (item._jf?.tmdbId && response.data) {
-                        tmdbCache[cacheKey] = response.data.results ? response.data.results[0] || response.data : response.data;
+                        let topResult = response.data.results ? response.data.results[0] || response.data : response.data;
+                        try {
+                            const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${topResult.id}?api_key=${tmdbKey}&append_to_response=credits`);
+                            if (detailRes.data) {
+                                topResult = detailRes.data;
+                            }
+                        } catch (err) {}
+                        tmdbCache[cacheKey] = topResult;
                         modified = true;
                     } else if (response.data?.results?.length > 0) {
-                        tmdbCache[cacheKey] = response.data.results[0];
+                        let topResult = response.data.results[0];
+                        try {
+                            const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${topResult.id}?api_key=${tmdbKey}&append_to_response=credits`);
+                            if (detailRes.data) {
+                                topResult = detailRes.data;
+                            }
+                        } catch (err) {}
+                        tmdbCache[cacheKey] = topResult;
                         modified = true;
                     } else if (searchYear) {
                         const noYearUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanName)}`;
                         try {
                             const noYearRes = await axios.get(noYearUrl);
                             if (noYearRes.data?.results?.length > 0) {
-                                tmdbCache[cacheKey] = noYearRes.data.results[0];
+                                let topResult = noYearRes.data.results[0];
+                                try {
+                                    const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${topResult.id}?api_key=${tmdbKey}&append_to_response=credits`);
+                                    if (detailRes.data) {
+                                        topResult = detailRes.data;
+                                    }
+                                } catch (err) {}
+                                tmdbCache[cacheKey] = topResult;
                                 modified = true;
                             } else {
                                 tmdbCache[cacheKey] = null;
