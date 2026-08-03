@@ -117,9 +117,7 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
     }
 
     const cachedData = forceRefresh ? null : apiCache.get(normalKey);
-    const cacheControlHeader = req.method === 'GET' 
-      ? `${isPrivate ? 'private' : 'public'}, max-age=${ttlSeconds}` 
-      : 'no-store';
+    const cacheControlHeader = 'no-cache, no-store, must-revalidate';
 
     if (cachedData) {
       res.setHeader('Cache-Control', cacheControlHeader);
