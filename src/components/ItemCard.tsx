@@ -83,7 +83,8 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
         type: overrideCat || category,
         year: releaseYear,
         tmdbId: targetTmdbId,
-        customTitle: customTitle.trim()
+        customTitle: customTitle.trim(),
+        parentPath: parentPath
       }, { headers: { Authorization: token } });
 
       if (res.data?.success) {
@@ -214,7 +215,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     queryKey: ['tmdb', item.name, category, parentPath, item._jf?.tmdbId],
     queryFn: async () => {
       try {
-        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}`;
+        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}&parentPath=${encodeURIComponent(parentPath)}&rawName=${encodeURIComponent(item.name)}`;
         if (item._jf && item._jf.tmdbId) url += `&tmdbId=${item._jf.tmdbId}`;
         
         const res = await axios.get(url);

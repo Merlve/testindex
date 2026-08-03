@@ -1673,11 +1673,25 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
 });
 
 app.get('/api/meta/search', cacheMiddleware(3600, false), async (req, res) => {
-  const { query, type, year, tmdbId } = req.query; // type can be 'movie' or 'tv'
+  const { query, type, year, tmdbId, parentPath, rawName } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
   const baseQuery = query.toLowerCase().trim();
   const baseKey = `${type}-${baseQuery}`;
+  
+  if (parentPath && rawName) {
+      const fullPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+      const parts = fullPath.split('/');
+      
+      // Check from deepest path up to the root
+      for (let i = parts.length; i > 0; i--) {
+          const ancestorPath = parts.slice(0, i).join('/');
+          const checkKey = `path::${ancestorPath}`;
+          if (tmdbCache[checkKey]) {
+              return res.json(tmdbCache[checkKey]);
+          }
+      }
+  }
   
   // ALWAYS prioritize manually overridden items
   const overridden = findOverriddenMetadata(baseQuery, type as string, tmdbId as string);
@@ -2498,7 +2512,7 @@ app.post('/api/meta/correct', adminMiddleware, (req, res) => {
 
 // Admin override for TMDB by ID
 app.post('/api/meta/override', adminMiddleware, async (req, res) => {
-  const { query, type, year, tmdbId, customTitle, rawName, jfName } = req.body;
+  const { query, type, year, tmdbId, customTitle, rawName, jfName, parentPath } = req.body;
   if (!query && !rawName && !jfName) return res.status(400).json({ error: 'Invalid data' });
   if (!tmdbId && !customTitle) return res.status(400).json({ error: 'Invalid data' });
   
@@ -2513,27 +2527,32 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
 
     // Clear server response cache so all GET queries get fresh data immediately
     apiCache.clear();
+    
+    let specificPathKey = null;
+    if (parentPath && rawName) {
+        const fullPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+        specificPathKey = `path::${fullPath}`;
+    }
 
     if (customTitle && !tmdbId) {
       // Just override title in existing cache or create a mock
-      let data = tmdbCache[cacheKey] || tmdbCache[baseKey] || {};
+      let data = tmdbCache[specificPathKey || cacheKey] || tmdbCache[cacheKey] || tmdbCache[baseKey] || {};
       data.title = customTitle;
       data.name = customTitle; // tv uses name
       data._overridden = true;
       data._override_query = cleanQ;
       
-      const targets = [cleanQ, rawQ, jfQ].filter(Boolean);
-      for (const qStr of targets) {
-        tmdbCache[`${type}-${qStr}`] = data;
-        tmdbCache[`SERIES-${qStr}`] = data;
-        tmdbCache[`MOVIES-${qStr}`] = data;
-        tmdbCache[`tv-${qStr}`] = data;
-        tmdbCache[`movie-${qStr}`] = data;
-      }
-
-      for (const key of Object.keys(tmdbCache)) {
-        if (targets.some(qStr => key.includes(qStr))) {
-          tmdbCache[key] = data;
+      if (specificPathKey) {
+        tmdbCache[specificPathKey] = data;
+      } else {
+        const targets = [cleanQ, rawQ, jfQ].filter(Boolean);
+        for (const qStr of targets) {
+          tmdbCache[`${type}-${qStr}`] = data;
+          tmdbCache[`SERIES-${qStr}`] = data;
+          tmdbCache[`MOVIES-${qStr}`] = data;
+          tmdbCache[`tv-${qStr}`] = data;
+          tmdbCache[`movie-${qStr}`] = data;
+          if (year) tmdbCache[`${type}-${qStr}-${year}`] = data;
         }
       }
 
@@ -2542,9 +2561,26 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
         const recent = getLocalItems();
         if (Array.isArray(recent)) {
           for (const item of recent) {
-            const itemClean = (item.name || item._jf_name || '').toLowerCase();
-            if (targets.some(qStr => qStr && itemClean.includes(qStr))) {
-              if (item._jf) item._jf.title = customTitle;
+            const iName = (item.name || '').toLowerCase();
+            const iJfName = (item._jf_name || '').toLowerCase();
+            
+            let isMatch = false;
+            if (specificPathKey) {
+                const overrideFullPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+                const itemFullPath = `${item._parent}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
+                if (itemFullPath === overrideFullPath || itemFullPath.startsWith(overrideFullPath + '/')) {
+                    isMatch = true;
+                }
+            } else {
+                const targets = [cleanQ, rawQ, jfQ].filter(Boolean);
+                if (targets.some(qStr => qStr && (iName === qStr || iJfName === qStr))) {
+                    isMatch = true;
+                }
+            }
+            
+            if (isMatch) {
+              if (!item._jf) item._jf = {};
+              item._jf.title = customTitle;
               item._tmdbData = data;
             }
           }
@@ -2584,24 +2620,22 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
        data._overridden = true;
        data._override_query = cleanQ;
 
-       const targets = Array.from(new Set([cleanQ, rawQ, jfQ].filter(Boolean)));
-       for (const qStr of targets) {
-         tmdbCache[`${type}-${qStr}`] = data;
-         tmdbCache[`SERIES-${qStr}`] = data;
-         tmdbCache[`MOVIES-${qStr}`] = data;
-         tmdbCache[`tv-${qStr}`] = data;
-         tmdbCache[`movie-${qStr}`] = data;
-         if (year) tmdbCache[`${type}-${qStr}-${year}`] = data;
+       if (specificPathKey) {
+         tmdbCache[specificPathKey] = data;
+       } else {
+         const targets = Array.from(new Set([cleanQ, rawQ, jfQ].filter(Boolean)));
+         for (const qStr of targets) {
+           tmdbCache[`${type}-${qStr}`] = data;
+           tmdbCache[`SERIES-${qStr}`] = data;
+           tmdbCache[`MOVIES-${qStr}`] = data;
+           tmdbCache[`tv-${qStr}`] = data;
+           tmdbCache[`movie-${qStr}`] = data;
+           if (year) tmdbCache[`${type}-${qStr}-${year}`] = data;
+         }
        }
        if (data.id) {
          tmdbCache[`id-${data.id}`] = data;
          tmdbCache[`id-${tmdbId}`] = data;
-       }
-
-       for (const key of Object.keys(tmdbCache)) {
-         if (targets.some(qStr => qStr && key.includes(qStr)) || (data.id && key.includes(String(data.id)))) {
-           tmdbCache[key] = data;
-         }
        }
 
        // Update recently added items in memory so they reflect the new TMDB ID & poster immediately
@@ -2611,7 +2645,22 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
            for (const item of recent) {
              const iName = (item.name || '').toLowerCase();
              const iJfName = (item._jf_name || '').toLowerCase();
-             if (targets.some(qStr => qStr && (iName.includes(qStr) || iJfName.includes(qStr) || qStr.includes(iName) || qStr.includes(iJfName)))) {
+             
+             let isMatch = false;
+             if (specificPathKey) {
+                 const overrideFullPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+                 const itemFullPath = `${item._parent}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
+                 if (itemFullPath === overrideFullPath || itemFullPath.startsWith(overrideFullPath + '/')) {
+                     isMatch = true;
+                 }
+             } else {
+                 const targets = Array.from(new Set([cleanQ, rawQ, jfQ].filter(Boolean)));
+                 if (targets.some(qStr => qStr && (iName === qStr || iJfName === qStr))) {
+                     isMatch = true;
+                 }
+             }
+             
+             if (isMatch) {
                if (!item._jf) item._jf = {};
                item._jf.tmdbId = data.id || tmdbId;
                item._tmdbData = data;

@@ -639,12 +639,12 @@ export default function Details() {
         if (/^(s\d+|season\s*\d+)$/i.test(name) && pathParts.length > 2) {
           searchName = pathParts[pathParts.length - 2];
         }
+        const actualParentPath = pathParts.slice(0, -1).join('/');
         const { cleanName, year } = parseMediaName(searchName);
-        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}`);
+        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&parentPath=${encodeURIComponent(actualParentPath)}&rawName=${encodeURIComponent(name)}`);
         if (tmdbRes.data) {
           setTmdb(tmdbRes.data);
           try {
-            const actualParentPath = pathParts.slice(0, -1).join('/');
             const recentStr = localStorage.getItem('recently_browsed') || '[]';
             let recent = JSON.parse(recentStr);
             const newItem = {
@@ -861,7 +861,8 @@ export default function Details() {
       }
       const { cleanName, year } = parseMediaName(searchName);
       
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' }, { headers: { Authorization: token } });
+      const actualParentPath = pathParts.slice(0, -1).join('/');
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '', parentPath: actualParentPath, rawName: name }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
@@ -887,7 +888,8 @@ export default function Details() {
         searchName = pathParts[pathParts.length - 2];
       }
       const { cleanName, year } = parseMediaName(searchName);
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle }, { headers: { Authorization: token } });
+      const actualParentPath = pathParts.slice(0, -1).join('/');
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle, parentPath: actualParentPath, rawName: name }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
