@@ -1778,33 +1778,9 @@ app.post('/api/meta/scan_credits/start', adminMiddleware, (req, res) => {
     try {
       const keys = Object.keys(tmdbCache).filter(k => tmdbCache[k] && tmdbCache[k].id);
       
-      const libraryIndexMap = new Map<number, string>();
-      const libraryItems = await getLibraryIndex(getOpenlistApiKey());
-      for (const item of libraryItems) {
-        let cached = null;
-        const cleanName = (item.cleanName || '').toLowerCase().trim();
-        const year = item.year;
-        
-        const overriddenKey = findOverriddenKeyInCache(tmdbCache, item.category, cleanName, year);
-        if (overriddenKey) {
-          cached = tmdbCache[overriddenKey];
-        } else {
-          const cacheKey = `${item.category}-${cleanName}${year ? `-${year}` : ''}`;
-          if (tmdbCache[cacheKey]) {
-            cached = tmdbCache[cacheKey];
-          } else if (year && tmdbCache[`${item.category}-${cleanName}`]) {
-            cached = tmdbCache[`${item.category}-${cleanName}`];
-          }
-        }
-        
-        if (cached && cached.id) {
-           libraryIndexMap.set(cached.id, item.category);
-        }
-      }
-
       const keysToScan = keys.filter(k => {
           const item = tmdbCache[k];
-          return item && item.id && !item.credits && libraryIndexMap.has(item.id);
+          return item && item.id && !item.credits;
       });
 
       creditsScanJob.total = keysToScan.length;
@@ -1817,7 +1793,7 @@ app.post('/api/meta/scan_credits/start', adminMiddleware, (req, res) => {
         const item = tmdbCache[key];
         
         if (item && item.id) {
-          const category = libraryIndexMap.get(item.id);
+          const category = key.split('-')[0];
           if (category) {
             creditsScanJob.message = `Scanning credits for: ${item.title || item.name} (${i + 1}/${keysToScan.length})`;
             
