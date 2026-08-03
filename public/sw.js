@@ -17,7 +17,12 @@ self.addEventListener('install', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   
-  // For HTML requests, go to network first, then cache
+  const url = event.request.url;
+  // Bypass cache for development server, HMR, Vite deps, node_modules, or API requests
+  if (url.includes('/@') || url.includes('/node_modules/') || url.includes('/src/') || url.includes('/api/') || url.includes('?v=')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
     event.respondWith(
       fetch(event.request)

@@ -11,7 +11,6 @@ import Category from './pages/Category';
 import RecentlyAddedPage from './pages/RecentlyAddedPage';
 import Recommendations from "./pages/Recommendations";
 import Details from './pages/Details';
-import Actor from './pages/Actor';
 import Admin from './pages/Admin';
 import Users from './pages/Users';
 import Watchlist from './pages/Watchlist';
@@ -80,7 +79,6 @@ export default function App() {
             <Route path="admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
             <Route path="home/*" element={<Details />} />
-            <Route path="actor/:id" element={<Actor />} />
           </Route>
         </Routes>
         <Bot />

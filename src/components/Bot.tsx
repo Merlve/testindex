@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router';
 
@@ -39,21 +39,17 @@ export default function Bot() {
   }
 
   return (
-    <AnimatePresence>
+    <>
       {isVisible && (
-        <motion.a 
+        <a 
           href={`https://wa.me/${whatsappNumber}`}
           target="_blank"
           rel="noopener noreferrer"
-          initial={{ opacity: 0, scale: 0.8, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.8, y: 20 }}
-          transition={{ duration: 0.2 }}
           className="fixed bottom-[100px] lg:bottom-6 right-6 sm:bottom-[100px] sm:right-8 lg:right-8 w-12 h-12 sm:w-14 sm:h-14 bg-[#25D366] rounded-full flex items-center justify-center text-black dark:text-white shadow-xl shadow-[#25D366]/20 hover:scale-110 z-40"
         >
           <WhatsAppIcon size={28} />
-        </motion.a>
+        </a>
       )}
-    </AnimatePresence>
+    </>
   );
 }

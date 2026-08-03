@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Sun, Moon, Monitor, Check } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -125,13 +125,9 @@ export default function ThemeToggle({ isUnderlyingDark = false, align = 'left', 
         )}
       </button>
 
-      <AnimatePresence>
+      <>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.95 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          <div
             className={`absolute ${alignClasses} top-full mt-3 w-36 p-1.5 rounded-2xl border backdrop-blur-3xl backdrop-saturate-[200%] shadow-2xl z-50 text-xs font-semibold space-y-1 transform-gpu will-change-transform ${
               isUnderlyingDark
                 ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_12px_40px_0_rgba(0,0,0,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.25)] dark:bg-black/60 dark:border-white/20 dark:text-white'
@@ -191,9 +187,9 @@ export default function ThemeToggle({ isUnderlyingDark = false, align = 'left', 
               </div>
               {themeMode === 'system' && <Check size={13} className="shrink-0 text-purple-600 dark:text-purple-400" />}
             </button>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </div>
   );
 }

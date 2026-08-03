@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
-import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Search, Sparkles, Loader2, Link2, X, Check, Tv } from 'lucide-react';
+import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
@@ -10,125 +10,22 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
   const [tmdb, setTmdb] = useState<any>(tmdbData || null);
   const { user, token } = useAuth();
   const [showOverrideModal, setShowOverrideModal] = useState(false);
-  const [modalTab, setModalTab] = useState<'tmdb' | 'link'>('tmdb');
   const [overridePath, setOverridePath] = useState(`${parentPath}/${item.name}`);
   const [overrideCat, setOverrideCat] = useState(category);
 
-  // TMDB Metadata Search & Fix state
-  const initialSearchQuery = parseMediaName(item._jf_name || item.name).cleanName || item._jf_name || item.name || '';
-  const [tmdbSearchQuery, setTmdbSearchQuery] = useState(initialSearchQuery);
-  const [searchForceType, setSearchForceType] = useState<'auto' | 'movie' | 'tv'>('auto');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [manualTmdbId, setManualTmdbId] = useState('');
-  const [customTitle, setCustomTitle] = useState('');
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
-
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (showOverrideModal) {
-      const q = tmdbSearchQuery || initialSearchQuery;
-      if (q && searchResults.length === 0) {
-        handleSearchTMDB(q, searchForceType);
-      }
-    }
-  }, [showOverrideModal]);
-
-  const handleSearchTMDB = async (queryToSearch: string, forceTypeToUse = searchForceType) => {
-    const q = queryToSearch.trim();
-    if (!q) {
-      setSearchResults([]);
-      return;
-    }
-    setIsSearching(true);
-    setSaveSuccessMsg('');
-    try {
-      let isId = /^\d+$/.test(q);
-      let finalQuery = q;
-      if (q.toLowerCase().startsWith('id:')) {
-        isId = true;
-        finalQuery = q.substring(3).trim();
-      } else if (q.toLowerCase().startsWith('tmdb:')) {
-        isId = true;
-        finalQuery = q.substring(5).trim();
-      }
-
-      const forceParam = forceTypeToUse === 'auto' ? '' : forceTypeToUse;
-      const url = `/api/meta/search_all?query=${encodeURIComponent(finalQuery)}&type=${overrideCat || category}${forceParam ? `&forceType=${forceParam}` : ''}${isId ? `&tmdbId=${finalQuery}` : ''}`;
-      const res = await axios.get(url);
-      setSearchResults(res.data?.results || []);
-    } catch (err) {
-      console.error('TMDB search failed:', err);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleApplyTmdbResult = async (result?: any) => {
-    try {
-      const targetTmdbId = result ? String(result.id) : manualTmdbId.trim();
-      if (!targetTmdbId && !customTitle.trim()) {
-        alert('Please select a result or enter a valid TMDB ID or Custom Title.');
-        return;
-      }
-      setIsSearching(true);
-      const cleanName = parseMediaName(item._jf_name || item.name).cleanName || item.name;
-      const releaseYear = result?.release_date?.substring(0, 4) || result?.first_air_date?.substring(0, 4) || item.year || '';
-
-      const res = await axios.post('/api/meta/override', {
-        query: cleanName,
-        rawName: item.name,
-        jfName: item._jf_name,
-        type: overrideCat || category,
-        year: releaseYear,
-        tmdbId: targetTmdbId,
-        customTitle: customTitle.trim(),
-        parentPath: parentPath
-      }, { headers: { Authorization: token } });
-
-      if (res.data?.success) {
-        const updatedMetadata = result || res.data.data;
-        if (updatedMetadata) {
-          setTmdb(updatedMetadata);
-          item._tmdbData = updatedMetadata;
-          if (!item._jf) item._jf = {};
-          if (targetTmdbId) item._jf.tmdbId = targetTmdbId;
-        }
-        setSaveSuccessMsg('TMDB metadata updated successfully!');
-        try {
-          await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } });
-        } catch (e) {}
-        queryClient.invalidateQueries({ queryKey: ['tmdb'] });
-        queryClient.invalidateQueries({ queryKey: ['recentlyAdded'] });
-        queryClient.resetQueries({ queryKey: ['tmdb'] });
-        queryClient.resetQueries({ queryKey: ['recentlyAdded'] });
-        setTimeout(() => setSaveSuccessMsg(''), 4000);
-      }
-    } catch (e: any) {
-      alert(e.response?.data?.error || 'Failed to apply metadata override');
-    } finally {
-      setIsSearching(false);
-    }
-  };
   
-  const { data: watchlistData = [] } = useQuery({
-    queryKey: ['watchlist', user],
+  const { data: watchlistData } = useQuery({
+    queryKey: ['watchlist'],
     queryFn: async () => {
       if (!user || user === 'guest') return [];
-      try {
-        const res = await axios.get('/api/watchlist', { headers: { 'x-user': user } });
-        if (Array.isArray(res.data)) return res.data;
-        if (Array.isArray(res.data?.watchlist)) return res.data.watchlist;
-        return [];
-      } catch {
-        return [];
-      }
+      const res = await axios.get('/api/watchlist', { headers: { 'x-user': user } });
+      return res.data;
     },
     enabled: !!user && user !== 'guest',
   });
 
-  const inWatchlist = Array.isArray(watchlistData) && watchlistData.some((i: any) => i?.item?.name === item.name && i?.parentPath === parentPath);
+  const inWatchlist = watchlistData?.some((i: any) => i.item.name === item.name && i.parentPath === parentPath) || false;
 
   const handleToggleWatchlist = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -199,8 +96,10 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     }
   };
 
-  let searchName = item._jf_name || item.name;
-  if (/^(s\d+|season\s*\d+)$/i.test(searchName)) {
+
+  
+  let searchName = item.name;
+  if (/^(s\d+|season\s*\d+)$/i.test(item.name)) {
     const parentParts = parentPath.split('/').filter(Boolean);
     if (parentParts.length > 0) {
       searchName = parentParts[parentParts.length - 1];
@@ -215,16 +114,16 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     queryKey: ['tmdb', item.name, category, parentPath, item._jf?.tmdbId],
     queryFn: async () => {
       try {
-        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}&parentPath=${encodeURIComponent(parentPath)}&rawName=${encodeURIComponent(item.name)}`;
+        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}`;
         if (item._jf && item._jf.tmdbId) url += `&tmdbId=${item._jf.tmdbId}`;
         
         const res = await axios.get(url);
-        if (res.data && (res.data.poster_path || res.data.title || res.data.name || res.data.id || res.data._overridden)) {
+        if (res.data && res.data.poster_path) {
           return res.data;
         } else if (item._jf && item._jf.tmdbId) {
           const fallbackRes = await axios.get(`/api/meta/search_all?query=fallback&type=${category}&tmdbId=${item._jf.tmdbId}`);
           if (fallbackRes.data?.results?.[0]) return fallbackRes.data.results[0];
-          if (fallbackRes.data && (fallbackRes.data.poster_path || fallbackRes.data.title || fallbackRes.data.id)) return fallbackRes.data;
+          if (fallbackRes.data && fallbackRes.data.poster_path) return fallbackRes.data;
         }
         return null;
       } catch (e) {
@@ -232,16 +131,16 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       }
     },
     enabled: !tmdbData,
-    staleTime: 60 * 1000,
+    staleTime: Infinity, // don't refetch automatically unless invalidated
   });
 
-  // Local component override state `tmdb` or attached `_tmdbData` takes priority over stale `fetchedTmdb`
-  const displayTmdb = tmdb || item._tmdbData || tmdbData || fetchedTmdb;
+  const displayTmdb = tmdbData || fetchedTmdb || tmdb;
+
 
   const sanitizedPath = `${parentPath}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
   const fullPath = `/${sanitizedPath}`;
 
-  const innerContent = (
+    const innerContent = (
     <>
       <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all duration-300 ${viewMode === 'grid' ? 'group-hover:-translate-y-2 group-hover:scale-[1.02] group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)]' : ''} flex-shrink-0`}>
         {displayTmdb?.poster_path ? (
@@ -333,254 +232,47 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       )}
 
       {showOverrideModal && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setShowOverrideModal(false)}>
-          <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-2xl p-4 sm:p-6 w-full max-w-[96vw] sm:max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto" onClick={e => e.stopPropagation()}>
-            
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10 mb-3">
-              <div>
-                <h3 className="text-base sm:text-xl font-bold text-black dark:text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                  <span>Fix Metadata & Link Override</span>
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 truncate max-w-[200px] sm:max-w-md">
-                  Item: <span className="font-semibold text-black dark:text-white">{item._jf_name || item.name}</span>
-                </p>
-              </div>
-              <button 
-                onClick={() => setShowOverrideModal(false)}
-                className="p-2 rounded-lg text-gray-500 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Success Feedback Banner */}
-            {saveSuccessMsg && (
-              <div className="mb-3 p-3 rounded-xl bg-green-500/15 border border-green-500/30 text-green-700 dark:text-green-300 text-xs sm:text-sm flex items-center gap-2">
-                <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                <span>{saveSuccessMsg}</span>
-              </div>
-            )}
-
-            {/* Navigation Tabs - Mobile Optimized */}
-            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2 mb-3 bg-black/5 dark:bg-white/5 p-1 rounded-xl">
-              <button
-                onClick={() => setModalTab('tmdb')}
-                className={`w-full sm:flex-1 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${modalTab === 'tmdb' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
-              >
-                <Search size={14} />
-                TMDB Metadata Search
-              </button>
-              <button
-                onClick={() => setModalTab('link')}
-                className={`w-full sm:flex-1 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${modalTab === 'link' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
-              >
-                <Link2 size={14} />
-                Jellyfin Link Path
-              </button>
-            </div>
-
-            {/* Tab 1: TMDB Metadata Search */}
-            {modalTab === 'tmdb' && (
-              <div className="flex-1 flex flex-col min-h-0 overflow-y-auto space-y-3 pr-1 overflow-x-hidden">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-                    Search TMDB (Title or TMDB ID)
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      className="w-full sm:flex-1 bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600"
-                      placeholder="Enter Movie/Show Name or TMDB ID..."
-                      value={tmdbSearchQuery}
-                      onChange={e => setTmdbSearchQuery(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleSearchTMDB(tmdbSearchQuery); }}
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowOverrideModal(false)}>
+            <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-black dark:text-white mb-4">Override Jellyfin Link</h3>
+                <div className="mb-4 text-xs text-gray-600 dark:text-gray-400">
+                   Jellyfin Name: <span className="text-black dark:text-white">{item._jf_name || item.name}</span>
+                </div>
+                <div className="mb-4">
+                    <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2">Openlist Path (e.g. /home/SERIES/My Show)</label>
+                    <input 
+                        className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50" 
+                        value={overridePath}
+                        onChange={e => setOverridePath(e.target.value)}
                     />
+                </div>
+                <div className="mb-6">
+                    <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2">Category</label>
+                    <input 
+                        className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50" 
+                        value={overrideCat}
+                        onChange={e => setOverrideCat(e.target.value)}
+                    />
+                </div>
+                <div className="flex gap-3 justify-end">
+                    <button onClick={() => setShowOverrideModal(false)} className="px-4 py-2 text-black dark:text-white bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:bg-white/20 rounded-lg">Cancel</button>
                     <button
-                      onClick={() => handleSearchTMDB(tmdbSearchQuery)}
-                      disabled={isSearching}
-                      className="w-full sm:w-auto px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      {isSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                      Search
-                    </button>
-                  </div>
+                        onClick={async () => {
+                           try {
+                               await axios.post('/api/jellyfin/override', {
+                                   jfName: item._jf_name || item.name,
+                                   openlistPath: overridePath,
+                                   category: overrideCat
+                               }, { headers: { Authorization: token } });
+                               setShowOverrideModal(false);
+                               try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} queryClient.invalidateQueries(); alert('Saved!');
+                           } catch(e) {
+                               alert('Failed to save override');
+                           }
+                       }}
+                       className="px-4 py-2 text-black dark:text-white bg-purple-600 hover:bg-purple-700 rounded-lg">Save Override</button>
                 </div>
-
-                {/* Force Type Selector - Mobile Wrap */}
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mr-1">Type:</span>
-                  {(['auto', 'movie', 'tv'] as const).map(t => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        setSearchForceType(t);
-                        handleSearchTMDB(tmdbSearchQuery, t);
-                      }}
-                      className={`px-2.5 py-1 text-xs rounded-lg border transition cursor-pointer ${searchForceType === t ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40 font-semibold' : 'bg-black/5 dark:bg-white/5 border-transparent text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
-                    >
-                      {t === 'auto' ? `Auto (${category})` : t === 'movie' ? 'Movie' : 'TV Show'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Search Results List - Responsive Mobile Cards */}
-                <div className="flex-1 overflow-y-auto max-h-[220px] sm:max-h-[260px] space-y-2.5 pr-1 border-t border-black/5 dark:border-white/5 pt-3 overflow-x-hidden">
-                  {isSearching ? (
-                    <div className="py-8 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
-                      <Loader2 size={16} className="animate-spin text-purple-600" />
-                      Searching TMDB database...
-                    </div>
-                  ) : searchResults.length > 0 ? (
-                    searchResults.map((res: any) => {
-                      const resTitle = res.title || res.name;
-                      const resYear = (res.release_date || res.first_air_date || '').substring(0, 4);
-                      const isTv = res.first_air_date || res.name;
-                      const posterUrl = res.poster_path ? `https://image.tmdb.org/t/p/w185${res.poster_path}` : null;
-
-                      return (
-                        <div
-                          key={res.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-purple-500/10 border border-black/5 dark:border-white/5 transition gap-2.5"
-                        >
-                          <div className="flex items-center gap-3 overflow-hidden min-w-0 flex-1">
-                            {posterUrl ? (
-                              <img src={posterUrl} alt={resTitle} className="w-12 h-16 sm:w-14 sm:h-20 object-cover rounded-md flex-shrink-0 shadow-sm" />
-                            ) : (
-                              <div className="w-12 h-16 sm:w-14 sm:h-20 bg-black/10 dark:bg-white/10 rounded-md flex items-center justify-center text-gray-400 flex-shrink-0">
-                                {isTv ? <Tv size={18} /> : <Film size={18} />}
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-xs sm:text-sm font-bold text-black dark:text-white truncate">
-                                {resTitle} {resYear ? `(${resYear})` : ''}
-                              </h4>
-                              <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                                <span className="uppercase px-1.5 py-0.5 bg-black/10 dark:bg-white/10 rounded font-mono font-semibold">
-                                  {isTv ? 'TV' : 'MOVIE'}
-                                </span>
-                                <span className="font-mono">ID: {res.id}</span>
-                              </div>
-                              {res.overview && (
-                                <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 line-clamp-1 mt-1">
-                                  {res.overview}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={() => handleApplyTmdbResult(res)}
-                            className="w-full sm:w-auto px-4 py-2 sm:py-1.5 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex-shrink-0 transition flex items-center justify-center gap-1 cursor-pointer shadow-sm"
-                          >
-                            <Check size={14} />
-                            Apply
-                          </button>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="py-6 text-center text-xs text-gray-500">
-                      No TMDB results found. Try searching with movie/show name or direct TMDB ID.
-                    </div>
-                  )}
-                </div>
-
-                {/* Direct Manual TMDB ID / Custom Title Fallback */}
-                <div className="border-t border-black/10 dark:border-white/10 pt-3">
-                  <span className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Direct Manual TMDB ID or Custom Title Override
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-                    <input
-                      type="text"
-                      className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-black dark:text-white focus:outline-none focus:border-purple-600"
-                      placeholder="TMDB ID (e.g. 1396)"
-                      value={manualTmdbId}
-                      onChange={e => setManualTmdbId(e.target.value)}
-                    />
-                    <input
-                      type="text"
-                      className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-black dark:text-white focus:outline-none focus:border-purple-600"
-                      placeholder="Custom Display Title (optional)"
-                      value={customTitle}
-                      onChange={e => setCustomTitle(e.target.value)}
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleApplyTmdbResult()}
-                    disabled={!manualTmdbId.trim() && !customTitle.trim()}
-                    className="w-full py-2.5 bg-purple-600/20 hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white border border-purple-500/30 rounded-xl text-xs font-semibold transition disabled:opacity-40 cursor-pointer"
-                  >
-                    Apply Manual TMDB ID / Title Override
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 2: Jellyfin Link Path */}
-            {modalTab === 'link' && (
-              <div className="space-y-3.5 py-2">
-                <div>
-                  <label className="block text-gray-600 dark:text-gray-400 text-xs sm:text-sm mb-1.5 font-medium">
-                    Openlist Path (e.g. /home/SERIES/My Show)
-                  </label>
-                  <input 
-                    className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600" 
-                    value={overridePath}
-                    onChange={e => setOverridePath(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-600 dark:text-gray-400 text-xs sm:text-sm mb-1.5 font-medium">
-                    Category (SERIES, MOVIES, KDRAMA, ANIME)
-                  </label>
-                  <input 
-                    className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600" 
-                    value={overrideCat}
-                    onChange={e => setOverrideCat(e.target.value)}
-                  />
-                </div>
-                <div className="pt-2 flex justify-end gap-3">
-                  <button
-                    onClick={async () => {
-                      try {
-                        await axios.post('/api/jellyfin/override', {
-                          jfName: item._jf_name || item.name,
-                          openlistPath: overridePath,
-                          category: overrideCat
-                        }, { headers: { Authorization: token } });
-                        setSaveSuccessMsg('Jellyfin link override saved successfully!');
-                        try {
-                          await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } });
-                        } catch(e) {}
-                        queryClient.invalidateQueries();
-                        queryClient.resetQueries();
-                        setTimeout(() => setSaveSuccessMsg(''), 4000);
-                      } catch(e) {
-                        alert('Failed to save override');
-                      }
-                    }}
-                    className="w-full py-2.5 text-white bg-purple-600 hover:bg-purple-700 rounded-xl text-sm font-semibold transition cursor-pointer"
-                  >
-                    Save Jellyfin Path Override
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Footer Close Button */}
-            <div className="border-t border-black/10 dark:border-white/10 pt-3 mt-3 flex justify-end">
-              <button 
-                onClick={() => setShowOverrideModal(false)}
-                className="w-full sm:w-auto px-5 py-2 text-xs sm:text-sm font-semibold text-black dark:text-white bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 rounded-xl transition cursor-pointer"
-              >
-                Close
-              </button>
             </div>
-
-          </div>
         </div>
       )}
     </>

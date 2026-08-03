@@ -87,7 +87,15 @@ export async function getOgMetadataForUrl(
     let tmdbData: any = null;
 
     // 1. Check overridden or cached in tmdbCache
-    const overriddenKey = Object.keys(tmdbCache).find(k => k.startsWith(baseKey) && tmdbCache[k]?._overridden);
+    const overriddenKey = Object.keys(tmdbCache).find(k => {
+      if (!tmdbCache[k]?._overridden) return false;
+      if (k === cacheKey || k === baseKey) return true;
+      if (k.startsWith(`${baseKey}-`)) {
+        const suffix = k.slice(baseKey.length + 1);
+        return /^\d{4}$/.test(suffix);
+      }
+      return false;
+    });
     if (overriddenKey) {
       tmdbData = tmdbCache[overriddenKey];
     } else if (tmdbCache[cacheKey]) {

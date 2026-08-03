@@ -1,6 +1,7 @@
 import { createClient } from "@libsql/client";
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 
 const dbDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
@@ -15,6 +16,13 @@ export const sqliteDb = createClient({
 
 export async function initSQLiteDB() {
   await sqliteDb.execute('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)');
+
+  try {
+    // Attempt to delete previously too-large uncompressed rows that cause OOMs
+    await sqliteDb.execute("DELETE FROM kv_store WHERE key IN ('db', 'library_index')");
+  } catch (e) {
+    console.error('Failed to cleanup old large rows', e);
+  }
 
   const migrationFlag = await readSQLiteJSON('_migration_complete');
   if (migrationFlag) {
@@ -92,6 +100,7 @@ export async function initSQLiteDB() {
     path.join(process.cwd(), 'watched'),
     path.join(process.cwd(), 'data', 'watched')
   ];
+
   for (const wDir of watchedDirs) {
     try {
       if (fs.existsSync(wDir) && fs.statSync(wDir).isDirectory()) {
@@ -122,7 +131,12 @@ export async function readSQLiteJSON(key: string) {
   try {
     const rs = await sqliteDb.execute({ sql: 'SELECT value FROM kv_store WHERE key = ?', args: [key] });
     if (rs.rows.length > 0 && rs.rows[0].value) {
-      return JSON.parse(rs.rows[0].value as string);
+      let valStr = rs.rows[0].value as string;
+      if (valStr.startsWith('gz:')) {
+        const buffer = Buffer.from(valStr.slice(3), 'base64');
+        valStr = zlib.inflateSync(buffer).toString('utf8');
+      }
+      return JSON.parse(valStr);
     }
   } catch(e) {
     console.error(`Error reading ${key} from SQLite:`, e);
@@ -133,7 +147,13 @@ export async function readSQLiteJSON(key: string) {
 export async function writeSQLiteJSON(key: string, value: any) {
   try {
     const str = JSON.stringify(value);
-    await sqliteDb.execute({ sql: 'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', args: [key, str] });
+    let valToStore = str;
+    // Compress strings larger than ~100KB to prevent Turso OOM
+    if (str.length > 100000) {
+      const buffer = zlib.deflateSync(str);
+      valToStore = 'gz:' + buffer.toString('base64');
+    }
+    await sqliteDb.execute({ sql: 'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', args: [key, valToStore] });
   } catch(e) {
     console.error(`Error writing ${key} to SQLite:`, e);
   }

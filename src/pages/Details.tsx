@@ -225,30 +225,6 @@ export default function Details() {
   const [tmdb, setTmdb] = useState<any>(null);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [toast, setToast] = useState('');
-  const [credits, setCredits] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (tmdb?.credits?.cast) {
-      const topCast = tmdb.credits.cast.slice(0, 15);
-      const keyCrew = (tmdb.credits.crew || []).filter((c: any) => ['Director', 'Executive Producer', 'Writer', 'Creator'].includes(c.job)).slice(0, 5);
-      const combined = [...keyCrew, ...topCast];
-      const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
-      setCredits(unique);
-    } else if (tmdb?.id && category) {
-      axios.get(`/api/meta/credits?id=${tmdb.id}&type=${category}`)
-        .then(res => {
-          if (res.data?.cast) {
-            const topCast = res.data.cast.slice(0, 15);
-            const keyCrew = (res.data.crew || []).filter((c: any) => ['Director', 'Executive Producer', 'Writer', 'Creator'].includes(c.job)).slice(0, 5);
-            const combined = [...keyCrew, ...topCast];
-            const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
-            setCredits(unique);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [tmdb, category]);
-
 
   useEffect(() => {
     let cleanName = '';
@@ -542,20 +518,6 @@ export default function Details() {
     }
   };
 
-  const [isMovieFilesCollapsed, setIsMovieFilesCollapsed] = useState(false);
-  const [isEpisodesCollapsed, setIsEpisodesCollapsed] = useState(false);
-
-  // Auto-trigger refresh if still loading openlist files after 2 seconds
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    if (loadingFiles && !refreshing) {
-      timeout = setTimeout(() => {
-        handleRefreshFolder();
-      }, 2000);
-    }
-    return () => clearTimeout(timeout);
-  }, [loadingFiles, refreshing]);
-
   // Fetch Base Items
   useEffect(() => {
     let isMounted = true;
@@ -639,12 +601,12 @@ export default function Details() {
         if (/^(s\d+|season\s*\d+)$/i.test(name) && pathParts.length > 2) {
           searchName = pathParts[pathParts.length - 2];
         }
-        const actualParentPath = pathParts.slice(0, -1).join('/');
         const { cleanName, year } = parseMediaName(searchName);
-        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&parentPath=${encodeURIComponent(actualParentPath)}&rawName=${encodeURIComponent(name)}`);
+        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}`);
         if (tmdbRes.data) {
           setTmdb(tmdbRes.data);
           try {
+            const actualParentPath = pathParts.slice(0, -1).join('/');
             const recentStr = localStorage.getItem('recently_browsed') || '[]';
             let recent = JSON.parse(recentStr);
             const newItem = {
@@ -861,8 +823,7 @@ export default function Details() {
       }
       const { cleanName, year } = parseMediaName(searchName);
       
-      const actualParentPath = pathParts.slice(0, -1).join('/');
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '', parentPath: actualParentPath, rawName: name }, { headers: { Authorization: token } });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
@@ -870,7 +831,6 @@ export default function Details() {
         setSearchResults([]);
         clearRecommendationsCache();
         queryClient.invalidateQueries();
-        queryClient.resetQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }
@@ -888,8 +848,7 @@ export default function Details() {
         searchName = pathParts[pathParts.length - 2];
       }
       const { cleanName, year } = parseMediaName(searchName);
-      const actualParentPath = pathParts.slice(0, -1).join('/');
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle, parentPath: actualParentPath, rawName: name }, { headers: { Authorization: token } });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
@@ -897,7 +856,6 @@ export default function Details() {
         setCustomTitle('');
         clearRecommendationsCache();
         queryClient.invalidateQueries();
-        queryClient.resetQueries();
         setToast('Metadata updated successfully!');
         setTimeout(() => setToast(''), 3000);
       }
@@ -1198,34 +1156,6 @@ export default function Details() {
             </button>
           </div>
 
-
-          {credits && credits.length > 0 && (
-            <div className="mt-6 mb-4">
-              <h3 className="text-base font-bold text-black dark:text-white mb-3">Cast & Crew</h3>
-              <div className="flex gap-3 overflow-x-auto pb-3 no-scrollbar">
-                {credits.slice(0, 20).map((person: any) => (
-                  <div key={person.credit_id || person.id} className="flex flex-col items-center gap-1.5 shrink-0 w-16 cursor-pointer group" onClick={() => navigate(`/actor/${person.id}`)}>
-                    {person.profile_path ? (
-                      <img 
-                        src={`https://image.tmdb.org/t/p/w185${person.profile_path}`} 
-                        alt={person.name}
-                        className="w-16 h-16 object-cover rounded-2xl shadow-sm bg-black/5 dark:bg-white/5"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-black/10 dark:bg-white/10 flex items-center justify-center text-gray-400">
-                        <span className="text-xs font-bold text-center px-1">{person.name.split(' ').map((n: string) => n[0]).join('')}</span>
-                      </div>
-                    )}
-                    <div className="text-center">
-                      <p className="text-xs font-bold text-black dark:text-white leading-tight break-words">{person.name}</p>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight break-words">{person.character || person.job}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           {/* MOVIE PLAY / DOWNLOAD SECTION */}
           {isMovieCategory && (
             <div className="mt-6 pt-6 border-t border-black/10 dark:border-white/10">
@@ -1240,12 +1170,8 @@ export default function Details() {
                 <div className="flex flex-col gap-3 max-w-2xl">
                   {/* Always visible header with Refresh button */}
                   <div className="flex items-center justify-between gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
-                    <div 
-                      className="flex items-center gap-2 cursor-pointer hover:text-black dark:hover:text-white transition"
-                      onClick={() => setIsMovieFilesCollapsed(!isMovieFilesCollapsed)}
-                    >
+                    <div className="flex items-center gap-2">
                       <Film size={15} /> Movie File{videoItems.length !== 1 ? 's' : ''} Available {videoItems.length > 1 ? `(${videoItems.length})` : ''}
-                      <ChevronDown size={15} className={`transition-transform duration-300 ${isMovieFilesCollapsed ? '-rotate-90' : ''}`} />
                     </div>
                     <button
                       onClick={handleRefreshFolder}
@@ -1258,20 +1184,11 @@ export default function Details() {
                     </button>
                   </div>
                   
-                  <AnimatePresence initial={false}>
-                    {!isMovieFilesCollapsed && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="overflow-hidden flex flex-col gap-3"
-                      >
-                        {loadingFiles ? (
-                          <div className="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 animate-pulse flex items-center justify-center h-32">
-                            <div className="h-6 w-1/3 bg-gray-300/30 dark:bg-gray-700/30 rounded"></div>
-                          </div>
-                      ) : videoItems.length > 0 ? (
+                  {loadingFiles ? (
+                    <div className="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 animate-pulse flex items-center justify-center h-32">
+                      <div className="h-6 w-1/3 bg-gray-300/30 dark:bg-gray-700/30 rounded"></div>
+                    </div>
+                  ) : videoItems.length > 0 ? (
                     videoItems.length === 1 ? (
                       /* Single Movie File Layout */
                       (() => {
@@ -1481,9 +1398,6 @@ export default function Details() {
                   <div className="text-gray-500 text-sm font-medium">No video files found in this movie folder.</div>
                 </div>
               )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
               )}
             </div>
@@ -1522,29 +1436,9 @@ export default function Details() {
                       ))}
                     </div>
                   )}
-                  
-                  {/* Episodes Section Header */}
-                  <div className="flex items-center justify-between gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 mt-2 mb-2">
-                    <div 
-                      className="flex items-center gap-2 cursor-pointer hover:text-black dark:hover:text-white transition"
-                      onClick={() => setIsEpisodesCollapsed(!isEpisodesCollapsed)}
-                    >
-                      <Tv size={15} /> Episodes Available {videoItems.length > 0 ? `(${videoItems.length})` : ''}
-                      <ChevronDown size={15} className={`transition-transform duration-300 ${isEpisodesCollapsed ? '-rotate-90' : ''}`} />
-                    </div>
-                  </div>
 
-                  <AnimatePresence initial={false}>
-                    {!isEpisodesCollapsed && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="overflow-hidden flex flex-col gap-3"
-                      >
-                        {/* Bulk Select & Actions Bar */}
-                        <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-3.5 py-2.5 rounded-2xl gap-2 min-w-0">
+                  {/* Bulk Select & Actions Bar */}
+                  <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-3.5 py-2.5 rounded-2xl gap-2 min-w-0">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300 select-none shrink-0">
                       <input
                         type="checkbox"
@@ -1755,9 +1649,6 @@ export default function Details() {
                       No episodes found in this season folder.
                     </div>
                   )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
               )}
             </div>

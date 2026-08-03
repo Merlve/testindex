@@ -10,6 +10,7 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      dedupe: ['react', 'react-dom', 'react-router', '@tanstack/react-query', 'framer-motion', 'motion']
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
