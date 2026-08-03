@@ -1746,6 +1746,331 @@ app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
   }
 });
 
+let creditsScanJob = {
+  isRunning: false,
+  message: '',
+  count: 0,
+  total: 0,
+  failedItems: [] as string[]
+};
+
+app.get('/api/meta/scan_credits/status', (req, res) => {
+  res.json(creditsScanJob);
+});
+
+app.post('/api/meta/scan_credits/start', adminMiddleware, (req, res) => {
+  if (creditsScanJob.isRunning) {
+    return res.json({ success: false, message: 'Already running' });
+  }
+
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.status(500).json({ error: 'TMDB key missing' });
+
+  creditsScanJob = {
+    isRunning: true,
+    message: 'Starting credits scan...',
+    count: 0,
+    total: 0,
+    failedItems: []
+  };
+  
+  (async () => {
+    try {
+      const keys = Object.keys(tmdbCache).filter(k => tmdbCache[k] && tmdbCache[k].id);
+      
+      const libraryIndexMap = new Map<number, string>();
+      const libraryItems = await getLibraryIndex(getOpenlistApiKey());
+      for (const item of libraryItems) {
+        let cached = null;
+        const cleanName = (item.cleanName || '').toLowerCase().trim();
+        const year = item.year;
+        
+        const overriddenKey = findOverriddenKeyInCache(tmdbCache, item.category, cleanName, year);
+        if (overriddenKey) {
+          cached = tmdbCache[overriddenKey];
+        } else {
+          const cacheKey = `${item.category}-${cleanName}${year ? `-${year}` : ''}`;
+          if (tmdbCache[cacheKey]) {
+            cached = tmdbCache[cacheKey];
+          } else if (year && tmdbCache[`${item.category}-${cleanName}`]) {
+            cached = tmdbCache[`${item.category}-${cleanName}`];
+          }
+        }
+        
+        if (cached && cached.id) {
+           libraryIndexMap.set(cached.id, item.category);
+        }
+      }
+
+      const keysToScan = keys.filter(k => {
+          const item = tmdbCache[k];
+          return item && item.id && !item.credits && libraryIndexMap.has(item.id);
+      });
+
+      creditsScanJob.total = keysToScan.length;
+      
+      let modified = false;
+      for (let i = 0; i < keysToScan.length; i++) {
+        if (!creditsScanJob.isRunning) break;
+        
+        const key = keysToScan[i];
+        const item = tmdbCache[key];
+        
+        if (item && item.id) {
+          const category = libraryIndexMap.get(item.id);
+          if (category) {
+            creditsScanJob.message = `Scanning credits for: ${item.title || item.name} (${i + 1}/${keysToScan.length})`;
+            
+            try {
+              const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t.toUpperCase());
+              const searchType = isTvType(category) ? 'tv' : 'movie';
+              const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/credits?api_key=${tmdbKey}`);
+              if (response.data) {
+                tmdbCache[key].credits = response.data;
+                modified = true;
+                creditsScanJob.count++;
+              }
+            } catch (err) {
+               creditsScanJob.failedItems.push(item.title || item.name || String(item.id));
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+      }
+      
+      if (modified) {
+        await writeSQLiteJSON('db', tmdbCache);
+      }
+      
+      creditsScanJob.isRunning = false;
+      creditsScanJob.message = `Finished credits scan. Processed ${creditsScanJob.count} items.`;
+    } catch (error: any) {
+      creditsScanJob.isRunning = false;
+      creditsScanJob.message = `Error during scan: ${error.message}`;
+    }
+  })();
+  
+  res.json({ success: true, message: 'Started' });
+});
+
+app.post('/api/meta/scan_credits/stop', adminMiddleware, (req, res) => {
+  creditsScanJob.isRunning = false;
+  creditsScanJob.message = 'Scan stopped.';
+  res.json({ success: true, message: 'Stopped' });
+});
+
+app.get('/api/meta/credits', cacheMiddleware(3600, true), async (req, res) => {
+  const { id, type } = req.query;
+  if (!id || !type) return res.status(400).json({ error: 'id and type required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json({ cast: [], crew: [] });
+
+  const numId = parseInt(id as string, 10);
+  
+  let cacheKeyToUpdate: string | null = null;
+  let cachedCredits = null;
+  
+  for (const [key, value] of Object.entries(tmdbCache)) {
+    if (value && value.id === numId) {
+      if (value.credits) {
+        cachedCredits = value.credits;
+      }
+      cacheKeyToUpdate = key;
+      break;
+    }
+  }
+
+  if (cachedCredits) {
+    return res.json(cachedCredits);
+  }
+
+  try {
+    const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t.toUpperCase());
+    const searchType = isTvType(String(type)) ? 'tv' : 'movie';
+    const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/credits?api_key=${tmdbKey}`);
+    const data = response.data || { cast: [], crew: [] };
+    
+    if (cacheKeyToUpdate && tmdbCache[cacheKeyToUpdate]) {
+      tmdbCache[cacheKeyToUpdate].credits = data;
+      await writeSQLiteJSON('db', tmdbCache);
+    }
+    
+    res.json(data);
+  } catch (err: any) {
+    res.json({ cast: [], crew: [] });
+  }
+});
+
+app.get('/api/meta/person/:personId', cacheMiddleware(1800, true), async (req, res) => {
+  const { personId } = req.params;
+  const nameQuery = req.query.name as string | undefined;
+
+  let token = req.headers.authorization;
+  if (isValidGuest(token || '')) token = getOpenlistApiKey();
+
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) {
+    return res.json({ person: null, movies: [], shows: [] });
+  }
+
+  try {
+    let numericId: number | null = /^\d+$/.test(personId) ? parseInt(personId, 10) : null;
+
+    if (!numericId) {
+      const q = nameQuery || personId.replace(/^crew-|^cast-/, '');
+      if (q) {
+        const searchRes = await axios.get(`https://api.themoviedb.org/3/search/person?api_key=${tmdbKey}&query=${encodeURIComponent(q)}`);
+        if (searchRes.data?.results?.length > 0) {
+          numericId = searchRes.data.results[0].id;
+        }
+      }
+    }
+
+    if (!numericId) {
+      return res.json({ person: null, movies: [], shows: [] });
+    }
+
+    const [personRes, creditsRes] = await Promise.all([
+      axios.get(`https://api.themoviedb.org/3/person/${numericId}?api_key=${tmdbKey}`).catch(() => null),
+      axios.get(`https://api.themoviedb.org/3/person/${numericId}/combined_credits?api_key=${tmdbKey}`).catch(() => null)
+    ]);
+
+    const person = personRes?.data || null;
+    const creditsData = creditsRes?.data || { cast: [], crew: [] };
+
+    const rawCredits = [
+      ...(Array.isArray(creditsData.cast) ? creditsData.cast : []),
+      ...(Array.isArray(creditsData.crew) ? creditsData.crew.filter((c: any) => c.job === 'Director' || c.job === 'Creator') : [])
+    ];
+
+    const libraryItems = await getLibraryIndex(token || '');
+
+    const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const tmdbMap = new Map<number, any>();
+    const nameMap = new Map<string, any[]>();
+
+    for (const item of libraryItems) {
+      const baseQuery = (item.cleanName || '').toLowerCase().trim();
+      const type = item.category;
+      const year = item.year;
+      const baseKey = `${type}-${baseQuery}`;
+
+      let cached = null;
+      const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
+      if (overriddenKey) {
+        cached = tmdbCache[overriddenKey];
+      } else {
+        const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+        if (tmdbCache[cacheKey]) {
+          cached = tmdbCache[cacheKey];
+        } else if (year && tmdbCache[baseKey]) {
+          cached = tmdbCache[baseKey];
+        }
+      }
+
+      if (cached && cached.id) {
+        tmdbMap.set(cached.id, { ...item, _cached: cached });
+      }
+
+      const norm = normalize(item.cleanName || item.name);
+      if (norm) {
+        if (!nameMap.has(norm)) nameMap.set(norm, []);
+        nameMap.get(norm)!.push({ ...item, _cached: cached });
+      }
+    }
+
+    const matchedMap = new Map<string, any>();
+
+    for (const credit of rawCredits) {
+      if (!credit) continue;
+
+      let matchedItem: any = null;
+
+      if (credit.id && tmdbMap.has(credit.id)) {
+        matchedItem = tmdbMap.get(credit.id);
+      }
+
+      if (!matchedItem) {
+        const creditTitleNorm = normalize(credit.title || credit.name || '');
+        const creditOrigTitleNorm = normalize(credit.original_title || credit.original_name || '');
+
+        let candidates = nameMap.get(creditTitleNorm) || nameMap.get(creditOrigTitleNorm) || [];
+
+        if (candidates.length > 0) {
+          const isTvCredit = credit.media_type === 'tv';
+          const filtered = candidates.filter((c: any) => {
+            const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(c.category.toUpperCase());
+            return isTvCredit ? isTvCategory : !isTvCategory;
+          });
+
+          if (filtered.length > 0) {
+            const creditYear = (credit.release_date || credit.first_air_date || '').substring(0, 4);
+            if (creditYear) {
+              // Try to find an exact year match
+              const yearMatch = filtered.find(c => {
+                 const itemYear = c.year || (c._cached?.release_date || c._cached?.first_air_date || '').substring(0, 4);
+                 return itemYear === creditYear;
+              });
+              
+              if (yearMatch) {
+                matchedItem = yearMatch;
+              } else {
+                // If there's no exact year match, only fallback if the library item has NO year info at all
+                const noYearMatch = filtered.find(c => !c.year && !c._cached);
+                if (noYearMatch) {
+                  matchedItem = noYearMatch;
+                }
+              }
+            } else {
+              // If TMDB credit has no year, only match library items that also have no year info
+              const noYearMatch = filtered.find(c => !c.year && !c._cached);
+              if (noYearMatch) {
+                matchedItem = noYearMatch;
+              }
+            }
+          }
+        }
+      }
+
+      if (matchedItem) {
+        const path = `/home/${matchedItem.category}/${matchedItem.name}`;
+        if (!matchedMap.has(path)) {
+          const isShow = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(matchedItem.category.toUpperCase()) || credit.media_type === 'tv';
+
+          matchedMap.set(path, {
+            id: credit.id || matchedItem.name,
+            title: credit.title || credit.name || matchedItem.cleanName || matchedItem.name,
+            openlistName: matchedItem.name,
+            category: matchedItem.category,
+            path,
+            poster_path: credit.poster_path || matchedItem._cached?.poster_path || null,
+            backdrop_path: credit.backdrop_path || matchedItem._cached?.backdrop_path || null,
+            vote_average: credit.vote_average || matchedItem._cached?.vote_average || null,
+            release_date: credit.release_date || credit.first_air_date || matchedItem.year || '',
+            character: credit.character || credit.job || '',
+            media_type: isShow ? 'tv' : 'movie'
+          });
+        }
+      }
+    }
+
+    const matchedList = Array.from(matchedMap.values());
+    const movies = matchedList.filter(m => m.media_type === 'movie');
+    const shows = matchedList.filter(m => m.media_type === 'tv');
+
+    res.json({
+      person,
+      movies,
+      shows
+    });
+  } catch (err: any) {
+    console.error('Error in /api/meta/person:', err);
+    res.json({ person: null, movies: [], shows: [] });
+  }
+});
+
 app.get('/api/meta/tv_details', cacheMiddleware(3600, true), async (req, res) => {
   const { tvId } = req.query;
   if (!tvId) return res.status(400).json({ error: 'tvId required' });
@@ -2282,9 +2607,9 @@ app.post('/api/meta/correct', adminMiddleware, (req, res) => {
 
 // Admin override for TMDB by ID
 app.post('/api/meta/override', adminMiddleware, async (req, res) => {
-  const { query, type, year, tmdbId, customTitle } = req.body;
-  if (!query || (!tmdbId && !customTitle)) return res.status(400).json({ error: 'Invalid data' });
-  
+  const { query, type, year, tmdbId, customTitle, customYear } = req.body;
+  if (!query || (!tmdbId && !customTitle && !customYear)) return res.status(400).json({ error: 'Invalid data' });
+
   try {
     const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
     const baseKey = `${type}-${query.toLowerCase().trim()}`;
@@ -2292,16 +2617,22 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     // Clear server response cache so all GET queries get fresh data immediately
     apiCache.clear();
 
-    if (customTitle && !tmdbId) {
-      // Just override title in existing cache or create a mock
+    if ((customTitle || customYear) && !tmdbId) {
+      // Just override title/year in existing cache or create a mock
       let data = tmdbCache[cacheKey] || {};
-      data.title = customTitle;
-      data.name = customTitle; // tv uses name
+      if (customTitle) {
+        data.title = customTitle;
+        data.name = customTitle; // tv uses name
+      }
+      if (customYear) {
+        data.release_date = customYear + '-01-01'; // approximate for movie
+        data.first_air_date = customYear + '-01-01'; // approximate for tv
+      }
       data._overridden = true;
       tmdbCache[cacheKey] = data;
       tmdbCache[baseKey] = data;
       saveDb();
-      addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle})`);
+      addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'})`);
       return res.json({ success: true, data });
     }
 
@@ -2329,6 +2660,10 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
        if (customTitle) {
          data.title = customTitle;
          data.name = customTitle;
+       }
+       if (customYear) {
+         data.release_date = customYear + '-01-01';
+         data.first_air_date = customYear + '-01-01';
        }
        data._overridden = true;
        tmdbCache[cacheKey] = data;

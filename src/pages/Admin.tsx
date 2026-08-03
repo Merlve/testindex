@@ -24,6 +24,12 @@ export default function Admin() {
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
   const [autoFetchLoading, setAutoFetchLoading] = useState(false);
   const [autoFetchFailed, setAutoFetchFailed] = useState<{name: string, path: string}[]>([]);
+  
+  // Scans
+  const [creditsScanLoading, setCreditsScanLoading] = useState(false);
+  const [creditsScanMsg, setCreditsScanMsg] = useState('');
+  const [collectionScanLoading, setCollectionScanLoading] = useState(false);
+  const [collectionScanMsg, setCollectionScanMsg] = useState('');
 
   // Logs
   const [logs, setLogs] = useState<any[]>([]);
@@ -69,6 +75,22 @@ export default function Admin() {
           setAutoFetchFailed(res.data.failedItems);
         }
       } catch(e) {}
+      
+      try {
+        const res = await axios.get('/api/meta/scan_credits/status');
+        setCreditsScanLoading(res.data.isRunning);
+        if (res.data.message) {
+          setCreditsScanMsg(res.data.message);
+        }
+      } catch(e) {}
+      
+      try {
+        const res = await axios.get('/api/meta/scan_collections/status');
+        setCollectionScanLoading(res.data.isRunning);
+        if (res.data.message) {
+          setCollectionScanMsg(res.data.message);
+        }
+      } catch(e) {}
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -109,6 +131,38 @@ export default function Admin() {
     } catch (e: any) {
       setAutoFetchMsg(`Error during auto-fetch: ${e.message}`);
       setAutoFetchLoading(false);
+    }
+  };
+
+  const handleCreditsScan = async () => {
+    if (creditsScanLoading) {
+      await axios.post('/api/meta/scan_credits/stop', {}, { headers: { Authorization: token } });
+      setCreditsScanLoading(false);
+      return;
+    }
+    setCreditsScanLoading(true);
+    setCreditsScanMsg('Starting credits scan...');
+    try {
+      await axios.post('/api/meta/scan_credits/start', {}, { headers: { Authorization: token } });
+    } catch (e: any) {
+      setCreditsScanMsg(`Error: ${e.message}`);
+      setCreditsScanLoading(false);
+    }
+  };
+
+  const handleCollectionScan = async () => {
+    if (collectionScanLoading) {
+      await axios.post('/api/meta/scan_collections/stop', {}, { headers: { Authorization: token } });
+      setCollectionScanLoading(false);
+      return;
+    }
+    setCollectionScanLoading(true);
+    setCollectionScanMsg('Starting collection scan...');
+    try {
+      await axios.post('/api/meta/scan_collections/start', {}, { headers: { Authorization: token } });
+    } catch (e: any) {
+      setCollectionScanMsg(`Error: ${e.message}`);
+      setCollectionScanLoading(false);
     }
   };
 
@@ -209,6 +263,44 @@ export default function Admin() {
               <p className="text-[10px] sm:text-xs text-red-400/50 mt-2">You can manually correct these below.</p>
             </div>
           )}
+        </div>
+      </div>
+      
+      <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm">
+        <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 sm:mb-4 tracking-tight">Metadata Scans</h3>
+        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs sm:text-sm">Scan existing items to fetch additional metadata.</p>
+        <div className="space-y-6">
+          <div>
+             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex-1">
+                   <h4 className="font-bold text-sm text-black dark:text-white">Credits Scan</h4>
+                   <p className="text-xs text-gray-500">Fetch cast and crew for all library items.</p>
+                </div>
+                <button onClick={handleCreditsScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${creditsScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
+                  {creditsScanLoading ? 'Stop Credits Scan' : 'Start Credits Scan'}
+                </button>
+             </div>
+             {creditsScanMsg && (
+                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{creditsScanMsg}</p>
+             )}
+          </div>
+          
+          <div className="h-px w-full bg-black/10 dark:bg-white/10"></div>
+          
+          <div>
+             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex-1">
+                   <h4 className="font-bold text-sm text-black dark:text-white">Collections Scan</h4>
+                   <p className="text-xs text-gray-500">Check movies for collections they belong to.</p>
+                </div>
+                <button onClick={handleCollectionScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${collectionScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
+                  {collectionScanLoading ? 'Stop Collections Scan' : 'Start Collections Scan'}
+                </button>
+             </div>
+             {collectionScanMsg && (
+                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{collectionScanMsg}</p>
+             )}
+          </div>
         </div>
       </div>
 

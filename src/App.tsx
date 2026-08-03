@@ -19,6 +19,7 @@ import CollectionsPage from './pages/CollectionsPage';
 import Genre from './pages/Genre';
 import GenresList from './pages/GenresList';
 import Profile from './pages/Profile';
+import PersonDetails from './pages/PersonDetails';
 import Layout from './components/Layout';
 import AuthProvider, { useAuth } from './context/AuthContext';
 import Bot from './components/Bot';
@@ -76,6 +77,8 @@ export default function App() {
             <Route path="recommendations" element={<Recommendations />} />
             <Route path="profile" element={<Profile />} />
             <Route path="user-details" element={<Profile />} />
+            <Route path="person/:id" element={<PersonDetails />} />
+            <Route path="actor/:id" element={<PersonDetails />} />
             <Route path="admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
             <Route path="home/*" element={<Details />} />

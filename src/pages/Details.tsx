@@ -1,12 +1,12 @@
 import DetailsSkeleton from "../components/DetailsSkeleton";
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation, useNavigate } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
@@ -288,6 +288,7 @@ export default function Details() {
   const [showMetadataModal, setShowMetadataModal] = useState(false);
   const [newTmdbId, setNewTmdbId] = useState('');
   const [customTitle, setCustomTitle] = useState('');
+  const [customYear, setCustomYear] = useState('');
   const [searchTitle, setSearchTitle] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -367,6 +368,87 @@ export default function Details() {
   const [showTrailerModal, setShowTrailerModal] = useState(false);
   const [trailerUrl, setTrailerUrl] = useState<string | null>(null);
   const [loadingTrailer, setLoadingTrailer] = useState(false);
+
+  // Cast & Crew state
+  const [credits, setCredits] = useState<{ cast: any[]; crew: any[] }>({ cast: [], crew: [] });
+  const [loadingCredits, setLoadingCredits] = useState(false);
+
+  useEffect(() => {
+    if (tmdb?.id) {
+      setLoadingCredits(true);
+      axios.get(`/api/meta/credits?id=${tmdb.id}&type=${category}`)
+        .then(res => {
+          if (res.data) {
+            setCredits({
+              cast: Array.isArray(res.data.cast) ? res.data.cast : [],
+              crew: Array.isArray(res.data.crew) ? res.data.crew : []
+            });
+          }
+        })
+        .catch(() => {
+          setCredits({ cast: [], crew: [] });
+        })
+        .finally(() => setLoadingCredits(false));
+    } else {
+      setCredits({ cast: [], crew: [] });
+    }
+  }, [tmdb?.id, category]);
+
+  const castAndCrewList = useMemo(() => {
+    const list: Array<{ id: number | string; name: string; role: string; profile_path: string | null }> = [];
+    const addedIds = new Set<number | string>();
+
+    // 1. Extract Directors & Creators from crew
+    if (credits.crew && credits.crew.length > 0) {
+      const directors = credits.crew.filter(c => c.job === 'Director' || c.job === 'Creator');
+      directors.forEach(d => {
+        if (d.name && !addedIds.has(d.id || d.name)) {
+          addedIds.add(d.id || d.name);
+          list.push({
+            id: d.id || `crew-${d.name}`,
+            name: d.name,
+            role: d.job || 'Director',
+            profile_path: d.profile_path || null
+          });
+        }
+      });
+    }
+
+    // Check tmdb.created_by for TV shows
+    if (Array.isArray(tmdb?.created_by)) {
+      tmdb.created_by.forEach((creator: any) => {
+        if (creator.name && !addedIds.has(creator.id || creator.name)) {
+          addedIds.add(creator.id || creator.name);
+          list.push({
+            id: creator.id || `creator-${creator.name}`,
+            name: creator.name,
+            role: 'Creator',
+            profile_path: creator.profile_path || null
+          });
+        }
+      });
+    }
+
+    // 2. Extract Cast
+    if (credits.cast && credits.cast.length > 0) {
+      const sortedCast = [...credits.cast].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+      sortedCast.forEach(actor => {
+        if (actor.name) {
+          if (!addedIds.has(actor.id || actor.name)) {
+            addedIds.add(actor.id || actor.name);
+            list.push({
+              id: actor.id || `cast-${actor.name}`,
+              name: actor.name,
+              role: actor.character || 'Actor',
+              profile_path: actor.profile_path || null
+            });
+          }
+        }
+      });
+    }
+
+    return list;
+  }, [credits, tmdb?.created_by]);
 
   const handleWatchTrailer = async () => {
     setShowTrailerModal(true);
@@ -823,7 +905,7 @@ export default function Details() {
       }
       const { cleanName, year } = parseMediaName(searchName);
       
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '' }, { headers: { Authorization: token } });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '', customYear: '' }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
@@ -841,19 +923,20 @@ export default function Details() {
 
   const handleFixMetadata = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTmdbId && !customTitle) return;
+    if (!newTmdbId && !customTitle && !customYear) return;
     try {
       let searchName = name;
       if (/^(s\d+|season\s*\d+)$/i.test(name) && pathParts.length > 2) {
         searchName = pathParts[pathParts.length - 2];
       }
       const { cleanName, year } = parseMediaName(searchName);
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle }, { headers: { Authorization: token } });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle, customYear }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
         setNewTmdbId('');
         setCustomTitle('');
+        setCustomYear('');
         clearRecommendationsCache();
         queryClient.invalidateQueries();
         setToast('Metadata updated successfully!');
@@ -879,8 +962,9 @@ export default function Details() {
 
   return (
     <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="-mt-16 min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-24 relative overflow-x-hidden max-w-full"
     >
@@ -1033,6 +1117,15 @@ export default function Details() {
                   className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-black dark:text-white focus:outline-none focus:border-purple-600/50"
                 />
               </div>
+              <div className="grid grid-cols-1 gap-2">
+                <input 
+                  type="text" 
+                  value={customYear} 
+                  onChange={e => setCustomYear(e.target.value)} 
+                  placeholder="Custom Display Year" 
+                  className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-black dark:text-white focus:outline-none focus:border-purple-600/50"
+                />
+              </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => {
@@ -1041,10 +1134,11 @@ export default function Details() {
                   setSearchResults([]);
                   setNewTmdbId('');
                   setCustomTitle('');
+                  setCustomYear('');
                 }} className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition cursor-pointer">Cancel</button>
                 <button 
                   type="submit" 
-                  disabled={!newTmdbId && !customTitle}
+                  disabled={!newTmdbId && !customTitle && !customYear}
                   className="px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition cursor-pointer"
                 >
                   Apply Override
@@ -1155,6 +1249,79 @@ export default function Details() {
               Watch Trailer
             </button>
           </div>
+
+          {/* CAST & CREW SECTION */}
+          {(loadingCredits || castAndCrewList.length > 0) && (
+            <div className="mb-6">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-3">
+                Cast & Crew
+              </h3>
+
+              {loadingCredits ? (
+                <div className="flex gap-3 overflow-x-auto pb-3 pt-1 scrollbar-none">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="w-20 sm:w-24 md:w-28 shrink-0 flex flex-col items-center animate-pulse">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl sm:rounded-2xl bg-black/10 dark:bg-white/10" />
+                      <div className="w-16 h-2.5 bg-black/10 dark:bg-white/10 rounded mt-2" />
+                      <div className="w-10 h-2 bg-black/10 dark:bg-white/10 rounded mt-1" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 sm:gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x">
+                  {castAndCrewList.map((person) => {
+                    const profileUrl = person.profile_path
+                      ? (person.profile_path.startsWith('http')
+                          ? person.profile_path
+                          : `https://image.tmdb.org/t/p/w185${person.profile_path}`)
+                      : null;
+
+                    return (
+                      <div
+                        key={person.id}
+                        onClick={() => navigate(`/person/${person.id}?name=${encodeURIComponent(person.name)}`)}
+                        className="w-20 sm:w-24 md:w-28 shrink-0 text-center flex flex-col items-center group cursor-pointer snap-start transition-transform duration-200 hover:scale-[1.03]"
+                        title={`View ${person.name}`}
+                      >
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 relative rounded-xl sm:rounded-2xl overflow-hidden bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 shadow-sm group-hover:shadow-md transition-all duration-300">
+                          {profileUrl ? (
+                            <img
+                              src={profileUrl}
+                              alt={person.name}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                                const parent = (e.target as HTMLElement).parentElement;
+                                if (parent) {
+                                  const fallback = parent.querySelector('.avatar-fallback');
+                                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                }
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className="avatar-fallback w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/30 to-slate-800/50 text-gray-400 font-bold text-xs"
+                            style={{ display: profileUrl ? 'none' : 'flex' }}
+                          >
+                            <User size={22} className="text-gray-400 mb-0.5 opacity-70" />
+                            <span className="text-[10px] text-gray-400 font-medium px-1 text-center line-clamp-1">{person.name}</span>
+                          </div>
+                        </div>
+
+                        <h4 className="text-[11px] sm:text-xs font-semibold text-gray-900 dark:text-white mt-1.5 line-clamp-2 px-0.5 leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                          {person.name}
+                        </h4>
+                        <p className="text-[10px] sm:text-[11px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 px-0.5 leading-tight">
+                          {person.role}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* MOVIE PLAY / DOWNLOAD SECTION */}
           {isMovieCategory && (
