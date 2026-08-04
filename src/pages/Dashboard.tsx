@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router';
 import { Play, RefreshCw } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
-import FeaturedSlide from '../components/FeaturedSlide';
+import FeaturedSlider from '../components/FeaturedSlider';
 import RecentlyAddedCarousel from '../components/RecentlyAddedCarousel';
 import TrendingCarousel from '../components/TrendingCarousel';
 import DigitalReleasesCarousel from '../components/DigitalReleasesCarousel';
@@ -86,8 +86,7 @@ export default function Dashboard() {
     }
   };
 
-  const [slideIndex, setSlideIndex] = useState(0);
-
+  
   const { data: categories = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchHome,
@@ -109,15 +108,6 @@ export default function Dashboard() {
     return shuffled.slice(0, 5);
   }, [categories]);
 
-  useEffect(() => {
-    if (featuredItems.length === 0) return;
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        setSlideIndex(prev => (prev + 1) % featuredItems.length);
-      }
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [featuredItems]);
 
 
   if (isLoading) return <DashboardSkeleton />;
@@ -138,8 +128,6 @@ export default function Dashboard() {
     );
   }
 
-  const actualSlideIndex = Math.min(slideIndex, Math.max(0, featuredItems.length - 1));
-  const featured = featuredItems[actualSlideIndex];
 
   return (
     <motion.div 
@@ -153,15 +141,8 @@ export default function Dashboard() {
           <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> {isFetching ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
-      {featured && (
-        <FeaturedSlide 
-         featured={featured} 
-         slideIndex={actualSlideIndex} 
-         totalSlides={featuredItems.length} 
-         onNext={() => setSlideIndex(prev => (prev + 1) % featuredItems.length)}
-         onPrev={() => setSlideIndex(prev => (prev - 1 + featuredItems.length) % featuredItems.length)}
-         onSetSlide={(idx) => setSlideIndex(idx)}
-       />
+      {featuredItems && featuredItems.length > 0 && (
+        <FeaturedSlider featuredItems={featuredItems} />
       )}
 
       <div className="px-4 sm:px-8 flex-1 flex flex-col gap-6 sm:gap-8 pb-12 mt-4">

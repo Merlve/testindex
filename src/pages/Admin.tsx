@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
-import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw } from 'lucide-react';
+import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 
 export default function Admin() {
@@ -28,6 +28,38 @@ export default function Admin() {
   // Scans
   const [creditsScanLoading, setCreditsScanLoading] = useState(false);
   const [creditsScanMsg, setCreditsScanMsg] = useState('');
+
+  const [missingMetadata, setMissingMetadata] = useState<any[]>([]);
+  const [loadingMissing, setLoadingMissing] = useState(false);
+  const [refreshingMissing, setRefreshingMissing] = useState(false);
+
+  const fetchMissingMetadata = async () => {
+    setLoadingMissing(true);
+    try {
+      const res = await axios.get('/api/admin/missing-metadata', { headers: { Authorization: token } });
+      setMissingMetadata(res.data.missing || []);
+    } catch(e) {
+      console.error(e);
+    }
+    setLoadingMissing(false);
+  };
+  
+  const refreshMissingMetadata = async () => {
+    if (missingMetadata.length === 0) return;
+    setRefreshingMissing(true);
+    try {
+      const res = await axios.post('/api/admin/missing-metadata/refresh', { items: missingMetadata }, { headers: { Authorization: token } });
+      setMsg(`Refreshed ${res.data.refreshedCount} items successfully!`);
+      setTimeout(() => setMsg(''), 3000);
+      fetchMissingMetadata();
+    } catch(e) {
+       console.error(e);
+       setMsg('Failed to refresh missing metadata.');
+       setTimeout(() => setMsg(''), 3000);
+    }
+    setRefreshingMissing(false);
+  };
+
   const [collectionScanLoading, setCollectionScanLoading] = useState(false);
   const [collectionScanMsg, setCollectionScanMsg] = useState('');
 
@@ -53,9 +85,13 @@ export default function Admin() {
   useEffect(() => {
     if (activeTab === 'logs') {
       axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => setLogs(res.data));
+
     } else if (activeTab === 'downloads') {
       fetchTopDownloads();
+    } else if (activeTab === 'missing-metadata') {
+      fetchMissingMetadata();
     }
+
   }, [activeTab, token]);
 
   useEffect(() => {
@@ -191,6 +227,14 @@ export default function Admin() {
           className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap min-h-[38px] ${activeTab === 'downloads' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
         >
           <Download size={16} /> Top 15 Downloads
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('missing-metadata')}
+          className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap min-h-[38px] ${activeTab === 'missing-metadata' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
+        >
+          <SearchX size={16} />
+          Missing Metadata
         </button>
       </div>
 
@@ -505,6 +549,79 @@ export default function Admin() {
           )}
         </div>
       )}
+
+      {activeTab === 'missing-metadata' && (
+        <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-5">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-1">
+                <Database size={16} /> Data Integrity
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-black dark:text-white flex items-center gap-2.5">
+                Missing Metadata Items
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                Files currently indexed from OpenList that could not be matched with TMDB data. 
+                You can try bulk refreshing to fetch data again.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button 
+                onClick={fetchMissingMetadata}
+                disabled={loadingMissing}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <RefreshCw size={14} className={loadingMissing ? 'animate-spin' : ''} />
+                <span>Reload List</span>
+              </button>
+              <button 
+                onClick={refreshMissingMetadata}
+                disabled={refreshingMissing || missingMetadata.length === 0}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-blue-600/20 disabled:opacity-50"
+              >
+                <UploadCloud size={14} className={refreshingMissing ? 'animate-bounce' : ''} />
+                <span>Bulk Refresh Metadata</span>
+              </button>
+            </div>
+          </div>
+          
+          {msg && (
+            <div className="bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 p-3 rounded-xl text-sm font-bold flex items-center gap-2">
+              <span>{msg}</span>
+            </div>
+          )}
+
+          {loadingMissing ? (
+            <div className="text-center py-12 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+              <RefreshCw size={36} className="mx-auto text-gray-400 opacity-40 animate-spin mb-3" />
+              <p className="text-sm font-bold text-black dark:text-white">Scanning Library...</p>
+            </div>
+          ) : missingMetadata.length === 0 ? (
+            <div className="text-center py-12 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5 space-y-2">
+              <SearchX size={36} className="mx-auto text-green-500 opacity-60" />
+              <h4 className="text-sm font-bold text-black dark:text-white">All Metadata Intact</h4>
+              <p className="text-xs text-gray-500">No items are missing metadata!</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {missingMetadata.map((item, idx) => (
+                <div key={idx} className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                   <div className="min-w-0">
+                      <h4 className="font-bold text-sm text-black dark:text-white truncate">{item.name}</h4>
+                      <div className="text-xs text-gray-500 font-mono mt-0.5 truncate">
+                        {item.path}
+                      </div>
+                   </div>
+                   <span className="text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 px-2 py-1 rounded border border-red-500/20 shrink-0">
+                      No Data
+                   </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
-import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Cloud } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
@@ -176,6 +176,14 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
         {displayTmdb?.vote_average && (
           <div className={`absolute top-1 right-1 ${viewMode === 'grid' ? 'sm:top-2 sm:right-2' : ''} px-1 sm:px-1.5 py-0.5 bg-black/70 backdrop-blur rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20`}>
             {Number(displayTmdb.vote_average).toFixed(1)}
+          </div>
+        )}
+        {user === 'admin' && displayTmdb?._synced && (
+          <div 
+            className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} ${viewMode === 'grid' ? (displayTmdb?.vote_average ? 'sm:top-2 sm:right-11' : 'sm:top-2 sm:right-2') : ''} p-1 rounded-md bg-black/75 backdrop-blur text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
+            title="Metadata synced in database (Cached)"
+          >
+            <Cloud size={11} className="sm:w-3 sm:h-3 fill-sky-400/20 text-sky-400" />
           </div>
         )}
         <button

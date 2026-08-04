@@ -150,7 +150,7 @@ const rateLimitMiddleware = (req: express.Request, res: express.Response, next: 
 app.use('/api', rateLimitMiddleware);
 
 // Simple file-based config storage
-let appConfig = {
+let appConfig: Record<string, any> = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home',
   inactivityTimeout: 0
@@ -1020,6 +1020,92 @@ app.get('/api/admin/diagnostic', adminMiddleware, async (req, res) => {
   res.json(result);
 });
 
+
+app.get('/api/admin/missing-metadata', adminMiddleware, async (req, res) => {
+  const token = req.headers.authorization as string;
+  const index = await getLibraryIndex(token);
+  
+  const missingItems = [];
+  for (const item of index) {
+     const typeStr = (item.category || '').toUpperCase();
+     const searchType = (['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(typeStr) || typeStr.includes('TV') || typeStr.includes('SHOW') || typeStr.includes('SERIES')) ? 'tv' : 'movie';
+     
+     const { cleanName, year } = parseMediaName(item.name);
+     const baseQuery = cleanName.toLowerCase().trim();
+     const baseKey = `${searchType}-${baseQuery}`;
+     const cacheKey = `${searchType}-${baseQuery}${year ? `-${year}` : ''}`;
+     
+     const pathKey = `path-${appConfig.basePath === '/' ? '' : appConfig.basePath}/${item.category}/${item.name}`;
+     
+     const overriddenKey = findOverriddenKeyInCache(tmdbCache, searchType, baseQuery, year);
+     
+     let cached = null;
+     if (overriddenKey && tmdbCache[overriddenKey] !== undefined) {
+         cached = tmdbCache[overriddenKey];
+     } else if (tmdbCache[pathKey] !== undefined) {
+         cached = tmdbCache[pathKey];
+     } else if (tmdbCache[cacheKey] !== undefined) {
+         cached = tmdbCache[cacheKey];
+     } else if (year && tmdbCache[baseKey] !== undefined) {
+         cached = tmdbCache[baseKey];
+     }
+     
+     // If it's explicitly null, it means we tried and failed.
+     if (cached === null) {
+         missingItems.push({
+             name: item.name,
+             category: item.category,
+             cleanName,
+             year,
+             searchType,
+             path: `${appConfig.basePath === '/' ? '' : appConfig.basePath}/${item.category}/${item.name}`
+         });
+     }
+  }
+  
+  res.json({ missing: missingItems });
+});
+
+app.post('/api/admin/missing-metadata/refresh', adminMiddleware, async (req, res) => {
+  const { items } = req.body;
+  if (!items || !Array.isArray(items)) return res.status(400).json({ error: 'Items required' });
+  
+  let refreshedCount = 0;
+  for (const item of items) {
+      const cacheKey = `${item.searchType}-${item.cleanName.toLowerCase().trim()}${item.year ? `-${item.year}` : ''}`;
+      const pathKey = `path-${item.path}`;
+      
+      // Clear from cache
+      delete tmdbCache[cacheKey];
+      delete tmdbCache[pathKey];
+      
+      // We will let the background or next request fetch it, or we can fetch it right now.
+      // Fetch right now:
+      try {
+          const tmdbKey = process.env.TMDB_API_KEY;
+          if (tmdbKey) {
+             const yearParam = item.year ? `&year=${item.year}` : '';
+             const res = await axios.get(`https://api.themoviedb.org/3/search/${item.searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(item.cleanName)}${yearParam}`);
+             if (res.data.results && res.data.results.length > 0) {
+                 tmdbCache[cacheKey] = res.data.results[0];
+                 tmdbCache[pathKey] = res.data.results[0];
+                 refreshedCount++;
+             } else {
+                 tmdbCache[cacheKey] = null;
+                 tmdbCache[pathKey] = null;
+             }
+          }
+      } catch (e) {
+          tmdbCache[cacheKey] = null;
+          tmdbCache[pathKey] = null;
+      }
+  }
+  
+  saveDb();
+  res.json({ success: true, refreshedCount });
+});
+
+
 // API: Openlist Proxy - Admin
 app.all('/api/admin/*', adminMiddleware, async (req, res) => {
   try {
@@ -1577,13 +1663,13 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
     
     const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
     if (overriddenKey) {
-      results[originalName] = tmdbCache[overriddenKey];
+      results[originalName] = { ...tmdbCache[overriddenKey], _synced: true };
     } else {
       const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
       if (tmdbCache[cacheKey]) {
-        results[originalName] = tmdbCache[cacheKey];
+        results[originalName] = { ...tmdbCache[cacheKey], _synced: true };
       } else if (year && tmdbCache[baseKey]) {
-        results[originalName] = tmdbCache[baseKey];
+        results[originalName] = { ...tmdbCache[baseKey], _synced: true };
       } else if (tmdbCache[cacheKey] === null) {
         results[originalName] = null;
       } else {
@@ -1640,7 +1726,7 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
                } catch(e) {}
            }
            tmdbCache[item.cacheKey] = topResult;
-           results[item.originalName] = topResult;
+           results[item.originalName] = { ...topResult, _synced: false };
         } else {
            tmdbCache[item.cacheKey] = null;
            results[item.originalName] = null;
@@ -1721,7 +1807,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
               }
           } catch (e) {}
       }
-      return res.json(cachedItem);
+      return res.json({ ...cachedItem, _synced: true });
   } else if (cachedItem === null && cacheKeyToUpdate) {
       return res.json(null);
   }
@@ -1805,7 +1891,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
            tmdbCache[cacheKey] = data.results[0];
        }
        saveDb();
-       return res.json(data.results[0]);
+       return res.json({ ...data.results[0], _synced: false });
     }
     res.json(null);
   } catch (error: any) {
