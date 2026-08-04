@@ -17,13 +17,6 @@ export const sqliteDb = createClient({
 export async function initSQLiteDB() {
   await sqliteDb.execute('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)');
 
-  try {
-    // Attempt to delete previously too-large uncompressed rows that cause OOMs
-    await sqliteDb.execute("DELETE FROM kv_store WHERE key IN ('db', 'library_index')");
-  } catch (e) {
-    console.error('Failed to cleanup old large rows', e);
-  }
-
   const migrationFlag = await readSQLiteJSON('_migration_complete');
   if (migrationFlag) {
     return; // Already migrated
