@@ -32,7 +32,8 @@ export default function FeaturedSlide({ featured, slideIndex, totalSlides, onNex
       const { cleanName, year } = parseMediaName(searchName);
       try {
         console.log("Fetching TMDB for featured:", { cleanName, category: featured.category, year });
-        const res = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${featured.category}${year ? `&year=${year}` : ''}`);
+        const itemPath = featured._jf_name ? featured._jf_name : featured.parentPath ? `${featured.parentPath}/${featured.name}` : featured.name;
+        const res = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${featured.category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}`);
         if (res.data) {
           setTmdb(res.data);
         }

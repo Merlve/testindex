@@ -59,7 +59,8 @@ const ProviderResultItem = ({ res, handleAddItemToCollection, isAdded }: any) =>
     queryKey: ['tmdb', res.name, res.category],
     queryFn: async () => {
       try {
-        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${res.category}${searchYear ? `&year=${searchYear}` : ''}`;
+        const itemPath = res.parentPath ? `${res.parentPath}/${res.name}` : res.name;
+        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${res.category}${searchYear ? `&year=${searchYear}` : ''}&path=${encodeURIComponent(itemPath)}`;
         const resp = await axios.get(url);
         return resp.data;
       } catch (e) {

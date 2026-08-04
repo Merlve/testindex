@@ -92,7 +92,7 @@ export default function Dashboard() {
   });
 
   const featuredItems = useMemo(() => {
-    const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name })));
+    const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name, parentPath: item._parent || `/home/${c.name}` })));
     // Shuffle and pick up to 5
     const shuffled = [...allItems].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 5);

@@ -428,7 +428,8 @@ export default function Profile() {
       if (!matchItem) return;
 
       try {
-        const searchRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(matchItem.episodeInfo!.showTitle)}&type=tv`);
+        const itemPath = matchItem.parentPath ? `${matchItem.parentPath}/${matchItem.rawName}` : matchItem.rawName;
+        const searchRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(matchItem.episodeInfo!.showTitle)}&type=tv&path=${encodeURIComponent(itemPath)}`);
         const showObj = searchRes.data?.results ? searchRes.data.results[0] : searchRes.data;
         if (showObj?.id) {
           const tvId = showObj.id;

@@ -684,7 +684,8 @@ export default function Details() {
           searchName = pathParts[pathParts.length - 2];
         }
         const { cleanName, year } = parseMediaName(searchName);
-        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&full=true`);
+        const itemPath = `/${fullPath}`;
+        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}&full=true`);
         if (tmdbRes.data) {
           setTmdb(tmdbRes.data);
           try {
@@ -904,8 +905,9 @@ export default function Details() {
         searchName = pathParts[pathParts.length - 2];
       }
       const { cleanName, year } = parseMediaName(searchName);
+      const itemPath = `/${fullPath}`;
       
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '', customYear: '' }, { headers: { Authorization: token } });
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: String(result.id), customTitle: '', customYear: '', path: itemPath }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);
@@ -930,7 +932,8 @@ export default function Details() {
         searchName = pathParts[pathParts.length - 2];
       }
       const { cleanName, year } = parseMediaName(searchName);
-      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle, customYear }, { headers: { Authorization: token } });
+      const itemPath = `/${fullPath}`;
+      const res = await axios.post('/api/meta/override', { query: cleanName, type: category, year, tmdbId: newTmdbId, customTitle, customYear, path: itemPath }, { headers: { Authorization: token } });
       if (res.data.success && res.data.data) {
         setTmdb(res.data.data);
         setShowMetadataModal(false);

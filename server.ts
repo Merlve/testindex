@@ -243,19 +243,23 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
   const cacheKey = `${typeStr}-${baseQuery}${year ? `-${year}` : ''}`;
 
   if (cache[cacheKey]?._overridden) return cacheKey;
-  if (cache[baseKey]?._overridden) return baseKey;
 
-  const found = Object.keys(cache).find(k => {
-    if (!cache[k]?._overridden) return false;
-    if (k === cacheKey || k === baseKey) return true;
-    if (k.startsWith(`${baseKey}-`)) {
-      const suffix = k.slice(baseKey.length + 1);
-      return /^\d{4}$/.test(suffix);
-    }
-    return false;
-  });
+  if (!year) {
+    if (cache[baseKey]?._overridden) return baseKey;
 
-  return found || null;
+    const found = Object.keys(cache).find(k => {
+      if (!cache[k]?._overridden) return false;
+      if (k.startsWith(`${baseKey}-`)) {
+        const suffix = k.slice(baseKey.length + 1);
+        return /^\d{4}$/.test(suffix);
+      }
+      return false;
+    });
+
+    return found || null;
+  }
+
+  return null;
 }
 
 
@@ -1627,7 +1631,7 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
 });
 
 app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
-  const { query, type, year, tmdbId, full } = req.query; // type can be 'movie' or 'tv'
+  const { query, type, year, tmdbId, full, path: itemPath } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
   const baseQuery = query.toLowerCase().trim();
@@ -1641,6 +1645,8 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   const typeStr = (type as string || '').toUpperCase();
   const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t) || t.includes('TV') || t.includes('SHOW') || t.includes('SERIES');
   const searchType = isTvType(typeStr) ? 'tv' : 'movie';
+
+  const pathKey = itemPath ? `path-${itemPath}` : null;
 
   // Helper to attach status if missing
   const attachStatus = async (item: any) => {
@@ -1663,7 +1669,10 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   
   let cachedItem = null;
   let cacheKeyToUpdate = null;
-  if (overriddenKey) {
+  if (pathKey && tmdbCache[pathKey] !== undefined) {
+    cachedItem = tmdbCache[pathKey];
+    cacheKeyToUpdate = pathKey;
+  } else if (overriddenKey) {
     cachedItem = tmdbCache[overriddenKey];
     cacheKeyToUpdate = overriddenKey;
   } else {
@@ -1764,7 +1773,11 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     
     if (data.results && data.results.length > 0) {
        if (full === 'true') await attachStatus(data.results[0]);
-       tmdbCache[cacheKey] = data.results[0];
+       if (pathKey) {
+           tmdbCache[pathKey] = data.results[0];
+       } else {
+           tmdbCache[cacheKey] = data.results[0];
+       }
        saveDb();
        return res.json(data.results[0]);
     }
@@ -2617,7 +2630,6 @@ app.post('/api/meta/correct', adminMiddleware, (req, res) => {
   const baseKey = `${type}-${query.toLowerCase().trim()}`;
   data._overridden = true;
   tmdbCache[cacheKey] = data;
-  tmdbCache[baseKey] = data;
   apiCache.clear();
   saveDb();
   addLog('TMDB Corrected', 'Admin', `Corrected TMDB data for query: ${query} (Type: ${type})`);
@@ -2626,12 +2638,13 @@ app.post('/api/meta/correct', adminMiddleware, (req, res) => {
 
 // Admin override for TMDB by ID
 app.post('/api/meta/override', adminMiddleware, async (req, res) => {
-  const { query, type, year, tmdbId, customTitle, customYear } = req.body;
+  const { query, type, year, tmdbId, customTitle, customYear, path: itemPath } = req.body;
   if (!query || (!tmdbId && !customTitle && !customYear)) return res.status(400).json({ error: 'Invalid data' });
 
   try {
     const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
     const baseKey = `${type}-${query.toLowerCase().trim()}`;
+    const pathKey = itemPath ? `path-${itemPath}` : null;
 
     // Clear server response cache so all GET queries get fresh data immediately
     apiCache.clear();
@@ -2648,8 +2661,11 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
         data.first_air_date = customYear + '-01-01'; // approximate for tv
       }
       data._overridden = true;
-      tmdbCache[cacheKey] = data;
-      tmdbCache[baseKey] = data;
+      if (pathKey) {
+          tmdbCache[pathKey] = data;
+      } else {
+          tmdbCache[cacheKey] = data;
+      }
       saveDb();
       addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'})`);
       return res.json({ success: true, data });
@@ -2685,8 +2701,11 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
          data.first_air_date = customYear + '-01-01';
        }
        data._overridden = true;
-       tmdbCache[cacheKey] = data;
-       tmdbCache[baseKey] = data;
+       if (pathKey) {
+           tmdbCache[pathKey] = data;
+       } else {
+           tmdbCache[cacheKey] = data;
+       }
        saveDb();
        addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
        return res.json({ success: true, data });
@@ -3078,6 +3097,16 @@ export async function initSQLiteState() {
     for (const k of Object.keys(tmdbCache)) {
       const item = tmdbCache[k];
       if (item && item._overridden) {
+        // Clean up polluted base keys
+        if (!k.match(/-\d{4}$/)) {
+          const matchingYearKey = Object.keys(tmdbCache).find(yk => yk.startsWith(k + '-') && tmdbCache[yk]?._overridden && tmdbCache[yk].id === item.id);
+          if (matchingYearKey) {
+            delete tmdbCache[k];
+            touched = true;
+            continue;
+          }
+        }
+        
         const kLower = k.toLowerCase();
         if (item.id === 37854) {
           const isExactShowKey = kLower === 'anime-one piece' || kLower === 'anime-one piece-1999' ||

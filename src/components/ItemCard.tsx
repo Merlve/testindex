@@ -134,7 +134,8 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     queryKey: ['tmdb', item.name, category, parentPath, item._jf?.tmdbId],
     queryFn: async () => {
       try {
-        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}`;
+        const itemPath = item._jf_name ? item._jf_name : parentPath ? `${parentPath}/${item.name}` : item.name;
+        let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${searchYear ? `&year=${searchYear}` : ''}&path=${encodeURIComponent(itemPath)}`;
         if (item._jf && item._jf.tmdbId) url += `&tmdbId=${item._jf.tmdbId}`;
         
         const res = await axios.get(url);
