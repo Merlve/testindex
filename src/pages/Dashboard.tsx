@@ -7,6 +7,7 @@ import ItemCard from '../components/ItemCard';
 import FeaturedSlide from '../components/FeaturedSlide';
 import RecentlyAddedCarousel from '../components/RecentlyAddedCarousel';
 import TrendingCarousel from '../components/TrendingCarousel';
+import DigitalReleasesCarousel from '../components/DigitalReleasesCarousel';
 import GenresCarousel from '../components/GenresCarousel';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -165,6 +166,7 @@ export default function Dashboard() {
 
       <div className="px-4 sm:px-8 flex-1 flex flex-col gap-6 sm:gap-8 pb-12 mt-4">
         <TrendingCarousel categories={categories} />
+        <DigitalReleasesCarousel categories={categories} />
         <RecentlyAddedCarousel />
         {categories.map(cat => (
           <div key={cat.name}>

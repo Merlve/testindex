@@ -222,9 +222,26 @@ export default function Details() {
   const [seasonItems, setSeasonItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingFiles, setLoadingFiles] = useState(true);
-  const [tmdb, setTmdb] = useState<any>(null);
+  const [tmdb, setTmdb] = useState<any>(location.state?.tmdbData || null);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [toast, setToast] = useState('');
+  
+  const [showPathModal, setShowPathModal] = useState(false);
+  const [manualPathInput, setManualPathInput] = useState(fullPath.replace(/^\//, ''));
+
+  const handleUpdateDigitalPath = async () => {
+    if (user !== 'admin' || !tmdb?.id) return;
+    try {
+      const res = await axios.post('/api/meta/digital-path', { tmdbId: tmdb.id, path: manualPathInput }, { headers: { Authorization: token } });
+      if (res.data.success) {
+        setToast('Digital Path Updated. Reloading...');
+        setTimeout(() => window.location.reload(), 1000);
+      }
+    } catch (e) {
+      console.error(e);
+      setToast('Failed to update path');
+    }
+  };
 
   useEffect(() => {
     let cleanName = '';
@@ -740,6 +757,30 @@ export default function Details() {
   }, [user, name, fullPath]);
 
   // Watchlist Toggle
+  const [unreleasedIds, setUnreleasedIds] = useState<number[]>(config.unreleasedTmdbIds || []);
+  useEffect(() => {
+    if (config.unreleasedTmdbIds) {
+      setUnreleasedIds(config.unreleasedTmdbIds);
+    }
+  }, [config.unreleasedTmdbIds]);
+
+  const isUnreleased = (tmdb?.id && unreleasedIds.some(id => Number(id) === Number(tmdb.id)));
+
+  const handleToggleUnrelease = async () => {
+    if (user !== 'admin' || !tmdb?.id) return;
+    const isCurrentlyUnreleased = unreleasedIds.some(id => Number(id) === Number(tmdb.id));
+    try {
+      const res = await axios.post('/api/meta/unrelease', { tmdbId: Number(tmdb.id), unrelease: !isCurrentlyUnreleased }, { headers: { Authorization: token } });
+      if (res.data.success) {
+        setUnreleasedIds(res.data.unreleasedTmdbIds);
+        setToast(isCurrentlyUnreleased ? 'Marked as Released' : 'Marked as Not Released');
+        setTimeout(() => setToast(''), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleToggleWatchlist = async () => {
     if (user === 'guest') {
       setToast('Sign up for the website plan to use this feature');
@@ -1043,6 +1084,39 @@ export default function Details() {
         </div>
       )}
 
+      {/* Edit Path Modal */}
+      {showPathModal && (
+        <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center backdrop-blur-md px-4">
+          <div className="bg-white/80 dark:bg-[#1a1a22]/80 backdrop-blur-2xl p-6 rounded-2xl border border-black/10 dark:border-white/10 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold text-black dark:text-white mb-2">Edit Digital Release Path</h3>
+            <p className="text-xs font-mono text-gray-600 dark:text-gray-400 mb-4 break-words break-all">Update the exact OpenList path for this digital release. Enter without leading slash. E.g. home/MOVIES/Title.2024</p>
+            <div className="mb-4">
+              <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2 font-bold">OpenList Path</label>
+              <input
+                 type="text"
+                 value={manualPathInput}
+                 onChange={(e) => setManualPathInput(e.target.value)}
+                 className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 text-black dark:text-white rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button 
+                onClick={() => setShowPathModal(false)}
+                className="px-4 py-2 rounded-xl font-bold text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleUpdateDigitalPath}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Fix Metadata Modal */}
       {showMetadataModal && (
         <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center backdrop-blur-md px-4">
@@ -1194,6 +1268,16 @@ export default function Details() {
             }} className="bg-purple-500/10 dark:bg-white/10 border border-purple-500/20 dark:border-white/10 text-purple-700 dark:text-purple-300 hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white dark:hover:text-white p-2 rounded-xl transition self-start mt-2 cursor-pointer shadow-sm" title="Fix Metadata">
               <Edit2 size={16} />
             </button>
+            {user === 'admin' && isMovieCategory && tmdb?.id && (
+               <button onClick={handleToggleUnrelease} className={`p-1.5 rounded-xl transition self-start mt-2 cursor-pointer shadow-sm border text-[10px] font-bold ${unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'bg-red-500/20 border-red-500/30 text-red-600 dark:text-red-400' : 'bg-gray-500/10 dark:bg-white/10 border-gray-500/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20'}`} title="Toggle Released Status">
+                  {unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'Not Released' : 'Released'}
+               </button>
+            )}
+            {user === 'admin' && location.state?.item?._digital_release && (
+               <button onClick={() => setShowPathModal(true)} className="p-1.5 rounded-xl transition self-start mt-2 cursor-pointer shadow-sm border text-[10px] font-bold bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300 hover:bg-blue-600 hover:text-white" title="Edit Path">
+                  Edit Path
+               </button>
+            )}
           </div>
         </div>
 
@@ -1213,6 +1297,16 @@ export default function Details() {
             }} className="bg-purple-500/10 dark:bg-white/10 border border-purple-500/20 dark:border-white/10 text-purple-700 dark:text-purple-300 hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white dark:hover:text-white p-2 rounded-xl transition shrink-0 cursor-pointer shadow-sm" title="Fix Metadata">
               <Edit2 size={16} />
             </button>
+            {user === 'admin' && isMovieCategory && tmdb?.id && (
+               <button onClick={handleToggleUnrelease} className={`p-2 rounded-xl transition shrink-0 cursor-pointer shadow-sm border text-xs font-bold flex items-center ${unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'bg-red-500/20 border-red-500/30 text-red-600 dark:text-red-400' : 'bg-gray-500/10 dark:bg-white/10 border-gray-500/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20'}`} title="Toggle Released Status">
+                  {unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'Not Released' : 'Released'}
+               </button>
+            )}
+            {user === 'admin' && location.state?.item?._digital_release && (
+               <button onClick={() => setShowPathModal(true)} className="p-2 rounded-xl transition shrink-0 cursor-pointer shadow-sm border text-xs font-bold flex items-center bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300 hover:bg-blue-600 hover:text-white" title="Edit Path">
+                  Edit Path
+               </button>
+            )}
           </div>
 
           <div className="hidden md:flex flex-col items-start gap-2 mb-4">
@@ -1366,7 +1460,7 @@ export default function Details() {
                     <div className="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 animate-pulse flex items-center justify-center h-32">
                       <div className="h-6 w-1/3 bg-gray-300/30 dark:bg-gray-700/30 rounded"></div>
                     </div>
-                  ) : videoItems.length > 0 ? (
+                  ) : (!isUnreleased && videoItems.length > 0) ? (
                     videoItems.length === 1 ? (
                       /* Single Movie File Layout */
                       (() => {
@@ -1573,7 +1667,13 @@ export default function Details() {
                 )
               ) : (
                 <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
-                  <div className="text-gray-500 text-sm font-medium">No video files found in this movie folder.</div>
+                  <div className="text-gray-500 text-sm font-medium">
+                    {(isUnreleased || (location.state?.item?._digital_release && location.state.item.releaseDate)) ? (
+                      `This movie releases on digital on ${new Date(location.state?.item?.releaseDate || tmdb?.release_date || new Date()).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}.`
+                    ) : (
+                      "No video files found in this movie folder."
+                    )}
+                  </div>
                 </div>
               )}
                 </div>

@@ -247,7 +247,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
               {innerContent}
           </a>
       ) : (
-          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses}>
+          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses} state={{ item, tmdbData: displayTmdb }}>
               {innerContent}
           </Link>
       )}

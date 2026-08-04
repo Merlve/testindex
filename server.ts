@@ -771,8 +771,34 @@ app.get('/api/config', (req, res) => {
   res.json({
     openlistUrl: getOpenlistUrl(),
     basePath: appConfig.basePath,
-    inactivityTimeout: appConfig.inactivityTimeout || 0
+    inactivityTimeout: appConfig.inactivityTimeout || 0,
+    unreleasedTmdbIds: appConfig.unreleasedTmdbIds || [],
+    digitalReleasePaths: appConfig.digitalReleasePaths || {}
   });
+});
+app.post('/api/meta/unrelease', adminMiddleware, (req, res) => {
+  const { tmdbId, unrelease } = req.body;
+  if (!appConfig.unreleasedTmdbIds) appConfig.unreleasedTmdbIds = [];
+  if (unrelease) {
+    if (!appConfig.unreleasedTmdbIds.includes(Number(tmdbId))) {
+      appConfig.unreleasedTmdbIds.push(Number(tmdbId));
+    }
+  } else {
+    appConfig.unreleasedTmdbIds = appConfig.unreleasedTmdbIds.filter((id: any) => Number(id) !== Number(tmdbId));
+  }
+  saveConfig();
+  res.json({ success: true, unreleasedTmdbIds: appConfig.unreleasedTmdbIds });
+});
+app.post('/api/meta/digital-path', adminMiddleware, (req, res) => {
+  const { tmdbId, path: manualPath } = req.body;
+  if (!appConfig.digitalReleasePaths) appConfig.digitalReleasePaths = {};
+  if (manualPath) {
+    appConfig.digitalReleasePaths[Number(tmdbId)] = manualPath;
+  } else {
+    delete appConfig.digitalReleasePaths[Number(tmdbId)];
+  }
+  saveConfig();
+  res.json({ success: true, digitalReleasePaths: appConfig.digitalReleasePaths });
 });
 app.post('/api/config', adminMiddleware, (req, res) => {
   if (req.body.openlistUrl !== undefined) appConfig.openlistUrl = req.body.openlistUrl;
@@ -2606,6 +2632,22 @@ app.get('/api/meta/genre/:genreId', async (req, res) => {
   });
 
   res.json({ success: true, genreId, items: matchedItems });
+});
+
+app.get('/api/meta/discover', cacheMiddleware(3600, true), async (req, res) => {
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json({ results: [] });
+  
+  try {
+    const params = new URLSearchParams(req.query as any);
+    params.set('api_key', tmdbKey);
+    const url = `https://api.themoviedb.org/3/discover/movie?${params.toString()}`;
+    const response = await axios.get(url);
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('TMDB Discover Error', error.message);
+    res.json({ results: [] });
+  }
 });
 
 app.get('/api/meta/trending', cacheMiddleware(3600, true), async (req, res) => {
