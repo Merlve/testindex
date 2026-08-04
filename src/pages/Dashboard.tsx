@@ -111,7 +111,9 @@ export default function Dashboard() {
   useEffect(() => {
     if (featuredItems.length === 0) return;
     const interval = setInterval(() => {
-      setSlideIndex(prev => (prev + 1) % featuredItems.length);
+      if (document.visibilityState === 'visible') {
+        setSlideIndex(prev => (prev + 1) % featuredItems.length);
+      }
     }, 8000);
     return () => clearInterval(interval);
   }, [featuredItems]);
