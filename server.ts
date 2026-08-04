@@ -1599,8 +1599,18 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
         }
         
         if (data.results && data.results.length > 0) {
-           tmdbCache[item.cacheKey] = data.results[0];
-           results[item.originalName] = data.results[0];
+           let topResult = data.results[0];
+           if (searchType === 'tv' && topResult.id && !topResult.status) {
+               try {
+                   const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${topResult.id}?api_key=${tmdbKey}`);
+                   if (idRes.data && idRes.data.status) {
+                       topResult.status = idRes.data.status;
+                       topResult.in_production = idRes.data.in_production;
+                   }
+               } catch(e) {}
+           }
+           tmdbCache[item.cacheKey] = topResult;
+           results[item.originalName] = topResult;
         } else {
            tmdbCache[item.cacheKey] = null;
            results[item.originalName] = null;
@@ -1623,33 +1633,63 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   const baseQuery = query.toLowerCase().trim();
   const baseKey = `${type}-${baseQuery}`;
   
-  // ALWAYS prioritize manually overridden items
-  const overriddenKey = findOverriddenKeyInCache(tmdbCache, type as string, baseQuery, year as string);
-  if (overriddenKey) {
-    return res.json(tmdbCache[overriddenKey]);
-  }
-
-  const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
-  
-  if (tmdbCache[cacheKey]) {
-    return res.json(tmdbCache[cacheKey]);
-  }
-  
-  // If we searched with a year and it was null/undefined, try to find a cached entry WITHOUT the year
-  if (year && tmdbCache[baseKey]) {
-      return res.json(tmdbCache[baseKey]);
-  }
-
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) {
     return res.json(null);
   }
 
+  const typeStr = (type as string || '').toUpperCase();
+  const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t) || t.includes('TV') || t.includes('SHOW') || t.includes('SERIES');
+  const searchType = isTvType(typeStr) ? 'tv' : 'movie';
+
+  // Helper to attach status if missing
+  const attachStatus = async (item: any) => {
+     if (searchType === 'tv' && item && item.id && !item.status) {
+         try {
+             const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${tmdbKey}`);
+             if (idRes.data && idRes.data.status) {
+                 item.status = idRes.data.status;
+                 item.in_production = idRes.data.in_production;
+                 return true; // modified
+             }
+         } catch(e) {}
+     }
+     return false;
+  };
+
+  // ALWAYS prioritize manually overridden items
+  const overriddenKey = findOverriddenKeyInCache(tmdbCache, type as string, baseQuery, year as string);
+  const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+  
+  let cachedItem = null;
+  let cacheKeyToUpdate = null;
+  if (overriddenKey) {
+    cachedItem = tmdbCache[overriddenKey];
+    cacheKeyToUpdate = overriddenKey;
+  } else {
+    if (tmdbCache[cacheKey] !== undefined) {
+      cachedItem = tmdbCache[cacheKey];
+      cacheKeyToUpdate = cacheKey;
+    } else if (year && tmdbCache[baseKey] !== undefined) {
+      cachedItem = tmdbCache[baseKey];
+      cacheKeyToUpdate = baseKey;
+    }
+  }
+
+  if (cachedItem !== undefined && cachedItem !== null) {
+      try {
+          const modified = await attachStatus(cachedItem);
+          if (modified && cacheKeyToUpdate) {
+              tmdbCache[cacheKeyToUpdate] = cachedItem;
+              saveDb();
+          }
+      } catch (e) {}
+      return res.json(cachedItem);
+  } else if (cachedItem === null && cacheKeyToUpdate) {
+      return res.json(null);
+  }
+
   try {
-    const typeStr = (type as string || '').toUpperCase();
-    const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t) || t.includes('TV') || t.includes('SHOW') || t.includes('SERIES');
-    const searchType = isTvType(typeStr) ? 'tv' : 'movie';
-    
     let data: any = { results: [] };
     if (tmdbId) {
         try {
@@ -1721,6 +1761,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     }
     
     if (data.results && data.results.length > 0) {
+       await attachStatus(data.results[0]);
        tmdbCache[cacheKey] = data.results[0];
        saveDb();
        return res.json(data.results[0]);
@@ -2827,7 +2868,17 @@ app.post('/api/meta/autofetch/start', adminMiddleware, (req, res) => {
               }
 
               if (data.results && data.results.length > 0) {
-                tmdbCache[cacheKey] = data.results[0];
+                let topResult = data.results[0];
+                if (searchType === 'tv' && topResult.id && !topResult.status) {
+                    try {
+                        const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${topResult.id}?api_key=${tmdbKey}`);
+                        if (idRes.data && idRes.data.status) {
+                            topResult.status = idRes.data.status;
+                            topResult.in_production = idRes.data.in_production;
+                        }
+                    } catch(e) {}
+                }
+                tmdbCache[cacheKey] = topResult;
                 saveDb();
               } else {
                 autoFetchJob.failedItems.push({ name: item.name, path: catPath });

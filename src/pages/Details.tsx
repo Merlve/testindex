@@ -1178,6 +1178,9 @@ export default function Details() {
               {releaseYear ? <span className="text-gray-500 font-normal ml-2">({releaseYear})</span> : null}
             </h1>
             <p className="text-[10px] font-mono text-gray-600 dark:text-gray-400 break-words break-all line-clamp-2">{fullPath}</p>
+            {!isMovieCategory && tmdb?.status && (
+              <span className={`self-start px-2 py-0.5 mt-1 rounded text-[10px] font-bold tracking-wider uppercase ${tmdb.status.toLowerCase() === 'ended' || tmdb.status.toLowerCase() === 'canceled' ? 'bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>{tmdb.status === 'Returning Series' ? 'Ongoing' : tmdb.status}</span>
+            )}
             <button onClick={() => {
               if (user === 'guest') {
                 setToast('Sign up for the website plan to use this feature');
@@ -1209,7 +1212,12 @@ export default function Details() {
             </button>
           </div>
 
-          <p className="hidden md:block text-xs md:text-sm font-mono text-gray-600 dark:text-gray-400 mb-4 break-words break-all">{fullPath}</p>
+          <div className="hidden md:flex flex-col items-start gap-2 mb-4">
+            <p className="text-xs md:text-sm font-mono text-gray-600 dark:text-gray-400 break-words break-all m-0">{fullPath}</p>
+            {!isMovieCategory && tmdb?.status && (
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${tmdb.status.toLowerCase() === 'ended' || tmdb.status.toLowerCase() === 'canceled' ? 'bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>{tmdb.status === 'Returning Series' ? 'Ongoing' : tmdb.status}</span>
+            )}
+          </div>
 
           {displayGenres && displayGenres.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
