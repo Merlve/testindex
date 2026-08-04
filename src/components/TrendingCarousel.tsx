@@ -42,6 +42,9 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
         }
       }
     }
+    try {
+      localStorage.setItem('trending_cache', JSON.stringify(availableTrending));
+    } catch (e) {}
     return availableTrending;
   };
 
@@ -50,6 +53,13 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
     queryFn: fetchTrending,
     enabled: categories.length > 0,
     staleTime: 10 * 60 * 1000,
+    placeholderData: () => {
+      try {
+        const cached = localStorage.getItem('trending_cache');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
+    }
   });
 
 

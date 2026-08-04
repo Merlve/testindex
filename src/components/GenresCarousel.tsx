@@ -20,7 +20,11 @@ export default function GenresCarousel() {
       headers: { Authorization: token }
     });
     if (res.data.success && res.data.genres) {
-      return res.data.genres;
+      const data = res.data.genres;
+      try {
+        localStorage.setItem('genres_cache', JSON.stringify(data));
+      } catch (e) {}
+      return data;
     }
     return [];
   };
@@ -30,6 +34,13 @@ export default function GenresCarousel() {
     queryFn: fetchGenres,
     enabled: !!token,
     staleTime: 10 * 60 * 1000,
+    placeholderData: () => {
+      try {
+        const cached = localStorage.getItem('genres_cache');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
+    }
   });
 
   if (loading || genres.length === 0) return null;

@@ -15,7 +15,11 @@ export default function RecentlyAddedCarousel() {
   const fetchRecentlyAdded = async () => {
     const res = await axios.get('/api/jellyfin/recently-added', { headers: { Authorization: token } });
     if (res.data?.success) {
-      return res.data.data || [];
+      const data = res.data.data || [];
+      try {
+        localStorage.setItem('recently_added_cache', JSON.stringify(data));
+      } catch (e) {}
+      return data;
     }
     return [];
   };
@@ -27,6 +31,13 @@ export default function RecentlyAddedCarousel() {
     staleTime: 60 * 1000,
     retry: 3,
     retryDelay: 2000,
+    placeholderData: () => {
+      try {
+        const cached = localStorage.getItem('recently_added_cache');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
+    }
   });
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);

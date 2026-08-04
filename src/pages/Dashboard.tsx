@@ -74,6 +74,9 @@ export default function Dashboard() {
           };
         })
       );
+      try {
+        localStorage.setItem('dashboard_cache', JSON.stringify(catData));
+      } catch (e) {}
       return catData;
     } catch (err: any) {
       if (err.response) {
@@ -89,6 +92,13 @@ export default function Dashboard() {
     queryFn: fetchHome,
     enabled: !!token,
     retry: 1, // Reduce retries so it doesn't spin too long on timeout
+    placeholderData: () => {
+      try {
+        const cached = localStorage.getItem('dashboard_cache');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
+    }
   });
 
   const featuredItems = useMemo(() => {
