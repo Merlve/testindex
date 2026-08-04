@@ -684,7 +684,7 @@ export default function Details() {
           searchName = pathParts[pathParts.length - 2];
         }
         const { cleanName, year } = parseMediaName(searchName);
-        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}`);
+        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&full=true`);
         if (tmdbRes.data) {
           setTmdb(tmdbRes.data);
           try {

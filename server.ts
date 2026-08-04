@@ -1627,7 +1627,7 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
 });
 
 app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
-  const { query, type, year, tmdbId } = req.query; // type can be 'movie' or 'tv'
+  const { query, type, year, tmdbId, full } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
   
   const baseQuery = query.toLowerCase().trim();
@@ -1677,13 +1677,15 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   }
 
   if (cachedItem !== undefined && cachedItem !== null) {
-      try {
-          const modified = await attachStatus(cachedItem);
-          if (modified && cacheKeyToUpdate) {
-              tmdbCache[cacheKeyToUpdate] = cachedItem;
-              saveDb();
-          }
-      } catch (e) {}
+      if (full === 'true') {
+          try {
+              const modified = await attachStatus(cachedItem);
+              if (modified && cacheKeyToUpdate) {
+                  tmdbCache[cacheKeyToUpdate] = cachedItem;
+                  saveDb();
+              }
+          } catch (e) {}
+      }
       return res.json(cachedItem);
   } else if (cachedItem === null && cacheKeyToUpdate) {
       return res.json(null);
@@ -1761,7 +1763,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     }
     
     if (data.results && data.results.length > 0) {
-       await attachStatus(data.results[0]);
+       if (full === 'true') await attachStatus(data.results[0]);
        tmdbCache[cacheKey] = data.results[0];
        saveDb();
        return res.json(data.results[0]);
