@@ -50,7 +50,7 @@ export default function GenresCarousel() {
       <button
         key={genre.id}
         onClick={() => navigate(`/genre/${genre.id}?name=${encodeURIComponent(genre.name)}`)}
-        className="snap-start relative w-32 h-20 sm:w-56 sm:h-32 flex-shrink-0 rounded-2xl overflow-hidden group hover:scale-105 transition-all shadow-md cursor-pointer border border-black/10 dark:border-white/10"
+        className="snap-start relative w-32 h-20 sm:w-56 sm:h-32 flex-shrink-0 rounded-2xl overflow-hidden isolate transform-gpu backface-hidden group hover:scale-105 transition-all shadow-md cursor-pointer border border-black/10 dark:border-white/10"
       >
         <img 
           src={`https://image.tmdb.org/t/p/w500${genre.backdrop_path}`} 

@@ -163,7 +163,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
 
     const innerContent = (
     <>
-      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 transform-gpu ${viewMode === 'grid' ? 'sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98]' : ''} flex-shrink-0`}>
+      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 ${viewMode === 'grid' ? 'sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98]' : ''} flex-shrink-0`}>
         {displayTmdb?.poster_path ? (
           <LazyImage src={`https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
         ) : (
@@ -246,7 +246,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     </>
   );
 
-  const cardClasses = `snap-start group relative transition-transform duration-300 transform-gpu ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`}`;
+  const cardClasses = `snap-start group relative transition-transform duration-300 transform-gpu backface-hidden ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`}`;
 
   return (
     <>

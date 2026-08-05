@@ -16,8 +16,8 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
   const renderedSlides = useMemo(() => {
     if (!featuredItems || featuredItems.length === 0) return null;
     return featuredItems.map((item, idx) => (
-      <SwiperSlide key={item.id || item.name || idx} className="h-full rounded-3xl overflow-hidden shadow-xl relative group transform-gpu transition-opacity duration-300 [&:not(.swiper-slide-active)]:opacity-75">
-         <div className="w-full h-full transform-gpu">
+      <SwiperSlide key={item.id || item.name || idx} className="h-full rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-xl relative group transition-opacity duration-300 [&:not(.swiper-slide-active)]:opacity-75">
+         <div className="w-full h-full">
             <FeaturedSlideCard item={item} />
          </div>
       </SwiperSlide>
@@ -108,10 +108,10 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
   return (
     <div 
       onClick={handleCardClick}
-      className="relative w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden shadow-lg border border-white/10 transform-gpu translate-z-0 group cursor-pointer"
+      className="relative w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-lg border border-white/10 group cursor-pointer"
     >
        {backdrop ? (
-         <img src={backdrop} className="absolute inset-0 w-full h-full object-cover transform-gpu group-hover:scale-105 transition-transform duration-500" alt={title} loading="eager" />
+         <img src={backdrop} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={title} loading="eager" />
        ) : (
          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/40 via-gray-900 to-black flex items-center justify-center p-6 text-center">
             <span className="text-2xl font-bold text-white/40 italic">{title}</span>

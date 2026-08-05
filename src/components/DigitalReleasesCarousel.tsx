@@ -23,11 +23,18 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
       'release_date.lte': lastDayStr,
       primary_release_year: now.getFullYear().toString(),
       sort_by: 'popularity.desc',
-      include_adult: 'false'
+      include_adult: 'false',
+      without_genres: '10770'
     });
-
-    const res = await axios.get(`/api/meta/discover?${params.toString()}`);
-    const results = res.data?.results || [];
+    let results: any[] = [];
+    for (let page = 1; page <= 3; page++) {
+      params.set('page', page.toString());
+      try {
+        const res = await axios.get(`/api/meta/discover?${params.toString()}`);
+        results = [...results, ...(res.data?.results || [])];
+        if (page >= (res.data?.total_pages || 1)) break;
+      } catch (e) { break; }
+    }
     const configRes = await axios.get('/api/config').catch(() => null);
     const digitalReleasePaths = configRes?.data?.digitalReleasePaths || {};
     
@@ -80,7 +87,7 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
   const currentMonthName = new Date().toLocaleString('default', { month: 'long' });
 
   const renderedItems = useMemo(() => {
-    return data.items.slice(0, 15).map((item: any, i: number) => (
+    return data.items.map((item: any, i: number) => (
       <ItemCard 
         key={item.id || i} 
         item={item} 
