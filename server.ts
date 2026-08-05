@@ -235,31 +235,39 @@ async function saveDb() {
   await writeSQLiteJSON('db', tmdbCache);
 }
 
-function findOverriddenKeyInCache(cache: Record<string, any>, type: string, cleanQuery: string, year?: string | number): string | null {
-  if (!cleanQuery) return null;
-  const baseQuery = cleanQuery.toLowerCase().trim();
+function findOverriddenKeyInCache(cache: Record<string, any>, type: string, cleanQuery: string, year?: string | number, itemPath?: string): string | null {
+  if (!cleanQuery && !itemPath) return null;
+  const baseQuery = (cleanQuery || '').toLowerCase().trim();
   const typeStr = (type || '').toUpperCase();
-  const baseKey = `${typeStr}-${baseQuery}`;
-  const cacheKey = `${typeStr}-${baseQuery}${year ? `-${year}` : ''}`;
+  const baseKey = baseQuery ? `${typeStr}-${baseQuery}` : '';
+  const cacheKey = baseQuery ? `${typeStr}-${baseQuery}${year ? `-${year}` : ''}` : '';
 
-  if (cache[cacheKey]?._overridden) return cacheKey;
+  if (cacheKey && cache[cacheKey]?._overridden) return cacheKey;
+  if (baseKey && cache[baseKey]?._overridden) return baseKey;
 
-  if (!year) {
-    if (cache[baseKey]?._overridden) return baseKey;
-
-    const found = Object.keys(cache).find(k => {
-      if (!cache[k]?._overridden) return false;
-      if (k.startsWith(`${baseKey}-`)) {
-        const suffix = k.slice(baseKey.length + 1);
-        return /^\d{4}$/.test(suffix);
-      }
-      return false;
-    });
-
-    return found || null;
+  if (itemPath) {
+    const cleanP = itemPath.replace(/^\/+/, '');
+    const p1 = `path-${cleanP}`;
+    const p2 = `path-/${cleanP}`;
+    if (cache[p1]?._overridden) return p1;
+    if (cache[p2]?._overridden) return p2;
   }
 
-  return null;
+  const found = Object.keys(cache).find(k => {
+    if (!cache[k]?._overridden) return false;
+    if (baseKey && (k === baseKey || k.startsWith(`${baseKey}-`))) {
+      return true;
+    }
+    if (itemPath) {
+      const cleanP = itemPath.replace(/^\/+/, '');
+      if (k === `path-${cleanP}` || k === `path-/${cleanP}` || k.endsWith(`/${cleanP}`)) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  return found || null;
 }
 
 
@@ -1742,6 +1750,32 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
   res.json(results);
 });
 
+// Helper to attach status and credits if missing in full mode
+async function attachFullDataToItem(item: any, searchType: string, tmdbKey: string) {
+   if (!item || !item.id || !tmdbKey) return false;
+   let modified = false;
+   if (searchType === 'tv' && !item.status) {
+       try {
+           const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${tmdbKey}`);
+           if (idRes.data && idRes.data.status) {
+               item.status = idRes.data.status;
+               item.in_production = idRes.data.in_production;
+               modified = true;
+           }
+       } catch(e) {}
+   }
+   if (!item.credits) {
+       try {
+           const creditsRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/credits?api_key=${tmdbKey}`);
+           if (creditsRes.data) {
+               item.credits = creditsRes.data;
+               modified = true;
+           }
+       } catch(e) {}
+   }
+   return modified;
+}
+
 app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   const { query, type, year, tmdbId, full, path: itemPath } = req.query; // type can be 'movie' or 'tv'
   if (!query || typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
@@ -1760,47 +1794,50 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
 
   const pathKey = itemPath ? `path-${itemPath}` : null;
 
-  // Helper to attach status if missing
-  const attachStatus = async (item: any) => {
-     if (searchType === 'tv' && item && item.id && !item.status) {
-         try {
-             const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${tmdbKey}`);
-             if (idRes.data && idRes.data.status) {
-                 item.status = idRes.data.status;
-                 item.in_production = idRes.data.in_production;
-                 return true; // modified
-             }
-         } catch(e) {}
-     }
-     return false;
+  const attachFullData = async (item: any) => {
+     return await attachFullDataToItem(item, searchType, tmdbKey);
   };
 
+  const cleanPath = itemPath ? (itemPath as string).replace(/^\/+/, '') : null;
+  const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+  const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
+
   // ALWAYS prioritize manually overridden items
-  const overriddenKey = findOverriddenKeyInCache(tmdbCache, type as string, baseQuery, year as string);
+  const overriddenKey = findOverriddenKeyInCache(tmdbCache, type as string, baseQuery, year as string, cleanPath || undefined);
   const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
   
   let cachedItem = null;
   let cacheKeyToUpdate = null;
-  if (pathKey && tmdbCache[pathKey] !== undefined) {
-    cachedItem = tmdbCache[pathKey];
-    cacheKeyToUpdate = pathKey;
-  } else if (overriddenKey) {
+  if (overriddenKey && tmdbCache[overriddenKey]) {
     cachedItem = tmdbCache[overriddenKey];
     cacheKeyToUpdate = overriddenKey;
+  } else if (pathKey1 && tmdbCache[pathKey1] !== undefined) {
+    cachedItem = tmdbCache[pathKey1];
+    cacheKeyToUpdate = pathKey1;
+  } else if (pathKey2 && tmdbCache[pathKey2] !== undefined) {
+    cachedItem = tmdbCache[pathKey2];
+    cacheKeyToUpdate = pathKey2;
   } else {
     if (tmdbCache[cacheKey] !== undefined) {
       cachedItem = tmdbCache[cacheKey];
       cacheKeyToUpdate = cacheKey;
-    } else if (year && tmdbCache[baseKey] !== undefined) {
+    } else if (tmdbCache[baseKey] !== undefined) {
       cachedItem = tmdbCache[baseKey];
       cacheKeyToUpdate = baseKey;
+    } else {
+      const prefix = `${type}-${baseQuery}`;
+      const foundKey = Object.keys(tmdbCache).find(k => k === baseKey || k.startsWith(`${prefix}-`) || k.startsWith(`${prefix}_`));
+      if (foundKey && tmdbCache[foundKey]) {
+        cachedItem = tmdbCache[foundKey];
+        cacheKeyToUpdate = foundKey;
+      }
     }
   }
 
   if (cachedItem !== undefined && cachedItem !== null) {
       if (full === 'true') {
           try {
-              const modified = await attachStatus(cachedItem);
+              const modified = await attachFullData(cachedItem);
               if (modified && cacheKeyToUpdate) {
                   tmdbCache[cacheKeyToUpdate] = cachedItem;
                   saveDb();
@@ -1884,7 +1921,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     }
     
     if (data.results && data.results.length > 0) {
-       if (full === 'true') await attachStatus(data.results[0]);
+       if (full === 'true') await attachFullData(data.results[0]);
        if (pathKey) {
            tmdbCache[pathKey] = data.results[0];
        } else {
@@ -2770,16 +2807,35 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
   if (!query || (!tmdbId && !customTitle && !customYear)) return res.status(400).json({ error: 'Invalid data' });
 
   try {
-    const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
-    const baseKey = `${type}-${query.toLowerCase().trim()}`;
-    const pathKey = itemPath ? `path-${itemPath}` : null;
+    const lowerQuery = query.toLowerCase().trim();
+    const typeStr = (type as string || '').toUpperCase();
+    const cacheKey = `${typeStr}-${lowerQuery}${year ? `-${year}` : ''}`;
+    const baseKey = `${typeStr}-${lowerQuery}`;
+    const cleanPath = itemPath ? itemPath.replace(/^\/+/, '') : null;
+    const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+    const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
 
     // Clear server response cache so all GET queries get fresh data immediately
     apiCache.clear();
 
+    const setOverriddenDataInCache = (dataToStore: any) => {
+      dataToStore._overridden = true;
+      tmdbCache[cacheKey] = dataToStore;
+      tmdbCache[baseKey] = dataToStore;
+      if (pathKey1) tmdbCache[pathKey1] = dataToStore;
+      if (pathKey2) tmdbCache[pathKey2] = dataToStore;
+
+      // Update any other existing keys in tmdbCache that match baseKey or cleanPath
+      for (const k of Object.keys(tmdbCache)) {
+        if (k === baseKey || k.startsWith(`${baseKey}-`) || (cleanPath && (k === `path-${cleanPath}` || k === `path-/${cleanPath}` || k.endsWith(`/${cleanPath}`)))) {
+          tmdbCache[k] = dataToStore;
+        }
+      }
+    };
+
     if ((customTitle || customYear) && !tmdbId) {
       // Just override title/year in existing cache or create a mock
-      let data = tmdbCache[cacheKey] || {};
+      let data = tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || {};
       if (customTitle) {
         data.title = customTitle;
         data.name = customTitle; // tv uses name
@@ -2788,12 +2844,7 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
         data.release_date = customYear + '-01-01'; // approximate for movie
         data.first_air_date = customYear + '-01-01'; // approximate for tv
       }
-      data._overridden = true;
-      if (pathKey) {
-          tmdbCache[pathKey] = data;
-      } else {
-          tmdbCache[cacheKey] = data;
-      }
+      setOverriddenDataInCache(data);
       saveDb();
       addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'})`);
       return res.json({ success: true, data });
@@ -2802,7 +2853,6 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     const tmdbKey = process.env.TMDB_API_KEY;
     if (!tmdbKey) return res.status(500).json({ error: 'TMDB Key missing' });
 
-    const typeStr = (type as string || '').toUpperCase();
     const primaryType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(typeStr) ? 'tv' : 'movie';
     const secondaryType = primaryType === 'tv' ? 'movie' : 'tv';
     
@@ -2828,12 +2878,7 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
          data.release_date = customYear + '-01-01';
          data.first_air_date = customYear + '-01-01';
        }
-       data._overridden = true;
-       if (pathKey) {
-           tmdbCache[pathKey] = data;
-       } else {
-           tmdbCache[cacheKey] = data;
-       }
+       setOverriddenDataInCache(data);
        saveDb();
        addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
        return res.json({ success: true, data });
@@ -3149,31 +3194,44 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
                         }
                     }
                     
+                    const itemPath = item.path || (item._parent ? `${item._parent}/${item.name}` : item.name);
+                    const cleanItemPath = itemPath ? itemPath.replace(/^\/+/, '') : null;
+                    const pKey1 = cleanItemPath ? `path-${cleanItemPath}` : null;
+                    const pKey2 = cleanItemPath ? `path-/${cleanItemPath}` : null;
+
+                    const setCacheKeys = async (dataObj: any) => {
+                        if (dataObj && typeof dataObj === 'object') {
+                            await attachFullDataToItem(dataObj, searchType, tmdbKey);
+                            tmdbCache[cacheKey] = dataObj;
+                            tmdbCache[baseKey] = dataObj;
+                            if (pKey1) tmdbCache[pKey1] = dataObj;
+                            if (pKey2) tmdbCache[pKey2] = dataObj;
+                        } else {
+                            tmdbCache[cacheKey] = dataObj;
+                        }
+                        modified = true;
+                    };
+
                     const response = await axios.get(url);
                     if (item._jf?.tmdbId && response.data) {
-                        tmdbCache[cacheKey] = response.data.results ? response.data.results[0] || response.data : response.data;
-                        modified = true;
+                        const targetData = response.data.results ? response.data.results[0] || response.data : response.data;
+                        await setCacheKeys(targetData);
                     } else if (response.data?.results?.length > 0) {
-                        tmdbCache[cacheKey] = response.data.results[0];
-                        modified = true;
+                        await setCacheKeys(response.data.results[0]);
                     } else if (searchYear) {
                         const noYearUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanName)}`;
                         try {
                             const noYearRes = await axios.get(noYearUrl);
                             if (noYearRes.data?.results?.length > 0) {
-                                tmdbCache[cacheKey] = noYearRes.data.results[0];
-                                modified = true;
+                                await setCacheKeys(noYearRes.data.results[0]);
                             } else {
-                                tmdbCache[cacheKey] = null;
-                                modified = true;
+                                await setCacheKeys(null);
                             }
                         } catch(e) {
-                            tmdbCache[cacheKey] = null;
-                            modified = true;
+                            await setCacheKeys(null);
                         }
                     } else {
-                        tmdbCache[cacheKey] = null;
-                        modified = true;
+                        await setCacheKeys(null);
                     }
                 } catch(e) {}
             }

@@ -139,7 +139,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
         if (item._jf && item._jf.tmdbId) url += `&tmdbId=${item._jf.tmdbId}`;
         
         const res = await axios.get(url);
-        if (res.data && res.data.poster_path) {
+        if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name)) {
           return res.data;
         } else if (item._jf && item._jf.tmdbId) {
           const fallbackRes = await axios.get(`/api/meta/search_all?query=fallback&type=${category}&tmdbId=${item._jf.tmdbId}`);
@@ -152,7 +152,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       }
     },
     enabled: !tmdbData,
-    staleTime: Infinity, // don't refetch automatically unless invalidated
+    staleTime: 10 * 1000,
   });
 
   const displayTmdb = tmdbData || fetchedTmdb || tmdb;

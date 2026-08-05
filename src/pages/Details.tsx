@@ -220,9 +220,9 @@ export default function Details() {
   // Directory items & state
   const [baseItems, setBaseItems] = useState<any[]>([]);
   const [seasonItems, setSeasonItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingFiles, setLoadingFiles] = useState(true);
   const [tmdb, setTmdb] = useState<any>(location.state?.tmdbData || null);
+  const [loading, setLoading] = useState(!location.state?.tmdbData);
+  const [loadingFiles, setLoadingFiles] = useState(true);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [toast, setToast] = useState('');
   
@@ -387,10 +387,28 @@ export default function Details() {
   const [loadingTrailer, setLoadingTrailer] = useState(false);
 
   // Cast & Crew state
-  const [credits, setCredits] = useState<{ cast: any[]; crew: any[] }>({ cast: [], crew: [] });
+  const [credits, setCredits] = useState<{ cast: any[]; crew: any[] }>(() => {
+    const tmdbData = location.state?.tmdbData;
+    if (tmdbData?.credits) {
+      return {
+        cast: Array.isArray(tmdbData.credits.cast) ? tmdbData.credits.cast : [],
+        crew: Array.isArray(tmdbData.credits.crew) ? tmdbData.credits.crew : []
+      };
+    }
+    return { cast: [], crew: [] };
+  });
   const [loadingCredits, setLoadingCredits] = useState(false);
 
   useEffect(() => {
+    if (tmdb?.credits) {
+      setCredits({
+        cast: Array.isArray(tmdb.credits.cast) ? tmdb.credits.cast : [],
+        crew: Array.isArray(tmdb.credits.crew) ? tmdb.credits.crew : []
+      });
+      setLoadingCredits(false);
+      return;
+    }
+
     if (tmdb?.id) {
       setLoadingCredits(true);
       axios.get(`/api/meta/credits?id=${tmdb.id}&type=${category}`)
@@ -409,7 +427,7 @@ export default function Details() {
     } else {
       setCredits({ cast: [], crew: [] });
     }
-  }, [tmdb?.id, category]);
+  }, [tmdb?.id, tmdb?.credits, category]);
 
   const castAndCrewList = useMemo(() => {
     const list: Array<{ id: number | string; name: string; role: string; profile_path: string | null }> = [];
@@ -694,7 +712,9 @@ export default function Details() {
   // Fetch TMDB Main Metadata
   useEffect(() => {
     const fetchMetadata = async () => {
-      setLoading(true);
+      if (!tmdb) {
+        setLoading(true);
+      }
       try {
         let searchName = name;
         if (/^(s\d+|season\s*\d+)$/i.test(name) && pathParts.length > 2) {
@@ -704,7 +724,7 @@ export default function Details() {
         const itemPath = `/${fullPath}`;
         const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}&full=true`);
         if (tmdbRes.data) {
-          setTmdb(tmdbRes.data);
+          setTmdb((prev: any) => ({ ...(prev || {}), ...tmdbRes.data }));
           try {
             const actualParentPath = pathParts.slice(0, -1).join('/');
             const recentStr = localStorage.getItem('recently_browsed') || '[]';
@@ -721,7 +741,7 @@ export default function Details() {
             recent = recent.slice(0, 20);
             localStorage.setItem('recently_browsed', JSON.stringify(recent));
           } catch(e) {}
-        } else {
+        } else if (!tmdb) {
           setSearchTitle(cleanName);
         }
       } catch (err) {
