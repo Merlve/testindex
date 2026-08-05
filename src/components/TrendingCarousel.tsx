@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { motion } from 'motion/react';
@@ -68,6 +68,12 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
     return null; // Don't show anything if no trending matches or still loading
   }
 
+  const renderedItems = useMemo(() => {
+    return trendingItems.slice(0, 10).map((item, i) => (
+      <ItemCard key={item.id || i} item={item} category={item.category} parentPath={`/home/${item.category}`} />
+    ));
+  }, [trendingItems]);
+
   return (
     <div className="relative">
       <div className="flex justify-between items-end mb-2">
@@ -76,10 +82,8 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
            Trending Now
         </h3>
       </div>
-      <div className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide">
-         {trendingItems.slice(0, 10).map((item, i) => (
-           <ItemCard key={i} item={item} category={item.category} parentPath={`/home/${item.category}`} />
-         ))}
+      <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+         {renderedItems}
       </div>
     </div>
   );

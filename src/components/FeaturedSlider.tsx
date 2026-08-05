@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo, useMemo } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router';
 import { Play, Star, Cloud } from 'lucide-react';
@@ -12,6 +12,17 @@ import 'swiper/css/effect-coverflow';
 
 export default function FeaturedSlider({ featuredItems }: { featuredItems: any[] }) {
   const navigate = useNavigate();
+
+  const renderedSlides = useMemo(() => {
+    if (!featuredItems || featuredItems.length === 0) return null;
+    return featuredItems.map((item, idx) => (
+      <SwiperSlide key={item.id || item.name || idx} className="h-full rounded-3xl overflow-hidden shadow-xl relative group transform-gpu transition-opacity duration-300 [&:not(.swiper-slide-active)]:opacity-75">
+         <div className="w-full h-full transform-gpu">
+            <FeaturedSlideCard item={item} />
+         </div>
+      </SwiperSlide>
+    ));
+  }, [featuredItems]);
 
   if (!featuredItems || featuredItems.length === 0) return null;
 
@@ -49,13 +60,7 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
         modules={[EffectCoverflow]}
         className="w-full h-[240px] sm:h-[340px] md:h-[380px]"
       >
-        {featuredItems.map((item, idx) => (
-          <SwiperSlide key={item.id || item.name || idx} className="h-full rounded-3xl overflow-hidden shadow-xl relative group transform-gpu transition-opacity duration-300 [&:not(.swiper-slide-active)]:opacity-75">
-             <div className="w-full h-full transform-gpu">
-                <FeaturedSlideCard item={item} />
-             </div>
-          </SwiperSlide>
-        ))}
+        {renderedSlides}
       </Swiper>
     </section>
   );
@@ -125,7 +130,7 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
           <div className="flex items-center gap-2">
             {user === 'admin' && tmdb?._synced && (
               <span 
-                className="px-2.5 py-1.5 bg-black/75 backdrop-blur text-sky-400 text-xs sm:text-sm font-bold rounded-2xl border border-sky-400/30 shadow-md flex items-center gap-1.5"
+                className="px-2.5 py-1.5 bg-black/85  text-sky-400 text-xs sm:text-sm font-bold rounded-2xl border border-sky-400/30 shadow-md flex items-center gap-1.5"
                 title="Metadata synced to database (Cached)"
               >
                 <Cloud size={14} className="fill-sky-400/20 text-sky-400" />

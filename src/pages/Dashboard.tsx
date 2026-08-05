@@ -129,6 +129,30 @@ export default function Dashboard() {
   }
 
 
+  const renderedCategories = useMemo(() => {
+    return categories.map(cat => (
+      <div key={cat.name}>
+        <div className="flex justify-between items-end mb-2">
+          <h3 className="text-lg font-bold text-black dark:text-white">{cat.name}</h3>
+          <div className="flex gap-2 items-center">
+            <Link to={`/category/${cat.name}`} className="text-xs text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider mr-2">View All</Link>
+            <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: -400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
+              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+            </div>
+            <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: 400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+            </div>
+          </div>
+        </div>
+        <div id={`carousel-${cat.name}`} className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+           {cat.items.slice(0, 10).map((item, i) => (
+             <ItemCard key={item.id || i} item={item} category={cat.name} parentPath={`/home/${cat.name}`} />
+           ))}
+        </div>
+      </div>
+    ));
+  }, [categories]);
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -149,27 +173,7 @@ export default function Dashboard() {
         <TrendingCarousel categories={categories} />
         <DigitalReleasesCarousel categories={categories} />
         <RecentlyAddedCarousel />
-        {categories.map(cat => (
-          <div key={cat.name}>
-            <div className="flex justify-between items-end mb-2">
-              <h3 className="text-lg font-bold text-black dark:text-white">{cat.name}</h3>
-              <div className="flex gap-2 items-center">
-                <Link to={`/category/${cat.name}`} className="text-xs text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider mr-2">View All</Link>
-                <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: -400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
-                  <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                </div>
-                <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: 400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-                </div>
-              </div>
-            </div>
-            <div id={`carousel-${cat.name}`} className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide">
-               {cat.items.slice(0, 10).map((item, i) => (
-                 <ItemCard key={i} item={item} category={cat.name} parentPath={`/home/${cat.name}`} />
-               ))}
-            </div>
-          </div>
-        ))}
+        {renderedCategories}
         <GenresCarousel />
       </div>
     </motion.div>

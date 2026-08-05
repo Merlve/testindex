@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import ItemCard from './ItemCard';
@@ -78,6 +79,18 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
   
   const currentMonthName = new Date().toLocaleString('default', { month: 'long' });
 
+  const renderedItems = useMemo(() => {
+    return data.items.slice(0, 15).map((item: any, i: number) => (
+      <ItemCard 
+        key={item.id || i} 
+        item={item} 
+        category={item.category || "MOVIES"} 
+        parentPath={item.parentPath || `/home/MOVIES`} 
+        tmdbData={data.tmdbData[i]} 
+      />
+    ));
+  }, [data.items, data.tmdbData]);
+
   return (
     <div className="relative">
       <div className="flex justify-between items-end mb-2">
@@ -86,16 +99,8 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
            Digital Releases {currentMonthName}
         </h3>
       </div>
-      <div className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide">
-         {data.items.slice(0, 15).map((item: any, i: number) => (
-           <ItemCard 
-             key={i} 
-             item={item} 
-             category={item.category || "MOVIES"} 
-             parentPath={item.parentPath || `/home/MOVIES`} 
-             tmdbData={data.tmdbData[i]} 
-           />
-         ))}
+      <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+         {renderedItems}
       </div>
     </div>
   );

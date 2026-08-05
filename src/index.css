@@ -28,3 +28,23 @@ body {
 .dark body {
   background-color: #08080a;
 }
+
+/* Performance Optimizations */
+html {
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
+.swiper-wrapper {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.swiper-slide {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}

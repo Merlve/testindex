@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
 import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Cloud } from 'lucide-react';
@@ -26,7 +26,7 @@ const LazyImage = ({ src, alt, className }: { src: string, alt: string, classNam
   );
 };
 
-export default function ItemCard({ item, category, parentPath, className, viewMode = 'grid', tmdbData }: { item: any, category: string, parentPath: string, className?: string, viewMode?: 'grid' | 'list', tmdbData?: any }) {
+const ItemCard = function ItemCard({ item, category, parentPath, className, viewMode = 'grid', tmdbData }: { item: any, category: string, parentPath: string, className?: string, viewMode?: 'grid' | 'list', tmdbData?: any }) {
   const [tmdb, setTmdb] = useState<any>(tmdbData || null);
   const { user, token } = useAuth();
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -163,7 +163,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
 
     const innerContent = (
     <>
-      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-all duration-300 ${viewMode === 'grid' ? 'group-hover:-translate-y-2 group-hover:scale-[1.02] group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)]' : ''} flex-shrink-0`}>
+      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 transform-gpu ${viewMode === 'grid' ? 'sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98]' : ''} flex-shrink-0`}>
         {displayTmdb?.poster_path ? (
           <LazyImage src={`https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
         ) : (
@@ -174,13 +174,13 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
         {displayTmdb?.vote_average && (
-          <div className={`absolute top-1 right-1 ${viewMode === 'grid' ? 'sm:top-2 sm:right-2' : ''} px-1 sm:px-1.5 py-0.5 bg-black/70 backdrop-blur rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20`}>
+          <div className={`absolute top-1 right-1 ${viewMode === 'grid' ? 'sm:top-2 sm:right-2' : ''} px-1 sm:px-1.5 py-0.5 bg-black/85  rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20`}>
             {Number(displayTmdb.vote_average).toFixed(1)}
           </div>
         )}
         {user === 'admin' && displayTmdb?._synced && (
           <div 
-            className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} ${viewMode === 'grid' ? (displayTmdb?.vote_average ? 'sm:top-2 sm:right-11' : 'sm:top-2 sm:right-2') : ''} p-1 rounded-md bg-black/75 backdrop-blur text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
+            className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} ${viewMode === 'grid' ? (displayTmdb?.vote_average ? 'sm:top-2 sm:right-11' : 'sm:top-2 sm:right-2') : ''} p-1 rounded-md bg-black/85  text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
             title="Metadata synced in database (Cached)"
           >
             <Cloud size={11} className="sm:w-3 sm:h-3 fill-sky-400/20 text-sky-400" />
@@ -188,7 +188,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
         )}
         <button
           onClick={handleToggleWatchlist}
-          className={`absolute top-1 left-1 ${viewMode === 'grid' ? 'sm:top-2 sm:left-2' : ''} p-1 sm:p-1.5 rounded-full bg-black/60 backdrop-blur z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+          className={`absolute top-1 left-1 ${viewMode === 'grid' ? 'sm:top-2 sm:left-2' : ''} p-1 sm:p-1.5 rounded-full bg-black/85  z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
           title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
         >
           {inWatchlist ? <BookmarkCheck size={12} className="sm:w-3.5 sm:h-3.5" /> : <Bookmark size={12} className="sm:w-3.5 sm:h-3.5" />}
@@ -196,14 +196,14 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
 
         <button
           onClick={handleToggleWatched}
-          className={`absolute top-1 left-7 ${viewMode === 'grid' ? 'sm:top-2 sm:left-9' : ''} p-1 sm:p-1.5 rounded-full bg-black/60 backdrop-blur z-30 transition-all hover:scale-110 ${isWatched ? 'text-purple-400 bg-purple-950/80 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'text-white/70 hover:text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+          className={`absolute top-1 left-7 ${viewMode === 'grid' ? 'sm:top-2 sm:left-9' : ''} p-1 sm:p-1.5 rounded-full bg-black/85  z-30 transition-all hover:scale-110 ${isWatched ? 'text-purple-400 bg-purple-950/80 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'text-white/70 hover:text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
           title={isWatched ? "Mark as unwatched" : "Mark as watched"}
         >
           {isWatched ? <Eye size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400 fill-purple-400/20" /> : <EyeOff size={12} className="sm:w-3.5 sm:h-3.5" />}
         </button>
 
         {isWatched && (
-          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600/95 backdrop-blur text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
+          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600  text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
             <CheckCircle size={9} className="fill-current text-white flex-shrink-0" />
             <span className="truncate">Watched</span>
           </div>
@@ -237,7 +237,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       {item._jf && user === 'admin' && (
          <button
             onClick={(e) => { e.preventDefault(); setShowOverrideModal(true); }}
-            className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 p-1.5 rounded-xl bg-purple-500/15 dark:bg-purple-500/20 hover:bg-purple-600 dark:hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white dark:hover:text-white border border-purple-500/30 hover:border-purple-600 shadow-sm backdrop-blur-sm z-30 transition-all hover:scale-110 cursor-pointer"
+            className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 p-1.5 rounded-xl bg-purple-500/15 dark:bg-purple-500/20 hover:bg-purple-600 dark:hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white dark:hover:text-white border border-purple-500/30 hover:border-purple-600 shadow-sm  z-30 transition-all hover:scale-110 cursor-pointer"
             title="Fix Metadata Override"
          >
             <Edit3 size={14} />
@@ -246,7 +246,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     </>
   );
 
-  const cardClasses = `group relative transition ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`}`;
+  const cardClasses = `snap-start group relative transition-transform duration-300 transform-gpu ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`}`;
 
   return (
     <>
@@ -261,7 +261,7 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
       )}
 
       {showOverrideModal && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowOverrideModal(false)}>
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 " onClick={() => setShowOverrideModal(false)}>
             <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-bold text-black dark:text-white mb-4">Override Jellyfin Link</h3>
                 <div className="mb-4 text-xs text-gray-600 dark:text-gray-400">
@@ -307,3 +307,4 @@ export default function ItemCard({ item, category, parentPath, className, viewMo
     </>
   );
 }
+export default React.memo(ItemCard);

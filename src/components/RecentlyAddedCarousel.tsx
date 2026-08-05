@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { motion } from 'motion/react';
@@ -70,10 +70,16 @@ export default function RecentlyAddedCarousel() {
     }
   };
 
+  const renderedItems = useMemo(() => {
+    return items.slice(0, 15).map((item, i) => (
+      <ItemCard key={item.id || i} item={item} category={item._cat} parentPath={item._parent} />
+    ));
+  }, [items]);
+
   return (
     <div className="relative">
       {toastMsg && (
-        <div className="mb-3 px-4 py-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs rounded-xl backdrop-blur-md transition-all">
+        <div className="mb-3 px-4 py-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs rounded-xl  transition-all">
           {toastMsg}
         </div>
       )}
@@ -89,7 +95,7 @@ export default function RecentlyAddedCarousel() {
           <button 
             onClick={handleFetchJellyfin}
             disabled={isFetching || isRefreshing}
-            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:scale-105 disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 border border-white/20 dark:border-white/10 text-black dark:text-white rounded-full transition-all shadow-[0_8px_32px_0_rgba(31,38,135,0.15)]  hover:scale-105 disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw size={14} className={(isFetching || isRefreshing) ? "animate-spin text-purple-400" : ""} />
             {(isFetching || isRefreshing) ? "Fetching..." : "Fetch"}
@@ -102,10 +108,8 @@ export default function RecentlyAddedCarousel() {
       {(loading || isFetching) && items.length === 0 && (
         <div className="text-gray-500 text-sm italic">Fetching recent items...</div>
       )}
-      <div className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide">
-         {items.slice(0, 15).map((item, i) => (
-           <ItemCard key={i} item={item} category={item._cat} parentPath={item._parent} />
-         ))}
+      <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+         {renderedItems}
       </div>
     </div>
   );
