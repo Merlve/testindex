@@ -123,7 +123,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
       if (item.Type === 'Episode') {
         name = item.SeriesName || item.Name;
         isSeries = true;
-        if (item.SeriesYear) targetYear = item.SeriesYear;
+        targetYear = item.SeriesYear || null;
         
         const s = item.ParentIndexNumber !== undefined ? String(item.ParentIndexNumber).padStart(2, '0') : '';
         const e = item.IndexNumber !== undefined ? String(item.IndexNumber).padStart(2, '0') : '';
