@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
@@ -32,6 +32,12 @@ export default function Admin() {
   const [missingMetadata, setMissingMetadata] = useState<any[]>([]);
   const [loadingMissing, setLoadingMissing] = useState(false);
   const [refreshingMissing, setRefreshingMissing] = useState(false);
+  const [fixModalItem, setFixModalItem] = useState<any>(null);
+  const [fixModalInput, setFixModalInput] = useState('');
+  const [fixModalLoading, setFixModalLoading] = useState(false);
+  const [fixModalSearchResults, setFixModalSearchResults] = useState<any[]>([]);
+  const [fixModalSearching, setFixModalSearching] = useState(false);
+  const fixModalSearchTimeoutRef = useRef<any>(null);
 
   const fetchMissingMetadata = async () => {
     setLoadingMissing(true);
@@ -44,6 +50,78 @@ export default function Admin() {
     setLoadingMissing(false);
   };
   
+  const handleFixMissing = (item: any) => {
+    setFixModalItem(item);
+    setFixModalInput(item.name || '');
+    setFixModalSearchResults([]);
+    handleSearchTMDBModal(item.name || '', item.category);
+  };
+
+  const handleSearchTMDBModal = (query: string, category: string) => {
+    setFixModalInput(query);
+    if (!query) {
+      setFixModalSearchResults([]);
+      return;
+    }
+    if (fixModalSearchTimeoutRef.current) clearTimeout(fixModalSearchTimeoutRef.current);
+    fixModalSearchTimeoutRef.current = setTimeout(async () => {
+      setFixModalSearching(true);
+      try {
+        let isId = /^\d+$/.test(query.trim());
+        let finalQuery = query.trim();
+        if (query.toLowerCase().startsWith('id:')) {
+           isId = true;
+           finalQuery = query.substring(3).trim();
+        } else if (query.toLowerCase().startsWith('tmdb:')) {
+           isId = true;
+           finalQuery = query.substring(5).trim();
+        }
+        const url = `/api/meta/search_all?query=${encodeURIComponent(finalQuery)}&type=${category}${isId ? `&tmdbId=${finalQuery}` : ''}`;
+        const res = await axios.get(url, { headers: { Authorization: localStorage.getItem('shindex_token') || '' } });
+        setFixModalSearchResults(res.data.results || []);
+      } catch(e) {}
+      setFixModalSearching(false);
+    }, 500);
+  };
+
+  const submitFixMetadataId = async (tmdbId: string) => {
+    if (!fixModalItem) return;
+    setFixModalLoading(true);
+    try {
+      await axios.post('/api/meta/override', {
+        query: fixModalItem.cleanName || fixModalItem.name,
+        type: fixModalItem.category,
+        year: fixModalItem.year,
+        tmdbId: tmdbId,
+        path: fixModalItem.path
+      }, { headers: { Authorization: token } });
+      setFixModalItem(null);
+      fetchMissingMetadata();
+    } catch (e: any) {
+      alert(`Failed to fix metadata: ${e.message}`);
+    }
+    setFixModalLoading(false);
+  };
+
+  const submitFixMetadata = async () => {
+    if (!fixModalItem || !fixModalInput) return;
+    setFixModalLoading(true);
+    try {
+      await axios.post('/api/meta/override', {
+        query: fixModalItem.cleanName || fixModalItem.name,
+        type: fixModalItem.category,
+        year: fixModalItem.year,
+        tmdbId: fixModalInput,
+        path: fixModalItem.path
+      }, { headers: { Authorization: token } });
+      setFixModalItem(null);
+      fetchMissingMetadata();
+    } catch (e: any) {
+      alert(`Failed to fix metadata: ${e.message}`);
+    }
+    setFixModalLoading(false);
+  };
+
   const refreshMissingMetadata = async () => {
     if (missingMetadata.length === 0) return;
     setRefreshingMissing(true);
@@ -612,9 +690,17 @@ export default function Admin() {
                         {item.path}
                       </div>
                    </div>
-                   <span className="text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 px-2 py-1 rounded border border-red-500/20 shrink-0">
-                      No Data
-                   </span>
+                   <div className="flex items-center gap-2 shrink-0">
+                     <span className="text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 px-2 py-1 rounded border border-red-500/20 shrink-0">
+                        No Data
+                     </span>
+                     <button 
+                       onClick={() => handleFixMissing(item)}
+                       className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-[10px] font-bold transition uppercase tracking-wider cursor-pointer relative z-10"
+                     >
+                       Fix
+                     </button>
+                   </div>
                 </div>
               ))}
             </div>
@@ -622,6 +708,69 @@ export default function Admin() {
         </div>
       )}
 
+      {fixModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 flex flex-col">
+            <div className="p-4 sm:p-6 border-b border-black/5 dark:border-white/5">
+              <h3 className="text-lg font-bold text-black dark:text-white">Fix Metadata</h3>
+              <p className="text-xs text-gray-500 mt-1">Enter TMDB ID for <span className="font-bold text-purple-600 dark:text-purple-400">{fixModalItem.name}</span></p>
+            </div>
+            <div className="p-4 sm:p-6 flex-1 flex flex-col min-h-0">
+              <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-xs font-bold uppercase tracking-wider">Search Title or TMDB ID</label>
+              <input 
+                autoFocus
+                className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors mb-4"
+                value={fixModalInput}
+                onChange={e => handleSearchTMDBModal(e.target.value, fixModalItem.category)}
+                placeholder="Type title or ID..."
+                onKeyDown={e => e.key === 'Enter' && submitFixMetadataId(fixModalInput)}
+              />
+              <div className="flex-1 overflow-y-auto max-h-52 space-y-2 pr-1 custom-scrollbar">
+                {fixModalSearching ? (
+                  <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Searching...</div>
+                ) : fixModalSearchResults.length > 0 ? (
+                  fixModalSearchResults.map((result: any) => (
+                    <div 
+                      key={result.id} 
+                      onClick={() => submitFixMetadataId(String(result.id))}
+                      className="flex items-center gap-3 p-2 hover:bg-black/5 dark:bg-white/5 rounded-xl cursor-pointer transition"
+                    >
+                      {result.poster_path ? (
+                        <img src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} alt={result.title || result.name} className="w-12 h-16 object-cover rounded shadow" />
+                      ) : (
+                        <div className="w-12 h-16 bg-black/5 dark:bg-white/5 rounded flex items-center justify-center shadow text-xs text-gray-600 dark:text-gray-400">No Img</div>
+                      )}
+                      <div>
+                        <div className="text-black dark:text-white font-semibold text-sm">{result.title || result.name}</div>
+                        <div className="text-gray-600 dark:text-gray-400 text-xs">{result.release_date || result.first_air_date}</div>
+                      </div>
+                    </div>
+                  ))
+                ) : fixModalInput ? (
+                  <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">No results found</div>
+                ) : (
+                  <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Type a title above to search</div>
+                )}
+              </div>
+            </div>
+            <div className="p-4 sm:p-6 bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5 flex justify-end gap-3 shrink-0">
+              <button 
+                onClick={() => setFixModalItem(null)}
+                className="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => submitFixMetadataId(fixModalInput)}
+                disabled={!fixModalInput || fixModalLoading}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/20 disabled:opacity-50 transition"
+              >
+                {fixModalLoading ? 'Saving...' : 'Save Manual ID'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

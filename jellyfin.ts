@@ -138,6 +138,10 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
         isSeries = true;
       }
       
+      if (targetYear && !name.includes(String(targetYear))) {
+        name = `${name} ${targetYear}`;
+      }
+      
       const lowerName = normalizeStr(name);
       if (!seenNames.has(lowerName) && name) {
         seenNames.add(lowerName);
