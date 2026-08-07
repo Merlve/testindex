@@ -1,5 +1,6 @@
 import DetailsSkeleton from "../components/DetailsSkeleton";
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation, useNavigate } from 'react-router';
 import axios from 'axios';
@@ -1059,7 +1060,7 @@ export default function Details() {
       </AnimatePresence>
 
       {/* Trailer Modal */}
-      {showTrailerModal && (
+      {showTrailerModal && createPortal(
         <div 
           className="fixed inset-0 z-[120] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md px-4"
           onClick={() => {
@@ -1113,7 +1114,8 @@ export default function Details() {
               ></iframe>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit Path Modal */}
