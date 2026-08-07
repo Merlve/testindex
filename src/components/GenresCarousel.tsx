@@ -43,8 +43,6 @@ export default function GenresCarousel() {
     }
   });
 
-  if (loading || genres.length === 0) return null;
-
   const renderedItems = useMemo(() => {
     return genres.map((genre: any) => (
       <button
@@ -66,6 +64,8 @@ export default function GenresCarousel() {
       </button>
     ));
   }, [genres, navigate]);
+
+  if (loading || genres.length === 0) return null;
 
   return (
     <div className="relative">

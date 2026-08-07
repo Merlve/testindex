@@ -10,14 +10,34 @@ import { useQuery } from '@tanstack/react-query';
 import 'swiper/css';
 import 'swiper/css/effect-coverflow';
 
+const COVERFLOW_EFFECT = {
+  rotate: 30,
+  stretch: 0,
+  depth: 100,
+  modifier: 1,
+  scale: 0.92,
+  slideShadows: false,
+};
+
+const BREAKPOINTS = {
+  640: {
+    slidesPerView: 1.25,
+  },
+  1024: {
+    slidesPerView: 1.28,
+  }
+};
+
+const MODULES = [EffectCoverflow];
+
 export default function FeaturedSlider({ featuredItems }: { featuredItems: any[] }) {
   const navigate = useNavigate();
 
   const renderedSlides = useMemo(() => {
     if (!featuredItems || featuredItems.length === 0) return null;
     return featuredItems.map((item, idx) => (
-      <SwiperSlide key={item.id || item.name || idx} className="h-full rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-xl relative group transition-opacity duration-300 [&:not(.swiper-slide-active)]:opacity-75">
-         <div className="w-full h-full">
+      <SwiperSlide key={`${item.id || item.name}-${idx}`} className="h-full rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-xl relative group transition-opacity duration-300 [&:not(.swiper-slide-active)]:opacity-75">
+         <div className="w-full h-full transform-gpu">
             <FeaturedSlideCard item={item} />
          </div>
       </SwiperSlide>
@@ -41,24 +61,10 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
         preventClicksPropagation={false}
         touchStartPreventDefault={false}
         simulateTouch={true}
-        coverflowEffect={{
-          rotate: 30,
-          stretch: 0,
-          depth: 100,
-          modifier: 1,
-          scale: 0.92,
-          slideShadows: false,
-        }}
-        breakpoints={{
-          640: {
-            slidesPerView: 1.25,
-          },
-          1024: {
-            slidesPerView: 1.28,
-          }
-        }}
-        modules={[EffectCoverflow]}
-        className="w-full h-[240px] sm:h-[340px] md:h-[380px]"
+        coverflowEffect={COVERFLOW_EFFECT}
+        breakpoints={BREAKPOINTS}
+        modules={MODULES}
+        className="w-full h-[240px] sm:h-[340px] md:h-[380px] transform-gpu"
       >
         {renderedSlides}
       </Swiper>

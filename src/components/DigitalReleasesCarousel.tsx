@@ -80,16 +80,13 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     }
   });
 
-  if (loading || !data.items || data.items.length === 0) {
-    return null;
-  }
-  
   const currentMonthName = new Date().toLocaleString('default', { month: 'long' });
 
   const renderedItems = useMemo(() => {
+    if (!data.items) return [];
     return data.items.map((item: any, i: number) => (
       <ItemCard 
-        key={item.id || i} 
+        key={`${item.id || item.name}-${i}`} 
         item={item} 
         category={item.category || "MOVIES"} 
         parentPath={item.parentPath || `/home/MOVIES`} 
@@ -97,6 +94,10 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
       />
     ));
   }, [data.items, data.tmdbData]);
+
+  if (loading || !data.items || data.items.length === 0) {
+    return null;
+  }
 
   return (
     <div className="relative">

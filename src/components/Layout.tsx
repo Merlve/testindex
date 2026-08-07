@@ -495,7 +495,7 @@ export default function Layout() {
 
         {/* Dynamic Bottom Navigation Bar (Home Page Only) */}
         {location.pathname === '/' && (
-          <div id="bottom-nav-bar" className={`fixed bottom-6 left-6 md:bottom-8 md:left-8 z-50 flex items-center transition-all duration-300 ${sidebarOpen || isIdle ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}>
+          <div id="bottom-nav-bar" className={`fixed bottom-6 left-6 md:bottom-8 md:left-8 z-50 flex items-center transition-all duration-300 ${sidebarOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}>
             <motion.div 
               layout
               className={`flex items-center gap-1 overflow-hidden transition-all duration-500 ease-in-out rounded-full border backdrop-blur-xl backdrop-saturate-[180%] ${

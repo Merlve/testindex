@@ -70,7 +70,7 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
 
   const renderedItems = useMemo(() => {
     return trendingItems.slice(0, 10).map((item, i) => (
-      <ItemCard key={item.id || i} item={item} category={item.category} parentPath={`/home/${item.category}`} />
+      <ItemCard key={`${item.id || item.name}-${i}`} item={item} category={item.category} parentPath={`/home/${item.category}`} />
     ));
   }, [trendingItems]);
 

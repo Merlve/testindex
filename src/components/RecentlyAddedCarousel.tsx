@@ -72,7 +72,7 @@ export default function RecentlyAddedCarousel() {
 
   const renderedItems = useMemo(() => {
     return items.slice(0, 15).map((item, i) => (
-      <ItemCard key={item.id || i} item={item} category={item._cat} parentPath={item._parent} />
+      <ItemCard key={`${item.id || item.name}-${i}`} item={item} category={item._cat} parentPath={item._parent} />
     ));
   }, [items]);
 

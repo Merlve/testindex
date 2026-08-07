@@ -722,7 +722,7 @@ export default function Details() {
         }
         const { cleanName, year } = parseMediaName(searchName);
         const itemPath = `/${fullPath}`;
-        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}&full=true`);
+        const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${encodeURIComponent(category)}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}&full=true`);
         if (tmdbRes.data) {
           setTmdb((prev: any) => ({ ...(prev || {}), ...tmdbRes.data }));
           try {
@@ -744,8 +744,10 @@ export default function Details() {
         } else if (!tmdb) {
           setSearchTitle(cleanName);
         }
-      } catch (err) {
-        console.error('Error fetching TMDB metadata', err);
+      } catch (err: any) {
+        if (err.message !== 'Network Error') {
+          console.error('Error fetching TMDB metadata', err);
+        }
       } finally {
         setLoading(false);
       }
@@ -1058,18 +1060,28 @@ export default function Details() {
 
       {/* Trailer Modal */}
       {showTrailerModal && (
-        <div className="fixed inset-0 z-[120] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md px-4">
+        <div 
+          className="fixed inset-0 z-[120] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md px-4"
+          onClick={() => {
+            setShowTrailerModal(false);
+            setTrailerUrl(null);
+          }}
+        >
           <button 
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setShowTrailerModal(false);
               setTrailerUrl(null);
             }} 
-            className="absolute top-6 right-6 text-white/70 hover:text-white transition bg-white/10 p-2.5 rounded-full z-10 cursor-pointer"
+            className="absolute top-24 right-6 text-white/70 hover:text-white transition bg-white/10 p-2.5 rounded-full z-10 cursor-pointer"
           >
             <X size={24} />
           </button>
           
-          <div className="w-full max-w-5xl aspect-video bg-black rounded-2xl shadow-2xl overflow-hidden relative border border-white/10">
+          <div 
+            className="w-full max-w-5xl aspect-video bg-black rounded-2xl shadow-2xl overflow-hidden relative border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
             {!trailerUrl ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70">
                 {loadingTrailer ? (
