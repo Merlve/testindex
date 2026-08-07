@@ -140,6 +140,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setToken(null);
     localStorage.removeItem('qs_user');
     localStorage.removeItem('qs_token');
+    sessionStorage.removeItem('shindex-featured-items-session');
   };
 
   return (

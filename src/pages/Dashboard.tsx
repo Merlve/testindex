@@ -102,10 +102,31 @@ export default function Dashboard() {
   });
 
   const featuredItems = useMemo(() => {
+    if (!categories || categories.length === 0) return [];
+    
     const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name, parentPath: item._parent || `/home/${c.name}` })));
+    if (allItems.length === 0) return [];
+    
+    const sessionKey = 'shindex-featured-items-session';
+    const cachedStr = sessionStorage.getItem(sessionKey);
+    let cachedIds: string[] = [];
+    if (cachedStr) {
+      try { cachedIds = JSON.parse(cachedStr); } catch (e) {}
+    }
+    
+    if (cachedIds.length > 0) {
+      const matched = cachedIds.map(id => allItems.find(item => (item.id && item.id.toString() === id) || item.name === id)).filter(Boolean);
+      if (matched.length > 0) {
+        return matched;
+      }
+    }
+
     // Shuffle and pick up to 5
     const shuffled = [...allItems].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 5);
+    const selected = shuffled.slice(0, 5);
+    
+    sessionStorage.setItem(sessionKey, JSON.stringify(selected.map(item => (item.id ? item.id.toString() : item.name))));
+    return selected;
   }, [categories]);
 
 
