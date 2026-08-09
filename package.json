@@ -39,6 +39,7 @@
     "swagger-ui-express": "^5.0.1",
     "swiper": "^14.0.7",
     "tailwind-merge": "^3.6.0",
+    "undici": "^8.10.0",
     "vite": "^6.2.3",
     "yamljs": "^0.3.0"
   },

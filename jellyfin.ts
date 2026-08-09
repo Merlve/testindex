@@ -184,6 +184,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
                modified: new Date().toISOString(),
                _cat: override.category || 'Unknown',
                _parent: override.openlistPath.substring(0, override.openlistPath.lastIndexOf('/')),
+               openlist_path: override.openlistPath,
                _jf_name: search.name,
                _jf: {
                    tmdbId: search.jfItem.ProviderIds?.Tmdb || search.jfItem.ProviderIds?.tmdb || null,
@@ -309,6 +310,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
              ...bestCandidate, 
              _cat: bestCandidate.parent.split('/').filter(Boolean).pop() || (search.isSeries ? 'SERIES' : 'MOVIES'), 
              _parent: bestCandidate.parent,
+             openlist_path: `${bestCandidate.parent}/${bestCandidate.name}`,
              _jf_name: search.name,
              _jf: {
                  tmdbId,

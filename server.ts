@@ -244,6 +244,197 @@ async function saveDb() {
   await writeSQLiteJSON('db', tmdbCache);
 }
 
+// Actor filmography persistence cache
+let actorCache: Record<string, { person: any, credits: any[], lastUpdated: number }> = {};
+async function saveActorCache() {
+  await writeSQLiteJSON('actor_cache', actorCache);
+}
+
+// Background batch pre-caching mechanism for actor filmography metadata
+async function preCacheActorFilmographyMetadata(matchedList: any[], tmdbKey: string) {
+  if (!tmdbKey || !matchedList || matchedList.length === 0) return;
+
+  let cacheUpdated = false;
+
+  for (const matchItem of matchedList) {
+    try {
+      const item = matchItem.item;
+      const category = matchItem.category || item?.category || '';
+      const cleanName = matchItem.title || item?.cleanName || matchItem.openlistName || '';
+      const year = item?.year;
+      const itemPath = matchItem.path; // e.g. /home/MOVIES/Blood.Diamond.2006
+      const cleanPath = itemPath ? itemPath.replace(/^\/+/, '') : null;
+
+      const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+      const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
+      const baseQuery = (cleanName || '').toLowerCase().trim();
+      if (!baseQuery) continue;
+
+      const cacheKey = `${category}-${baseQuery}${year ? `-${year}` : ''}`;
+      const baseKey = `${category}-${baseQuery}`;
+
+      const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes((category || '').toUpperCase());
+      const searchType = isTvCategory ? 'tv' : 'movie';
+
+      let existing = (pathKey1 && tmdbCache[pathKey1]) || 
+                     (pathKey2 && tmdbCache[pathKey2]) || 
+                     tmdbCache[cacheKey] || 
+                     tmdbCache[baseKey];
+
+      let targetData: any = existing;
+
+      // Check if item needs full details/credits pre-cached
+      if (!targetData || !targetData.credits || (searchType === 'tv' && !targetData.status)) {
+        const tmdbId = matchItem.id || existing?.id;
+
+        if (tmdbId && typeof tmdbId === 'number') {
+          try {
+            const detailRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${tmdbId}?api_key=${tmdbKey}`);
+            if (detailRes.data) {
+              targetData = { ...(existing || {}), ...detailRes.data };
+            }
+          } catch (e) {}
+        }
+
+        if (!targetData || !targetData.id) {
+          let searchUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanName)}`;
+          if (year) searchUrl += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
+          try {
+            const searchRes = await axios.get(searchUrl);
+            if (searchRes.data?.results?.length > 0) {
+              targetData = searchRes.data.results[0];
+            }
+          } catch (e) {}
+        }
+
+        if (targetData && targetData.id) {
+          await attachFullDataToItem(targetData, searchType, tmdbKey);
+          targetData._synced = true;
+
+          tmdbCache[cacheKey] = targetData;
+          tmdbCache[baseKey] = targetData;
+          if (pathKey1) tmdbCache[pathKey1] = targetData;
+          if (pathKey2) tmdbCache[pathKey2] = targetData;
+          cacheUpdated = true;
+        }
+      } else {
+        // Ensure all path and cache keys point to targetData
+        if (pathKey1 && !tmdbCache[pathKey1]) { tmdbCache[pathKey1] = targetData; cacheUpdated = true; }
+        if (pathKey2 && !tmdbCache[pathKey2]) { tmdbCache[pathKey2] = targetData; cacheUpdated = true; }
+        if (!tmdbCache[cacheKey]) { tmdbCache[cacheKey] = targetData; cacheUpdated = true; }
+        if (!tmdbCache[baseKey]) { tmdbCache[baseKey] = targetData; cacheUpdated = true; }
+      }
+    } catch (e) {
+      console.error('Error pre-caching metadata item:', e);
+    }
+  }
+
+  if (cacheUpdated) {
+    await saveDb();
+  }
+}
+
+// Re-sync saved actor filmographies when new library items are added to the app
+async function syncAllActorsWithNewLibraryItems() {
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey || !libraryIndex || libraryIndex.length === 0) return;
+
+  const actorIds = Object.keys(actorCache);
+  if (actorIds.length === 0) return;
+
+  const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  for (const actorId of actorIds) {
+    const actorData = actorCache[actorId];
+    if (!actorData || !actorData.credits) continue;
+
+    const actorCastCredits = actorData.credits;
+    const actorTmdbIdsMap = new Map<number, any>();
+    for (const castItem of actorCastCredits) {
+      if (castItem.id) actorTmdbIdsMap.set(castItem.id, castItem);
+    }
+
+    const matchedList: any[] = [];
+
+    for (const item of libraryIndex) {
+      const baseQuery = (item.cleanName || '').toLowerCase().trim();
+      const type = item.category;
+      const year = item.year;
+      const cleanPath = item.openlist_path ? item.openlist_path.replace(/^\/+/, '') : (item.path ? item.path.replace(/^\/+/, '') : null);
+      const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+      const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
+
+      const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes((type || '').toUpperCase());
+      const expectedMediaType = isTvCategory ? 'tv' : 'movie';
+
+      let cached = null;
+      const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year, cleanPath || undefined);
+      if (overriddenKey && tmdbCache[overriddenKey]) {
+        cached = tmdbCache[overriddenKey];
+      } else if (pathKey1 && tmdbCache[pathKey1] !== undefined) {
+        cached = tmdbCache[pathKey1];
+      } else if (pathKey2 && tmdbCache[pathKey2] !== undefined) {
+        cached = tmdbCache[pathKey2];
+      } else {
+        const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+        if (tmdbCache[cacheKey] !== undefined) {
+          cached = tmdbCache[cacheKey];
+        } else if (year && tmdbCache[`${type}-${baseQuery}`] !== undefined) {
+          cached = tmdbCache[`${type}-${baseQuery}`];
+        }
+      }
+
+      let matchedCastCredit: any = null;
+      if (cached && cached.id) {
+        const cachedId = Number(cached.id);
+        if (actorTmdbIdsMap.has(cachedId)) {
+          const castCredit = actorTmdbIdsMap.get(cachedId);
+          const creditMediaType = castCredit.media_type || (cached.first_air_date ? 'tv' : 'movie');
+          const mediaTypeMatch = (expectedMediaType === 'tv' && creditMediaType === 'tv') || (expectedMediaType === 'movie' && creditMediaType === 'movie');
+          if (mediaTypeMatch) matchedCastCredit = castCredit;
+        }
+      }
+
+      if (!matchedCastCredit) {
+        const normItemName = normalize(item.cleanName);
+        if (normItemName) {
+          const candidate = actorCastCredits.find((c: any) => {
+            const cMediaType = c.media_type || (c.first_air_date ? 'tv' : 'movie');
+            if (cMediaType !== expectedMediaType) return false;
+
+            const cTitle = normalize(c.title || c.name || '');
+            if (cTitle !== normItemName) return false;
+
+            if (year) {
+              const cYear = (c.release_date || c.first_air_date || '').substring(0, 4);
+              if (cYear && /^\d{4}$/.test(cYear) && /^\d{4}$/.test(year)) {
+                if (Math.abs(parseInt(year, 10) - parseInt(cYear, 10)) > 1) return false;
+              }
+            }
+            return true;
+          });
+          if (candidate) matchedCastCredit = candidate;
+        }
+      }
+
+      if (matchedCastCredit) {
+        const path = `/home/${item.category}/${item.name}`;
+        matchedList.push({
+          item,
+          id: matchedCastCredit.id,
+          category: item.category,
+          path,
+          title: cached?.title || cached?.name || matchedCastCredit.title || matchedCastCredit.name || item.cleanName || item.name
+        });
+      }
+    }
+
+    if (matchedList.length > 0) {
+      preCacheActorFilmographyMetadata(matchedList, tmdbKey).catch(() => {});
+    }
+  }
+}
+
 function findOverriddenKeyInCache(cache: Record<string, any>, type: string, cleanQuery: string, year?: string | number, itemPath?: string): string | null {
   if (!cleanQuery && !itemPath) return null;
   const baseQuery = (cleanQuery || '').toLowerCase().trim();
@@ -324,7 +515,8 @@ async function getLibraryIndex(token: string, forceRefresh = false) {
             for (const c of catData) {
                 for (const item of c.items) {
                     const { cleanName, year } = parseMediaName(item.name);
-                    allItems.push({ ...item, category: c.name, cleanName, year });
+                    const openlistPath = item.path || `${appConfig.basePath}/${c.name}/${item.name}`;
+                    allItems.push({ ...item, category: c.name, cleanName, year, openlist_path: openlistPath });
                 }
             }
             
@@ -332,6 +524,7 @@ async function getLibraryIndex(token: string, forceRefresh = false) {
                 libraryIndex = allItems;
                 libraryIndexLastUpdated = Date.now();
                 saveLibraryIndex();
+                syncAllActorsWithNewLibraryItems().catch(err => console.error('Error syncing actors on library update:', err));
             }
        } catch(e) {
            console.error("Failed to refresh library index", e);
@@ -2058,16 +2251,15 @@ app.get('/api/meta/credits', cacheMiddleware(3600, true), async (req, res) => {
 
   const numId = parseInt(id as string, 10);
   
-  let cacheKeyToUpdate: string | null = null;
+  let cacheKeysToUpdate: string[] = [];
   let cachedCredits = null;
   
   for (const [key, value] of Object.entries(tmdbCache)) {
     if (value && value.id === numId) {
+      cacheKeysToUpdate.push(key);
       if (value.credits) {
         cachedCredits = value.credits;
       }
-      cacheKeyToUpdate = key;
-      break;
     }
   }
 
@@ -2081,8 +2273,14 @@ app.get('/api/meta/credits', cacheMiddleware(3600, true), async (req, res) => {
     const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/credits?api_key=${tmdbKey}`);
     const data = response.data || { cast: [], crew: [] };
     
-    if (cacheKeyToUpdate && tmdbCache[cacheKeyToUpdate]) {
-      tmdbCache[cacheKeyToUpdate].credits = data;
+    let dbUpdated = false;
+    for (const key of cacheKeysToUpdate) {
+      if (tmdbCache[key]) {
+        tmdbCache[key].credits = data;
+        dbUpdated = true;
+      }
+    }
+    if (dbUpdated) {
       await writeSQLiteJSON('db', tmdbCache);
     }
     
@@ -2121,125 +2319,169 @@ app.get('/api/meta/person/:personId', cacheMiddleware(1800, true), async (req, r
       return res.json({ person: null, movies: [], shows: [] });
     }
 
-    const [personRes, creditsRes] = await Promise.all([
-      axios.get(`https://api.themoviedb.org/3/person/${numericId}?api_key=${tmdbKey}`).catch(() => null),
-      axios.get(`https://api.themoviedb.org/3/person/${numericId}/combined_credits?api_key=${tmdbKey}`).catch(() => null)
-    ]);
+    // 1. Fetch person bio/details & combined credits using persistent actorCache
+    const actorCacheKey = numericId.toString();
+    let cachedActor = actorCache[actorCacheKey];
+    let person = cachedActor?.person || null;
+    let actorCastCredits: any[] = cachedActor?.credits || [];
 
-    const person = personRes?.data || null;
-    const creditsData = creditsRes?.data || { cast: [], crew: [] };
+    if (!cachedActor || !person || !actorCastCredits.length || (Date.now() - (cachedActor.lastUpdated || 0) > 24 * 60 * 60 * 1000)) {
+      const [personRes, creditsRes] = await Promise.all([
+        axios.get(`https://api.themoviedb.org/3/person/${numericId}?api_key=${tmdbKey}`).catch(() => null),
+        axios.get(`https://api.themoviedb.org/3/person/${numericId}/combined_credits?api_key=${tmdbKey}`).catch(() => null)
+      ]);
 
-    const rawCredits = [
-      ...(Array.isArray(creditsData.cast) ? creditsData.cast : []),
-      ...(Array.isArray(creditsData.crew) ? creditsData.crew.filter((c: any) => c.job === 'Director' || c.job === 'Creator') : [])
-    ];
+      if (personRes?.data) person = personRes.data;
+      if (creditsRes?.data?.cast) actorCastCredits = creditsRes.data.cast;
 
-    const libraryItems = await getLibraryIndex(token || '');
+      if (person && actorCastCredits.length > 0) {
+        actorCache[actorCacheKey] = {
+          person,
+          credits: actorCastCredits,
+          lastUpdated: Date.now()
+        };
+        saveActorCache();
+      }
+    }
+
+    // Map TMDB IDs -> Cast Credit (character, title, media_type, etc.)
+    const actorTmdbIdsMap = new Map<number, any>();
 
     const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    const tmdbMap = new Map<number, any>();
-    const nameMap = new Map<string, any[]>();
+    for (const castItem of actorCastCredits) {
+      if (!castItem.id) continue;
+      actorTmdbIdsMap.set(castItem.id, castItem);
+    }
+
+    const searchName = nameQuery ? normalize(nameQuery) : (person?.name ? normalize(person.name) : null);
+
+    // 3. Get Openlist library items
+    const libraryItems = await getLibraryIndex(token || '');
+    const matchedMap = new Map<string, any>();
 
     for (const item of libraryItems) {
       const baseQuery = (item.cleanName || '').toLowerCase().trim();
       const type = item.category;
       const year = item.year;
       const baseKey = `${type}-${baseQuery}`;
+      const cleanPath = item.openlist_path ? item.openlist_path.replace(/^\/+/, '') : (item.path ? item.path.replace(/^\/+/, '') : null);
+      const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+      const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
+
+      const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes((type || '').toUpperCase());
+      const expectedMediaType = isTvCategory ? 'tv' : 'movie';
 
       let cached = null;
-      const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
-      if (overriddenKey) {
+      const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year, cleanPath || undefined);
+      if (overriddenKey && tmdbCache[overriddenKey]) {
         cached = tmdbCache[overriddenKey];
+      } else if (pathKey1 && tmdbCache[pathKey1] !== undefined) {
+        cached = tmdbCache[pathKey1];
+      } else if (pathKey2 && tmdbCache[pathKey2] !== undefined) {
+        cached = tmdbCache[pathKey2];
       } else {
         const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
-        if (tmdbCache[cacheKey]) {
+        if (tmdbCache[cacheKey] !== undefined) {
           cached = tmdbCache[cacheKey];
-        } else if (year && tmdbCache[baseKey]) {
+        } else if (year && tmdbCache[baseKey] !== undefined) {
           cached = tmdbCache[baseKey];
         }
       }
 
+      let matchedCastCredit: any = null;
+      let finalTmdbData: any = null;
+
+      // Check cached entry if available
       if (cached && cached.id) {
-        tmdbMap.set(cached.id, { ...item, _cached: cached });
-      }
+        const cachedId = Number(cached.id);
+        if (actorTmdbIdsMap.has(cachedId)) {
+          const castCredit = actorTmdbIdsMap.get(cachedId);
+          // Verify media_type compatibility
+          const creditMediaType = castCredit.media_type || (cached.first_air_date ? 'tv' : 'movie');
+          const mediaTypeMatch = (expectedMediaType === 'tv' && creditMediaType === 'tv') || (expectedMediaType === 'movie' && creditMediaType === 'movie');
 
-      const norm = normalize(item.cleanName || item.name);
-      if (norm) {
-        if (!nameMap.has(norm)) nameMap.set(norm, []);
-        nameMap.get(norm)!.push({ ...item, _cached: cached });
-      }
-    }
-
-    const matchedMap = new Map<string, any>();
-
-    for (const credit of rawCredits) {
-      if (!credit) continue;
-
-      let matchedItem: any = null;
-
-      if (credit.id && tmdbMap.has(credit.id)) {
-        matchedItem = tmdbMap.get(credit.id);
-      }
-
-      if (!matchedItem) {
-        const creditTitleNorm = normalize(credit.title || credit.name || '');
-        const creditOrigTitleNorm = normalize(credit.original_title || credit.original_name || '');
-
-        let candidates = nameMap.get(creditTitleNorm) || nameMap.get(creditOrigTitleNorm) || [];
-
-        if (candidates.length > 0) {
-          const isTvCredit = credit.media_type === 'tv';
-          const filtered = candidates.filter((c: any) => {
-            const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(c.category.toUpperCase());
-            return isTvCredit ? isTvCategory : !isTvCategory;
-          });
-
-          if (filtered.length > 0) {
-            const creditYear = (credit.release_date || credit.first_air_date || '').substring(0, 4);
-            if (creditYear) {
-              // Try to find an exact year match
-              const yearMatch = filtered.find(c => {
-                 const itemYear = c.year || (c._cached?.release_date || c._cached?.first_air_date || '').substring(0, 4);
-                 return itemYear === creditYear;
-              });
-              
-              if (yearMatch) {
-                matchedItem = yearMatch;
-              } else {
-                // If there's no exact year match, only fallback if the library item has NO year info at all
-                const noYearMatch = filtered.find(c => !c.year && !c._cached);
-                if (noYearMatch) {
-                  matchedItem = noYearMatch;
-                }
-              }
-            } else {
-              // If TMDB credit has no year, only match library items that also have no year info
-              const noYearMatch = filtered.find(c => !c.year && !c._cached);
-              if (noYearMatch) {
-                matchedItem = noYearMatch;
+          // Verify year if present
+          let yearMatch = true;
+          if (year) {
+            const releaseYear = (castCredit.release_date || castCredit.first_air_date || cached.release_date || cached.first_air_date || '').substring(0, 4);
+            if (releaseYear && /^\d{4}$/.test(releaseYear) && /^\d{4}$/.test(year)) {
+              if (Math.abs(parseInt(year, 10) - parseInt(releaseYear, 10)) > 1) {
+                yearMatch = false;
               }
             }
+          }
+
+          // Verify cast if credits list is attached to cached item
+          let castMatch = true;
+          if (cached.credits && Array.isArray(cached.credits.cast) && cached.credits.cast.length > 0) {
+            const foundInCast = cached.credits.cast.some((c: any) => c.id === numericId || (searchName && c.name && normalize(c.name) === searchName));
+            if (!foundInCast) castMatch = false;
+          }
+
+          if (mediaTypeMatch && yearMatch && castMatch) {
+            matchedCastCredit = castCredit;
+            finalTmdbData = { ...cached, _synced: true };
           }
         }
       }
 
-      if (matchedItem) {
-        const path = `/home/${matchedItem.category}/${matchedItem.name}`;
-        if (!matchedMap.has(path)) {
-          const isShow = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(matchedItem.category.toUpperCase()) || credit.media_type === 'tv';
+      // If not matched via cached ID, check if any cast credit in actor's filmography matches cleanName + year + media_type
+      if (!matchedCastCredit) {
+        const normItemName = normalize(item.cleanName);
+        if (normItemName) {
+          const candidate = actorCastCredits.find((c: any) => {
+            const cMediaType = c.media_type || (c.first_air_date ? 'tv' : 'movie');
+            if (cMediaType !== expectedMediaType) return false;
 
+            const cTitle = normalize(c.title || c.name || '');
+            if (cTitle !== normItemName) return false;
+
+            if (year) {
+              const cYear = (c.release_date || c.first_air_date || '').substring(0, 4);
+              if (cYear && /^\d{4}$/.test(cYear) && /^\d{4}$/.test(year)) {
+                if (Math.abs(parseInt(year, 10) - parseInt(cYear, 10)) > 1) return false;
+              }
+            }
+            return true;
+          });
+
+          if (candidate) {
+            matchedCastCredit = candidate;
+            finalTmdbData = {
+              id: candidate.id,
+              title: candidate.title || candidate.name,
+              name: candidate.name || candidate.title,
+              poster_path: candidate.poster_path,
+              backdrop_path: candidate.backdrop_path,
+              vote_average: candidate.vote_average,
+              release_date: candidate.release_date || candidate.first_air_date,
+              first_air_date: candidate.first_air_date || candidate.release_date,
+              overview: candidate.overview,
+              _synced: false
+            };
+          }
+        }
+      }
+
+      if (matchedCastCredit) {
+        const path = `/home/${item.category}/${item.name}`;
+        const isShow = expectedMediaType === 'tv';
+
+        if (!matchedMap.has(path)) {
           matchedMap.set(path, {
-            id: credit.id || matchedItem.name,
-            title: credit.title || credit.name || matchedItem.cleanName || matchedItem.name,
-            openlistName: matchedItem.name,
-            category: matchedItem.category,
+            item,
+            tmdbData: finalTmdbData,
+            id: matchedCastCredit.id,
+            title: finalTmdbData?.title || finalTmdbData?.name || matchedCastCredit.title || matchedCastCredit.name || item.cleanName || item.name,
+            openlistName: item.name,
+            category: item.category,
             path,
-            poster_path: credit.poster_path || matchedItem._cached?.poster_path || null,
-            backdrop_path: credit.backdrop_path || matchedItem._cached?.backdrop_path || null,
-            vote_average: credit.vote_average || matchedItem._cached?.vote_average || null,
-            release_date: credit.release_date || credit.first_air_date || matchedItem.year || '',
-            character: credit.character || credit.job || '',
+            poster_path: finalTmdbData?.poster_path || matchedCastCredit.poster_path || null,
+            backdrop_path: finalTmdbData?.backdrop_path || matchedCastCredit.backdrop_path || null,
+            vote_average: finalTmdbData?.vote_average || matchedCastCredit.vote_average || null,
+            release_date: finalTmdbData?.release_date || finalTmdbData?.first_air_date || matchedCastCredit.release_date || matchedCastCredit.first_air_date || item.year || '',
+            character: matchedCastCredit.character || '',
             media_type: isShow ? 'tv' : 'movie'
           });
         }
@@ -2249,6 +2491,11 @@ app.get('/api/meta/person/:personId', cacheMiddleware(1800, true), async (req, r
     const matchedList = Array.from(matchedMap.values());
     const movies = matchedList.filter(m => m.media_type === 'movie');
     const shows = matchedList.filter(m => m.media_type === 'tv');
+
+    // Trigger background batch pre-caching mechanism for movie/show metadata
+    preCacheActorFilmographyMetadata(matchedList, tmdbKey).catch(err => {
+      console.error('Error pre-caching actor filmography metadata:', err);
+    });
 
     res.json({
       person,
@@ -2920,13 +3167,14 @@ app.post('/api/meta/scan_collections/start', adminMiddleware, (req, res) => {
   if (!tmdbKey) return res.status(500).json({ error: 'TMDB key missing' });
 
   collectionScanJob.isRunning = true;
-  collectionScanJob.message = 'Starting collection scan...';
+  collectionScanJob.message = 'Starting collection and actor filmography scan...';
   collectionScanJob.count = 0;
   
   (async () => {
     try {
       const keys = Object.keys(tmdbCache).filter(k => k.startsWith('movie-') || (tmdbCache[k] && tmdbCache[k].title));
-      collectionScanJob.total = keys.length;
+      const actorIds = Object.keys(actorCache);
+      collectionScanJob.total = keys.length + actorIds.length;
       
       let modified = false;
       for (const key of keys) {
@@ -2952,9 +3200,116 @@ app.post('/api/meta/scan_collections/start', adminMiddleware, (req, res) => {
         collectionScanJob.message = `Scanning collections... ${collectionScanJob.count} / ${collectionScanJob.total}`;
       }
       
-      if (modified) saveDb();
-      collectionScanJob.message = `Finished collection scan. Processed ${collectionScanJob.count} items.`;
-    } catch(e) {
+      if (modified) await saveDb();
+
+      // Scan actor filmography matches for all actors stored in actorCache
+      if (collectionScanJob.isRunning && actorIds.length > 0) {
+        if (!libraryIndex || libraryIndex.length === 0) {
+          const token = getOpenlistApiKey();
+          await getLibraryIndex(token).catch(() => {});
+        }
+
+        const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        for (const actorId of actorIds) {
+          if (!collectionScanJob.isRunning) break;
+
+          const actorData = actorCache[actorId];
+          const actorName = actorData?.person?.name || `Actor #${actorId}`;
+          collectionScanJob.message = `Scanning actor filmography: ${actorName} (${collectionScanJob.count + 1} / ${collectionScanJob.total})...`;
+
+          if (actorData && actorData.credits && libraryIndex && libraryIndex.length > 0) {
+            const actorCastCredits = actorData.credits;
+            const actorTmdbIdsMap = new Map<number, any>();
+            for (const castItem of actorCastCredits) {
+              if (castItem.id) actorTmdbIdsMap.set(castItem.id, castItem);
+            }
+
+            const matchedList: any[] = [];
+            for (const item of libraryIndex) {
+              const baseQuery = (item.cleanName || '').toLowerCase().trim();
+              const type = item.category;
+              const year = item.year;
+              const cleanPath = item.openlist_path ? item.openlist_path.replace(/^\/+/, '') : (item.path ? item.path.replace(/^\/+/, '') : null);
+              const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+              const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
+
+              const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes((type || '').toUpperCase());
+              const expectedMediaType = isTvCategory ? 'tv' : 'movie';
+
+              let cached = null;
+              const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year, cleanPath || undefined);
+              if (overriddenKey && tmdbCache[overriddenKey]) {
+                cached = tmdbCache[overriddenKey];
+              } else if (pathKey1 && tmdbCache[pathKey1] !== undefined) {
+                cached = tmdbCache[pathKey1];
+              } else if (pathKey2 && tmdbCache[pathKey2] !== undefined) {
+                cached = tmdbCache[pathKey2];
+              } else {
+                const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+                if (tmdbCache[cacheKey] !== undefined) {
+                  cached = tmdbCache[cacheKey];
+                } else if (year && tmdbCache[`${type}-${baseQuery}`] !== undefined) {
+                  cached = tmdbCache[`${type}-${baseQuery}`];
+                }
+              }
+
+              let matchedCastCredit: any = null;
+              if (cached && cached.id) {
+                const cachedId = Number(cached.id);
+                if (actorTmdbIdsMap.has(cachedId)) {
+                  const castCredit = actorTmdbIdsMap.get(cachedId);
+                  const creditMediaType = castCredit.media_type || (cached.first_air_date ? 'tv' : 'movie');
+                  const mediaTypeMatch = (expectedMediaType === 'tv' && creditMediaType === 'tv') || (expectedMediaType === 'movie' && creditMediaType === 'movie');
+                  if (mediaTypeMatch) matchedCastCredit = castCredit;
+                }
+              }
+
+              if (!matchedCastCredit) {
+                const normItemName = normalize(item.cleanName);
+                if (normItemName) {
+                  const candidate = actorCastCredits.find((c: any) => {
+                    const cMediaType = c.media_type || (c.first_air_date ? 'tv' : 'movie');
+                    if (cMediaType !== expectedMediaType) return false;
+
+                    const cTitle = normalize(c.title || c.name || '');
+                    if (cTitle !== normItemName) return false;
+
+                    if (year) {
+                      const cYear = (c.release_date || c.first_air_date || '').substring(0, 4);
+                      if (cYear && /^\d{4}$/.test(cYear) && /^\d{4}$/.test(year)) {
+                        if (Math.abs(parseInt(year, 10) - parseInt(cYear, 10)) > 1) return false;
+                      }
+                    }
+                    return true;
+                  });
+                  if (candidate) matchedCastCredit = candidate;
+                }
+              }
+
+              if (matchedCastCredit) {
+                const path = `/home/${item.category}/${item.name}`;
+                matchedList.push({
+                  item,
+                  id: matchedCastCredit.id,
+                  category: item.category,
+                  path,
+                  title: cached?.title || cached?.name || matchedCastCredit.title || matchedCastCredit.name || item.cleanName || item.name
+                });
+              }
+            }
+
+            if (matchedList.length > 0) {
+              await preCacheActorFilmographyMetadata(matchedList, tmdbKey);
+            }
+          }
+
+          collectionScanJob.count++;
+        }
+      }
+
+      collectionScanJob.message = `Finished scan. Processed ${collectionScanJob.count} items.`;
+    } catch(e: any) {
       collectionScanJob.message = `Error: ${e.message}`;
     } finally {
       collectionScanJob.isRunning = false;
@@ -2967,6 +3322,190 @@ app.post('/api/meta/scan_collections/start', adminMiddleware, (req, res) => {
 app.post('/api/meta/scan_collections/stop', adminMiddleware, (req, res) => {
   collectionScanJob.isRunning = false;
   collectionScanJob.message = 'Scan stopped.';
+  res.json({ success: true, message: 'Stopped' });
+});
+
+let actorSyncJob = {
+  isRunning: false,
+  message: '',
+  count: 0,
+  total: 0
+};
+
+app.get('/api/meta/scan_actors/status', (req, res) => {
+  res.json(actorSyncJob);
+});
+
+app.post('/api/meta/scan_actors/start', adminMiddleware, (req, res) => {
+  if (actorSyncJob.isRunning) {
+    return res.json({ success: false, message: 'Actor sync is already running' });
+  }
+
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.status(500).json({ error: 'TMDB key missing' });
+
+  const forceRefresh = Boolean(req.body?.forceRefresh || req.query?.forceRefresh === 'true');
+
+  actorSyncJob = {
+    isRunning: true,
+    message: forceRefresh ? 'Starting forced actor filmography refresh...' : 'Starting actor filmography sync...',
+    count: 0,
+    total: 0
+  };
+
+  (async () => {
+    try {
+      const actorIds = Object.keys(actorCache);
+      actorSyncJob.total = actorIds.length;
+
+      if (actorIds.length === 0) {
+        actorSyncJob.message = 'No actors stored in actor cache to sync.';
+        actorSyncJob.isRunning = false;
+        return;
+      }
+
+      if (!libraryIndex || libraryIndex.length === 0) {
+        const token = getOpenlistApiKey();
+        await getLibraryIndex(token).catch(() => {});
+      }
+
+      const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      for (let i = 0; i < actorIds.length; i++) {
+        if (!actorSyncJob.isRunning) break;
+
+        const actorId = actorIds[i];
+        let actorData = actorCache[actorId];
+        let actorName = actorData?.person?.name || `Actor #${actorId}`;
+
+        actorSyncJob.count = i + 1;
+        actorSyncJob.message = `${forceRefresh ? 'Force refreshing' : 'Syncing'} filmography: ${actorName} (${i + 1}/${actorIds.length})...`;
+
+        if (forceRefresh || !actorData || !actorData.person || !actorData.credits || !actorData.credits.length) {
+          try {
+            const [personRes, creditsRes] = await Promise.all([
+              axios.get(`https://api.themoviedb.org/3/person/${actorId}?api_key=${tmdbKey}`).catch(() => null),
+              axios.get(`https://api.themoviedb.org/3/person/${actorId}/combined_credits?api_key=${tmdbKey}`).catch(() => null)
+            ]);
+
+            if (personRes?.data && creditsRes?.data?.cast) {
+              actorCache[actorId] = {
+                person: personRes.data,
+                credits: creditsRes.data.cast,
+                lastUpdated: Date.now()
+              };
+              actorData = actorCache[actorId];
+              actorName = actorData.person?.name || actorName;
+              await saveActorCache();
+            }
+          } catch (err) {
+            console.error(`Error refreshing actor ${actorId}:`, err);
+          }
+        }
+
+        if (actorData && actorData.credits && libraryIndex && libraryIndex.length > 0) {
+          const actorCastCredits = actorData.credits;
+          const actorTmdbIdsMap = new Map<number, any>();
+          for (const castItem of actorCastCredits) {
+            if (castItem.id) actorTmdbIdsMap.set(castItem.id, castItem);
+          }
+
+          const matchedList: any[] = [];
+          for (const item of libraryIndex) {
+            const baseQuery = (item.cleanName || '').toLowerCase().trim();
+            const type = item.category;
+            const year = item.year;
+            const cleanPath = item.openlist_path ? item.openlist_path.replace(/^\/+/, '') : (item.path ? item.path.replace(/^\/+/, '') : null);
+            const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+            const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
+
+            const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes((type || '').toUpperCase());
+            const expectedMediaType = isTvCategory ? 'tv' : 'movie';
+
+            let cached = null;
+            const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year, cleanPath || undefined);
+            if (overriddenKey && tmdbCache[overriddenKey]) {
+              cached = tmdbCache[overriddenKey];
+            } else if (pathKey1 && tmdbCache[pathKey1] !== undefined) {
+              cached = tmdbCache[pathKey1];
+            } else if (pathKey2 && tmdbCache[pathKey2] !== undefined) {
+              cached = tmdbCache[pathKey2];
+            } else {
+              const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+              if (tmdbCache[cacheKey] !== undefined) {
+                cached = tmdbCache[cacheKey];
+              } else if (year && tmdbCache[`${type}-${baseQuery}`] !== undefined) {
+                cached = tmdbCache[`${type}-${baseQuery}`];
+              }
+            }
+
+            let matchedCastCredit: any = null;
+            if (cached && cached.id) {
+              const cachedId = Number(cached.id);
+              if (actorTmdbIdsMap.has(cachedId)) {
+                const castCredit = actorTmdbIdsMap.get(cachedId);
+                const creditMediaType = castCredit.media_type || (cached.first_air_date ? 'tv' : 'movie');
+                const mediaTypeMatch = (expectedMediaType === 'tv' && creditMediaType === 'tv') || (expectedMediaType === 'movie' && creditMediaType === 'movie');
+                if (mediaTypeMatch) matchedCastCredit = castCredit;
+              }
+            }
+
+            if (!matchedCastCredit) {
+              const normItemName = normalize(item.cleanName);
+              if (normItemName) {
+                const candidate = actorCastCredits.find((c: any) => {
+                  const cMediaType = c.media_type || (c.first_air_date ? 'tv' : 'movie');
+                  if (cMediaType !== expectedMediaType) return false;
+
+                  const cTitle = normalize(c.title || c.name || '');
+                  if (cTitle !== normItemName) return false;
+
+                  if (year) {
+                    const cYear = (c.release_date || c.first_air_date || '').substring(0, 4);
+                    if (cYear && /^\d{4}$/.test(cYear) && /^\d{4}$/.test(year)) {
+                      if (Math.abs(parseInt(year, 10) - parseInt(cYear, 10)) > 1) return false;
+                    }
+                  }
+                  return true;
+                });
+                if (candidate) matchedCastCredit = candidate;
+              }
+            }
+
+            if (matchedCastCredit) {
+              const path = `/home/${item.category}/${item.name}`;
+              matchedList.push({
+                item,
+                id: matchedCastCredit.id,
+                category: item.category,
+                path,
+                title: cached?.title || cached?.name || matchedCastCredit.title || matchedCastCredit.name || item.cleanName || item.name
+              });
+            }
+          }
+
+          if (matchedList.length > 0) {
+            await preCacheActorFilmographyMetadata(matchedList, tmdbKey);
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+
+      actorSyncJob.message = `Finished actor filmography ${forceRefresh ? 'force refresh' : 'sync'}. Processed ${actorSyncJob.count} actors.`;
+    } catch (e: any) {
+      actorSyncJob.message = `Error during actor sync: ${e.message}`;
+    } finally {
+      actorSyncJob.isRunning = false;
+    }
+  })();
+
+  res.json({ success: true, message: 'Actor filmography sync background job started.' });
+});
+
+app.post('/api/meta/scan_actors/stop', adminMiddleware, (req, res) => {
+  actorSyncJob.isRunning = false;
+  actorSyncJob.message = 'Actor filmography sync stopped.';
   res.json({ success: true, message: 'Stopped' });
 });
 
@@ -3328,6 +3867,7 @@ export async function initSQLiteState() {
   genreBackdropsCache = (await readSQLiteJSON('genre_backdrops_cache')) || null;
   jfOverrides = (await readSQLiteJSON('jf_override')) || {};
   downloadTracker = (await readSQLiteJSON('download_tracker')) || {};
+  actorCache = (await readSQLiteJSON('actor_cache')) || {};
 }
 
 // Attach the routes that were in startServer to the app globally

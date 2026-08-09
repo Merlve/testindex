@@ -104,7 +104,7 @@ export default function Dashboard() {
   const featuredItems = useMemo(() => {
     if (!categories || categories.length === 0) return [];
     
-    const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name, parentPath: item._parent || `/home/${c.name}` })));
+    const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name, parentPath: item._parent || `/home/${c.name}`, openlist_path: item.path || `/home/${c.name}/${item.name}` })));
     if (allItems.length === 0) return [];
     
     const sessionKey = 'shindex-featured-items-session';

@@ -2,6 +2,14 @@ import { createClient } from "@libsql/client";
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { setGlobalDispatcher, Agent } from 'undici';
+
+// Increase timeouts for Turso/LibSQL HTTP requests
+setGlobalDispatcher(new Agent({
+  connectTimeout: 60000,
+  headersTimeout: 300000,
+  bodyTimeout: 300000,
+}));
 
 const dbDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });

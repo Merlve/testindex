@@ -29,6 +29,9 @@ export default function Admin() {
   const [creditsScanLoading, setCreditsScanLoading] = useState(false);
   const [creditsScanMsg, setCreditsScanMsg] = useState('');
 
+  const [actorSyncLoading, setActorSyncLoading] = useState(false);
+  const [actorSyncMsg, setActorSyncMsg] = useState('');
+
   const [missingMetadata, setMissingMetadata] = useState<any[]>([]);
   const [loadingMissing, setLoadingMissing] = useState(false);
   const [refreshingMissing, setRefreshingMissing] = useState(false);
@@ -205,6 +208,14 @@ export default function Admin() {
           setCollectionScanMsg(res.data.message);
         }
       } catch(e) {}
+
+      try {
+        const res = await axios.get('/api/meta/scan_actors/status');
+        setActorSyncLoading(res.data.isRunning);
+        if (res.data.message) {
+          setActorSyncMsg(res.data.message);
+        }
+      } catch(e) {}
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -277,6 +288,22 @@ export default function Admin() {
     } catch (e: any) {
       setCollectionScanMsg(`Error: ${e.message}`);
       setCollectionScanLoading(false);
+    }
+  };
+
+  const handleActorSync = async (forceRefresh: boolean = false) => {
+    if (actorSyncLoading) {
+      await axios.post('/api/meta/scan_actors/stop', {}, { headers: { Authorization: token } });
+      setActorSyncLoading(false);
+      return;
+    }
+    setActorSyncLoading(true);
+    setActorSyncMsg(forceRefresh ? 'Starting forced actor filmography refresh...' : 'Starting actor filmography sync...');
+    try {
+      await axios.post('/api/meta/scan_actors/start', { forceRefresh }, { headers: { Authorization: token } });
+    } catch (e: any) {
+      setActorSyncMsg(`Error: ${e.message}`);
+      setActorSyncLoading(false);
     }
   };
 
@@ -421,6 +448,37 @@ export default function Admin() {
              </div>
              {collectionScanMsg && (
                 <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{collectionScanMsg}</p>
+             )}
+          </div>
+
+          <div className="h-px w-full bg-black/10 dark:bg-white/10"></div>
+
+          <div>
+             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex-1">
+                   <h4 className="font-bold text-sm text-black dark:text-white">Actor Filmography Sync</h4>
+                   <p className="text-xs text-gray-500">Sync and re-verify filmography matches for all actors stored in database cache. Use Force Refresh to re-fetch latest actor bios and credits from TMDB.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
+                   {actorSyncLoading ? (
+                      <button onClick={() => handleActorSync(false)} className="w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30">
+                        Stop Actor Sync
+                      </button>
+                   ) : (
+                      <>
+                        <button onClick={() => handleActorSync(false)} className="w-full sm:w-auto border px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-500/30">
+                          Sync Actor Filmography
+                        </button>
+                        <button onClick={() => handleActorSync(true)} className="w-full sm:w-auto border px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer bg-amber-500/20 text-amber-400 border-amber-500/50 hover:bg-amber-500/30 flex items-center justify-center gap-1.5">
+                          <span>⚡</span>
+                          <span>Force Refresh</span>
+                        </button>
+                      </>
+                   )}
+                </div>
+             </div>
+             {actorSyncMsg && (
+                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{actorSyncMsg}</p>
              )}
           </div>
         </div>

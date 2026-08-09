@@ -11,7 +11,12 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
     const res = await axios.get('/api/meta/trending');
     const results = res.data?.results || [];
     
-    const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ ...item, category: c.name })));
+    const allItems = categories.flatMap(c => (c.items || []).map((item: any) => ({ 
+      ...item, 
+      category: c.name, 
+      parentPath: item._parent || `/home/${c.name}`, 
+      openlist_path: item.path || `/home/${c.name}/${item.name}` 
+    })));
     
     const availableTrending = [];
     const seen = new Set();

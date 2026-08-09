@@ -55,7 +55,8 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
         _rec: false,
         _digital_release: true,
         releaseDate: tmdbItem.release_date,
-        parentPath: finalParent
+        parentPath: finalParent,
+        openlist_path: manualPath ? `/${manualPath.replace(/^\//, '')}` : undefined
       };
     });
 

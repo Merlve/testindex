@@ -7,12 +7,13 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
 import { getGenresWithIds } from '../utils/genres';
 import { clearRecommendationsCache } from './Recommendations';
+import { MediaItem, TMDBData } from '../types';
 
 // Player Selection Intent Modal Component
 function IntentPlayerModal({ 
@@ -210,6 +211,7 @@ export default function Details() {
   const name = pathParts[pathParts.length - 1] || '';
   const category = (pathParts[1] || '').toUpperCase();
   const isMovieCategory = category === 'MOVIES';
+  const actualOpenlistPath = location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
 
   const { token, user } = useAuth();
   const [config, setConfig] = useState<any>({});
@@ -552,8 +554,8 @@ export default function Details() {
 
   const activeSeasonTab = seasonTabs[activeSeasonIndex] || seasonTabs[0];
   const activeSeasonPath = activeSeasonTab?.folderName 
-    ? `${fullPath}/${activeSeasonTab.folderName}` 
-    : (isVideoFile(name) ? fullPath.split('/').slice(0, -1).join('/') : fullPath);
+    ? `${actualOpenlistPath}/${activeSeasonTab.folderName}` 
+    : (isVideoFile(name) ? actualOpenlistPath.split('/').slice(0, -1).join('/') : actualOpenlistPath);
 
   // Refresh folder directly bypassing cache
   const handleRefreshFolder = async () => {
@@ -563,8 +565,8 @@ export default function Details() {
     try {
       const isFile = isVideoFile(name);
       if (isFile) {
-        const parentFolder = fullPath.split('/').slice(0, -1).join('/');
-        const reqPath = parentFolder ? `/${parentFolder}` : '/';
+        const parentFolder = actualOpenlistPath.split('/').slice(0, -1).join('/');
+        const reqPath = parentFolder.startsWith('/') ? parentFolder : `/${parentFolder}`;
         const res = await axios.post('/api/fs/list', { reqPath, refresh: true }, { headers: { Authorization: token } });
         if (res.data?.code === 200) {
           const content = res.data.data?.content || [];
@@ -579,9 +581,10 @@ export default function Details() {
         }
       } else {
         // Refresh base directory list
+        const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
         const baseRes = await axios.post(
           '/api/fs/list',
-          { reqPath: `/${fullPath}`, refresh: true },
+          { reqPath: fetchPath, refresh: true },
           { headers: { Authorization: token } }
         );
         if (baseRes.data?.code === 200) {
@@ -593,10 +596,11 @@ export default function Details() {
         }
 
         // If TV Show, also refresh active season directory list
-        if (!isMovieCategory && activeSeasonPath && activeSeasonPath !== fullPath) {
+        if (!isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath) {
+          const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
           const seasonRes = await axios.post(
             '/api/fs/list',
-            { reqPath: `/${activeSeasonPath}`, refresh: true },
+            { reqPath: fetchSeasonPath, refresh: true },
             { headers: { Authorization: token } }
           );
           if (seasonRes.data?.code === 200) {
@@ -612,15 +616,17 @@ export default function Details() {
     }
   };
 
+
+
   const handleDeleteFiles = async () => {
     if (!token || user !== 'admin' || selectedItems.length === 0) return;
     if (!confirm(`Are you sure you want to delete ${selectedItems.length} file(s)? This action cannot be undone.`)) return;
     
     try {
-      const dir = isMovieCategory ? fullPath : activeSeasonPath;
+      const dir = isMovieCategory ? actualOpenlistPath : activeSeasonPath;
       const res = await axios.post('/api/fs/remove', {
         names: selectedItems,
-        dir: `/${dir}`
+        dir: dir.startsWith('/') ? dir : `/${dir}`
       }, { headers: { Authorization: token } });
       
       if (res.data.code === 200) {
@@ -645,8 +651,8 @@ export default function Details() {
         const isFile = isVideoFile(name);
         if (isFile) {
           if (token) {
-            const parentFolder = fullPath.split('/').slice(0, -1).join('/');
-            const reqPath = parentFolder ? `/${parentFolder}` : '/';
+            const parentFolder = actualOpenlistPath.split('/').slice(0, -1).join('/');
+            const reqPath = parentFolder.startsWith('/') ? parentFolder : `/${parentFolder}`;
             const res = await axios.post('/api/fs/list', { reqPath }, { headers: { Authorization: token } });
             if (isMounted && res.data.code === 200) {
               const content = res.data.data?.content || [];
@@ -663,13 +669,16 @@ export default function Details() {
             setBaseItems([{ name, is_dir: false }]);
           }
         } else if (token) {
-          const res = await axios.post('/api/fs/list', { reqPath: `/${fullPath}` }, { headers: { Authorization: token } });
+          const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
+          const res = await axios.post('/api/fs/list', { reqPath: fetchPath }, { headers: { Authorization: token } });
           if (isMounted && res.data.code === 200) {
             setBaseItems(res.data.data?.content || []);
           }
         }
       } catch (err: any) {
-        if (isMounted) console.error("Error fetching file list", err);
+        if (isMounted && !axios.isCancel(err) && err.code !== 'ERR_CANCELED' && err.name !== 'CanceledError' && err.name !== 'AbortError' && !err.message?.toLowerCase().includes('aborted') && !err.message?.toLowerCase().includes('canceled')) {
+          console.error("Error fetching file list", err);
+        }
       } finally {
         if (isMounted && isMovieCategory) setLoadingFiles(false);
       }
@@ -691,13 +700,16 @@ export default function Details() {
         if (isFile) {
           if (isMounted) setSeasonItems([{ name, is_dir: false }]);
         } else if (token) {
-          const res = await axios.post('/api/fs/list', { reqPath: `/${activeSeasonPath}` }, { headers: { Authorization: token } });
+          const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
+          const res = await axios.post('/api/fs/list', { reqPath: fetchSeasonPath }, { headers: { Authorization: token } });
           if (isMounted && res.data.code === 200) {
             setSeasonItems(res.data.data?.content || []);
           }
         }
       } catch (err: any) {
-        if (isMounted) console.error("Error fetching season list", err);
+        if (isMounted && !axios.isCancel(err) && err.code !== 'ERR_CANCELED' && err.name !== 'CanceledError' && err.name !== 'AbortError' && !err.message?.toLowerCase().includes('aborted') && !err.message?.toLowerCase().includes('canceled')) {
+          console.error("Error fetching season list", err);
+        }
       } finally {
         if (isMounted) setLoadingFiles(false);
       }
@@ -712,6 +724,7 @@ export default function Details() {
 
   // Fetch TMDB Main Metadata
   useEffect(() => {
+    let isMounted = true;
     const fetchMetadata = async () => {
       if (!tmdb) {
         setLoading(true);
@@ -724,7 +737,7 @@ export default function Details() {
         const { cleanName, year } = parseMediaName(searchName);
         const itemPath = `/${fullPath}`;
         const tmdbRes = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${encodeURIComponent(category)}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}&full=true`);
-        if (tmdbRes.data) {
+        if (isMounted && tmdbRes.data) {
           setTmdb((prev: any) => ({ ...(prev || {}), ...tmdbRes.data }));
           try {
             const actualParentPath = pathParts.slice(0, -1).join('/');
@@ -742,18 +755,22 @@ export default function Details() {
             recent = recent.slice(0, 20);
             localStorage.setItem('recently_browsed', JSON.stringify(recent));
           } catch(e) {}
-        } else if (!tmdb) {
+        } else if (isMounted && !tmdb) {
           setSearchTitle(cleanName);
         }
       } catch (err: any) {
+        if (!isMounted || axios.isCancel(err) || err.code === 'ERR_CANCELED' || err.name === 'CanceledError' || err.name === 'AbortError' || err.message === 'canceled' || err.message?.toLowerCase().includes('aborted') || err.message?.toLowerCase().includes('canceled')) {
+          return;
+        }
         if (err.message !== 'Network Error') {
           console.error('Error fetching TMDB metadata', err);
         }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     if (fullPath) fetchMetadata();
+    return () => { isMounted = false; };
   }, [fullPath, name, category]);
 
   // Fetch TMDB Season Episode Metadata for TV Shows

@@ -3,6 +3,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { User, Film, Tv, Star, ChevronDown, ChevronUp } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import ItemCard from '../components/ItemCard';
 
 interface PersonData {
   id: number;
@@ -36,42 +38,25 @@ export default function PersonDetails() {
   const navigate = useNavigate();
   const { token } = useAuth();
 
-  const [loading, setLoading] = useState(true);
-  const [person, setPerson] = useState<PersonData | null>(null);
-  const [movies, setMovies] = useState<MediaItem[]>([]);
-  const [shows, setShows] = useState<MediaItem[]>([]);
+
+  const q = nameQuery ? `?name=${encodeURIComponent(nameQuery)}` : '';
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['person', id, nameQuery],
+    queryFn: async () => {
+      const res = await axios.get(`/api/meta/person/${id}${q}`, {
+        headers: { Authorization: token || '' }
+      });
+      return res.data;
+    },
+    enabled: !!id
+  });
+
+  const person = data?.person || null;
+  const movies = data?.movies || [];
+  const shows = data?.shows || [];
+  const profileUrl = person?.profile_path ? (person.profile_path.startsWith('http') ? person.profile_path : `https://image.tmdb.org/t/p/w500${person.profile_path}`) : null;
+
   const [bioExpanded, setBioExpanded] = useState(false);
-
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-
-    const q = nameQuery ? `?name=${encodeURIComponent(nameQuery)}` : '';
-    axios.get(`/api/meta/person/${id}${q}`, {
-      headers: { Authorization: token || '' }
-    })
-      .then(res => {
-        if (res.data) {
-          setPerson(res.data.person || null);
-          setMovies(Array.isArray(res.data.movies) ? res.data.movies : []);
-          setShows(Array.isArray(res.data.shows) ? res.data.shows : []);
-        }
-      })
-      .catch(err => {
-        console.error('Failed to load person details:', err);
-        setPerson(null);
-        setMovies([]);
-        setShows([]);
-      })
-      .finally(() => setLoading(false));
-  }, [id, nameQuery, token]);
-
-  const profileUrl = person?.profile_path
-    ? (person.profile_path.startsWith('http')
-        ? person.profile_path
-        : `https://image.tmdb.org/t/p/w500${person.profile_path}`)
-    : null;
-
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
@@ -151,47 +136,16 @@ export default function PersonDetails() {
                 Movies
               </h2>
               <div className="flex gap-4 overflow-x-auto pb-4 pt-1 scrollbar-none snap-x">
-                {movies.map((item) => {
-                  const poster = item.poster_path
-                    ? (item.poster_path.startsWith('http')
-                        ? item.poster_path
-                        : `https://image.tmdb.org/t/p/w500${item.poster_path}`)
-                    : null;
-
-                  return (
-                    <div
-                      key={item.path}
-                      onClick={() => navigate(encodeURI(item.path))}
-                      className="w-32 sm:w-40 md:w-44 shrink-0 cursor-pointer group snap-start"
-                    >
-                      <div className="aspect-[2/3] w-full relative rounded-2xl overflow-hidden bg-black/10 dark:bg-white/10 shadow-md group-hover:shadow-2xl group-hover:scale-105 transition-all duration-300 border border-black/5 dark:border-white/5">
-                        {poster ? (
-                          <img
-                            src={poster}
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-black/5 dark:bg-white/5 p-2 text-center">
-                            <Film size={28} className="text-gray-400 mb-1" />
-                            <span className="text-xs text-gray-500 font-medium line-clamp-2">{item.title}</span>
-                          </div>
-                        )}
-                        {item.vote_average ? (
-                          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur rounded text-[10px] font-bold text-yellow-500 flex items-center gap-0.5">
-                            <Star size={10} className="fill-current" />
-                            {Number(item.vote_average).toFixed(1)}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white mt-2 line-clamp-2 leading-snug group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                        {item.title}
-                      </h3>
-                    </div>
-                  );
-                })}
+                {movies.map((item) => (
+                  <ItemCard
+                    key={item.path}
+                    item={item.item || { name: item.openlistName, path: item.path }}
+                    category={item.category}
+                    parentPath={`/home/${item.category}`}
+                    tmdbData={item.tmdbData}
+                    className="w-32 sm:w-40 md:w-44 shrink-0 snap-start"
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -203,47 +157,16 @@ export default function PersonDetails() {
                 TV Shows
               </h2>
               <div className="flex gap-4 overflow-x-auto pb-4 pt-1 scrollbar-none snap-x">
-                {shows.map((item) => {
-                  const poster = item.poster_path
-                    ? (item.poster_path.startsWith('http')
-                        ? item.poster_path
-                        : `https://image.tmdb.org/t/p/w500${item.poster_path}`)
-                    : null;
-
-                  return (
-                    <div
-                      key={item.path}
-                      onClick={() => navigate(encodeURI(item.path))}
-                      className="w-32 sm:w-40 md:w-44 shrink-0 cursor-pointer group snap-start"
-                    >
-                      <div className="aspect-[2/3] w-full relative rounded-2xl overflow-hidden bg-black/10 dark:bg-white/10 shadow-md group-hover:shadow-2xl group-hover:scale-105 transition-all duration-300 border border-black/5 dark:border-white/5">
-                        {poster ? (
-                          <img
-                            src={poster}
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-black/5 dark:bg-white/5 p-2 text-center">
-                            <Tv size={28} className="text-gray-400 mb-1" />
-                            <span className="text-xs text-gray-500 font-medium line-clamp-2">{item.title}</span>
-                          </div>
-                        )}
-                        {item.vote_average ? (
-                          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur rounded text-[10px] font-bold text-yellow-500 flex items-center gap-0.5">
-                            <Star size={10} className="fill-current" />
-                            {Number(item.vote_average).toFixed(1)}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white mt-2 line-clamp-2 leading-snug group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                        {item.title}
-                      </h3>
-                    </div>
-                  );
-                })}
+                {shows.map((item) => (
+                  <ItemCard
+                    key={item.path}
+                    item={item.item || { name: item.openlistName, path: item.path }}
+                    category={item.category}
+                    parentPath={`/home/${item.category}`}
+                    tmdbData={item.tmdbData}
+                    className="w-32 sm:w-40 md:w-44 shrink-0 snap-start"
+                  />
+                ))}
               </div>
             </div>
           )}
