@@ -162,7 +162,8 @@ app.use('/api', rateLimitMiddleware);
 let appConfig: Record<string, any> = {
   openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home',
-  inactivityTimeout: 0
+  inactivityTimeout: 0,
+  announcement: ''
 };
 
 
@@ -982,6 +983,7 @@ app.get('/api/config', (req, res) => {
     openlistUrl: getOpenlistUrl(),
     basePath: appConfig.basePath,
     inactivityTimeout: appConfig.inactivityTimeout || 0,
+    announcement: appConfig.announcement || '',
     unreleasedTmdbIds: appConfig.unreleasedTmdbIds || [],
     digitalReleasePaths: appConfig.digitalReleasePaths || {}
   });
@@ -1014,6 +1016,7 @@ app.post('/api/config', adminMiddleware, (req, res) => {
   if (req.body.openlistUrl !== undefined) appConfig.openlistUrl = req.body.openlistUrl;
   if (req.body.basePath !== undefined) appConfig.basePath = req.body.basePath;
   if (req.body.inactivityTimeout !== undefined) appConfig.inactivityTimeout = Number(req.body.inactivityTimeout) || 0;
+  if (req.body.announcement !== undefined) appConfig.announcement = String(req.body.announcement);
   saveConfig();
   addLog('Config Updated', 'Admin', 'Updated application configuration settings.');
   res.json({ success: true, config: appConfig });

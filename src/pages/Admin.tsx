@@ -2,8 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
-import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud } from 'lucide-react';
+import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud, Megaphone } from 'lucide-react';
 import { useSearchParams } from 'react-router';
+import AnnouncementPill from '../components/AnnouncementPill';
 
 export default function Admin() {
   const { token } = useAuth();
@@ -11,7 +12,7 @@ export default function Admin() {
   const activeTab = searchParams.get('tab') || 'settings';
   const setActiveTab = (tab: string) => setSearchParams({ tab });
 
-  const [config, setConfig] = useState({ openlistUrl: '', basePath: '', inactivityTimeout: 0 });
+  const [config, setConfig] = useState({ openlistUrl: '', basePath: '', inactivityTimeout: 0, announcement: '' });
   const [msg, setMsg] = useState('');
   
   // TMDB Correction State
@@ -378,6 +379,51 @@ export default function Admin() {
           </div>
           <button onClick={handleConfigSave} className="w-full sm:w-auto bg-purple-600 text-white px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold hover:bg-purple-500 shadow-lg shadow-purple-600/20 transition-all cursor-pointer">
             Save Configuration
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-2 sm:mb-4">
+          <div className="flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-purple-500" />
+            <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white tracking-tight">Announcement Pill Banner</h3>
+          </div>
+          {config.announcement && (
+            <button 
+              onClick={() => setConfig({ ...config, announcement: '' })}
+              className="text-xs text-red-500 hover:text-red-400 font-semibold px-2.5 py-1 rounded-lg border border-red-500/20 hover:bg-red-500/10 transition-all cursor-pointer"
+            >
+              Clear Message
+            </button>
+          )}
+        </div>
+        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs sm:text-sm">
+          Set a message to display in the announcement pill on the home page beside the refresh button.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-xs font-bold uppercase tracking-wider">Announcement Text</label>
+            <input 
+              type="text"
+              className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
+              value={config.announcement || ''}
+              onChange={e => setConfig({ ...config, announcement: e.target.value })}
+              placeholder="e.g. 🎉 New 4K HDR movies and series have been added to the library today!"
+            />
+          </div>
+
+          {config.announcement && (
+            <div className="mt-4 pt-4 border-t border-black/10 dark:border-white/10">
+              <label className="block text-gray-500 dark:text-gray-400 mb-2 text-[11px] font-bold uppercase tracking-wider">Live Banner Preview</label>
+              <div className="bg-black/10 dark:bg-black/40 p-4 rounded-xl border border-black/10 dark:border-white/10 flex items-center justify-center">
+                <AnnouncementPill message={config.announcement} className="w-full max-w-lg" />
+              </div>
+            </div>
+          )}
+
+          <button onClick={handleConfigSave} className="w-full sm:w-auto bg-purple-600 text-white px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold hover:bg-purple-500 shadow-lg shadow-purple-600/20 transition-all cursor-pointer">
+            Save Announcement
           </button>
         </div>
       </div>

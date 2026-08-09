@@ -9,6 +9,7 @@ import RecentlyAddedCarousel from '../components/RecentlyAddedCarousel';
 import TrendingCarousel from '../components/TrendingCarousel';
 import DigitalReleasesCarousel from '../components/DigitalReleasesCarousel';
 import GenresCarousel from '../components/GenresCarousel';
+import AnnouncementPill from '../components/AnnouncementPill';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -101,6 +102,15 @@ export default function Dashboard() {
     }
   });
 
+  const { data: configData } = useQuery({
+    queryKey: ['site-config'],
+    queryFn: async () => {
+      const res = await axios.get('/api/config');
+      return res.data;
+    },
+    staleTime: 15000
+  });
+
   const featuredItems = useMemo(() => {
     if (!categories || categories.length === 0) return [];
     
@@ -181,8 +191,11 @@ export default function Dashboard() {
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="pb-20"
     >
-      <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
-        <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-4 py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105">
+      <div className="px-4 sm:px-8 flex items-center justify-between gap-2.5 mt-4 md:mt-6 mb-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <AnnouncementPill message={configData?.announcement} className="w-full" />
+        </div>
+        <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-4 py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105 shrink-0 h-9">
           <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> {isFetching ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
