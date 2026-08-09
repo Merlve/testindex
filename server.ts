@@ -3821,53 +3821,57 @@ app.post('/api/chat', async (req, res) => {
 let jfOverrides: Record<string, any> = {};
 
 export async function initSQLiteState() {
-  await initSQLiteDB();
-  await initJellyfinCache();
-  const loadedConfig = await readSQLiteJSON('config');
-  if (loadedConfig) appConfig = { ...appConfig, ...loadedConfig };
-  tmdbCache = (await readSQLiteJSON('db')) || {};
-  if (tmdbCache && typeof tmdbCache === 'object') {
-    let touched = false;
-    for (const k of Object.keys(tmdbCache)) {
-      const item = tmdbCache[k];
-      if (item && item._overridden) {
-        // Clean up polluted base keys
-        if (!k.match(/-\d{4}$/)) {
-          const matchingYearKey = Object.keys(tmdbCache).find(yk => yk.startsWith(k + '-') && tmdbCache[yk]?._overridden && tmdbCache[yk].id === item.id);
-          if (matchingYearKey) {
-            delete tmdbCache[k];
-            touched = true;
-            continue;
+  try {
+    await initSQLiteDB();
+    await initJellyfinCache().catch(e => console.error("Error init Jellyfin cache:", e));
+    const loadedConfig = await readSQLiteJSON('config');
+    if (loadedConfig) appConfig = { ...appConfig, ...loadedConfig };
+    tmdbCache = (await readSQLiteJSON('db')) || {};
+    if (tmdbCache && typeof tmdbCache === 'object') {
+      let touched = false;
+      for (const k of Object.keys(tmdbCache)) {
+        const item = tmdbCache[k];
+        if (item && item._overridden) {
+          // Clean up polluted base keys
+          if (!k.match(/-\d{4}$/)) {
+            const matchingYearKey = Object.keys(tmdbCache).find(yk => yk.startsWith(k + '-') && tmdbCache[yk]?._overridden && tmdbCache[yk].id === item.id);
+            if (matchingYearKey) {
+              delete tmdbCache[k];
+              touched = true;
+              continue;
+            }
           }
-        }
-        
-        const kLower = k.toLowerCase();
-        if (item.id === 37854) {
-          const isExactShowKey = kLower === 'anime-one piece' || kLower === 'anime-one piece-1999' ||
-                                 kLower === 'tv-one piece' || kLower === 'tv-one piece-1999' ||
-                                 kLower === 'series-one piece' || kLower === 'series-one piece-1999';
-          if (!isExactShowKey) {
-            delete tmdbCache[k];
-            touched = true;
+          
+          const kLower = k.toLowerCase();
+          if (item.id === 37854) {
+            const isExactShowKey = kLower === 'anime-one piece' || kLower === 'anime-one piece-1999' ||
+                                   kLower === 'tv-one piece' || kLower === 'tv-one piece-1999' ||
+                                   kLower === 'series-one piece' || kLower === 'series-one piece-1999';
+            if (!isExactShowKey) {
+              delete tmdbCache[k];
+              touched = true;
+            }
           }
         }
       }
+      if (touched) {
+        await saveDb().catch(e => console.error("Error saving DB:", e));
+      }
     }
-    if (touched) {
-      await saveDb();
+    const loadedLibrary = await readSQLiteJSON('library_index');
+    if (loadedLibrary) {
+      libraryIndex = loadedLibrary.items || [];
+      libraryIndexLastUpdated = loadedLibrary.lastUpdated || 0;
     }
+    userExpirations = (await readSQLiteJSON('users_expirations')) || {};
+    activityLogs = (await readSQLiteJSON('activity_logs')) || [];
+    genreBackdropsCache = (await readSQLiteJSON('genre_backdrops_cache')) || null;
+    jfOverrides = (await readSQLiteJSON('jf_override')) || {};
+    downloadTracker = (await readSQLiteJSON('download_tracker')) || {};
+    actorCache = (await readSQLiteJSON('actor_cache')) || {};
+  } catch (err) {
+    console.error("Error during initSQLiteState:", err);
   }
-  const loadedLibrary = await readSQLiteJSON('library_index');
-  if (loadedLibrary) {
-    libraryIndex = loadedLibrary.items || [];
-    libraryIndexLastUpdated = loadedLibrary.lastUpdated || 0;
-  }
-  userExpirations = (await readSQLiteJSON('users_expirations')) || {};
-  activityLogs = (await readSQLiteJSON('activity_logs')) || [];
-  genreBackdropsCache = (await readSQLiteJSON('genre_backdrops_cache')) || null;
-  jfOverrides = (await readSQLiteJSON('jf_override')) || {};
-  downloadTracker = (await readSQLiteJSON('download_tracker')) || {};
-  actorCache = (await readSQLiteJSON('actor_cache')) || {};
 }
 
 // Attach the routes that were in startServer to the app globally

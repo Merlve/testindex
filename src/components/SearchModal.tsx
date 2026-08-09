@@ -1,15 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, Search as SearchIcon, Loader2, Film } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Search as SearchIcon, Loader2, Film, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { getRecentSearches, saveRecentSearch, removeRecentSearch, clearRecentSearches } from '../utils/recentSearches';
 
 export default function SearchModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { token } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -41,15 +47,25 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
+      saveRecentSearch(query.trim());
+      setRecentSearches(getRecentSearches());
       navigate(`/category/search?q=${encodeURIComponent(query)}`);
       onClose();
     }
   };
 
   const handleSelect = (item: any) => {
+    saveRecentSearch(item.name || query.trim());
+    setRecentSearches(getRecentSearches());
     const fullPath = `${item.parent}/${item.name}`;
     navigate(`${fullPath.startsWith('/') ? '' : '/'}${fullPath}`.split('/').map(p => encodeURIComponent(p)).join('/'));
     onClose();
+  };
+
+  const handleSelectRecent = (term: string) => {
+    saveRecentSearch(term);
+    setRecentSearches(getRecentSearches());
+    setQuery(term);
   };
 
   return (
@@ -76,6 +92,52 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
           </button>
         </form>
         
+        {!query.trim() && recentSearches.length > 0 && (
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+            <div className="flex items-center justify-between mb-3 text-xs sm:text-sm font-semibold tracking-wider text-gray-500 dark:text-gray-400 uppercase">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+                <span>Recent Searches</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecentSearches(clearRecentSearches())}
+                className="text-xs text-red-500 hover:text-red-400 font-medium transition cursor-pointer"
+              >
+                Clear All
+              </button>
+            </div>
+            <div className="space-y-1">
+              {recentSearches.map((term) => (
+                <div
+                  key={term}
+                  className="group flex items-center justify-between px-3.5 py-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-black dark:text-white"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleSelectRecent(term)}
+                    className="flex-1 flex items-center text-left truncate mr-2 cursor-pointer"
+                  >
+                    <SearchIcon className="w-4 h-4 text-gray-400 mr-3 shrink-0 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition" />
+                    <span className="text-sm sm:text-base font-medium truncate">{term}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRecentSearches(removeRecentSearch(term));
+                    }}
+                    className="p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
+                    title="Remove search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {query.trim() && (
           <div className="overflow-y-auto flex-1">
             {loading ? (

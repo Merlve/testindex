@@ -1,17 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Loader2, Film } from 'lucide-react';
+import { Search as SearchIcon, X, Loader2, Film, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { getRecentSearches, saveRecentSearch, removeRecentSearch, clearRecentSearches } from '../utils/recentSearches';
 
 export default function NavbarSearch() {
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { token } = useAuth();
   const navigate = useNavigate();
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -53,15 +59,25 @@ export default function NavbarSearch() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
+      saveRecentSearch(query.trim());
+      setRecentSearches(getRecentSearches());
       navigate(`/category/search?q=${encodeURIComponent(query)}`);
       setIsFocused(false);
     }
   };
 
   const handleSelect = (item: any) => {
+    saveRecentSearch(item.name || query.trim());
+    setRecentSearches(getRecentSearches());
     navigate(`${item.parent.startsWith('/') ? '' : '/'}${item.parent}/${item.name}`.split('/').map(p => encodeURIComponent(p)).join('/'));
     setIsFocused(false);
     setQuery('');
+  };
+
+  const handleSelectRecent = (term: string) => {
+    saveRecentSearch(term);
+    setRecentSearches(getRecentSearches());
+    setQuery(term);
   };
 
   return (
@@ -84,6 +100,52 @@ export default function NavbarSearch() {
           </button>
         )}
       </form>
+
+      {isFocused && !query.trim() && recentSearches.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-[#fffcf9] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 p-3">
+          <div className="flex items-center justify-between mb-2 px-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-purple-400" />
+              <span>Recent Searches</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRecentSearches(clearRecentSearches())}
+              className="text-[10px] text-red-500 hover:text-red-400 font-medium transition cursor-pointer"
+            >
+              Clear All
+            </button>
+          </div>
+          <div className="space-y-1">
+            {recentSearches.map((term) => (
+              <div
+                key={term}
+                className="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition text-black dark:text-white"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleSelectRecent(term)}
+                  className="flex-1 flex items-center text-left truncate mr-2 cursor-pointer"
+                >
+                  <SearchIcon className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0 group-hover:text-purple-400 transition" />
+                  <span className="text-xs font-medium truncate">{term}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRecentSearches(removeRecentSearch(term));
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
+                  title="Remove search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isFocused && query.trim() && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-[#fffcf9] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-96 flex flex-col">

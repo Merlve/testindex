@@ -321,6 +321,11 @@ export default function Details() {
   const [loadingSeasonTmdb, setLoadingSeasonTmdb] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasRefreshedRoot, setHasRefreshedRoot] = useState(false);
+
+  useEffect(() => {
+    setHasRefreshedRoot(false);
+  }, [fullPath, actualOpenlistPath]);
 
   // Watched state
   const [watchedItems, setWatchedItems] = useState<any[]>([]);
@@ -579,24 +584,14 @@ export default function Details() {
         } else {
           setBaseItems([{ name, is_dir: false }]);
         }
+        setHasRefreshedRoot(true);
+        setToast('Folder refreshed');
+        setTimeout(() => setToast(''), 3000);
       } else {
-        // Refresh base directory list
-        const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
-        const baseRes = await axios.post(
-          '/api/fs/list',
-          { reqPath: fetchPath, refresh: true },
-          { headers: { Authorization: token } }
-        );
-        if (baseRes.data?.code === 200) {
-          const newBaseItems = baseRes.data.data?.content || [];
-          setBaseItems(newBaseItems);
-          if (!isMovieCategory && (!activeSeasonPath || activeSeasonPath === fullPath)) {
-            setSeasonItems(newBaseItems);
-          }
-        }
+        const isSubfolderActive = !isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath;
 
-        // If TV Show, also refresh active season directory list
-        if (!isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath) {
+        if (isSubfolderActive && hasRefreshedRoot) {
+          // Refresh active subfolder directory (e.g. S01, S02, etc.)
           const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
           const seasonRes = await axios.post(
             '/api/fs/list',
@@ -606,10 +601,47 @@ export default function Details() {
           if (seasonRes.data?.code === 200) {
             setSeasonItems(seasonRes.data.data?.content || []);
           }
+          const subfolderLabel = activeSeasonTab?.label || 'Subfolder';
+          setToast(`${subfolderLabel} folder refreshed`);
+          setTimeout(() => setToast(''), 3000);
+        } else {
+          // Refresh parent/root directory list
+          const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
+          const baseRes = await axios.post(
+            '/api/fs/list',
+            { reqPath: fetchPath, refresh: true },
+            { headers: { Authorization: token } }
+          );
+          if (baseRes.data?.code === 200) {
+            const newBaseItems = baseRes.data.data?.content || [];
+            setBaseItems(newBaseItems);
+            if (!isMovieCategory && (!activeSeasonPath || activeSeasonPath === fullPath)) {
+              setSeasonItems(newBaseItems);
+            }
+          }
+
+          // Fetch active season directory list if present
+          if (isSubfolderActive) {
+            const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
+            const seasonRes = await axios.post(
+              '/api/fs/list',
+              { reqPath: fetchSeasonPath },
+              { headers: { Authorization: token } }
+            );
+            if (seasonRes.data?.code === 200) {
+              setSeasonItems(seasonRes.data.data?.content || []);
+            }
+          }
+
+          setHasRefreshedRoot(true);
+          setToast('Root folder refreshed');
+          setTimeout(() => setToast(''), 3000);
         }
       }
     } catch (err: any) {
       console.error("Error refreshing directory", err);
+      setToast('Error refreshing folder');
+      setTimeout(() => setToast(''), 3000);
     } finally {
       setRefreshing(false);
       setLoadingFiles(false);
@@ -1831,11 +1863,21 @@ export default function Details() {
                       <button
                         onClick={handleRefreshFolder}
                         disabled={refreshing}
-                        title="Refresh folder directory from OpenList"
+                        title={
+                          !isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath
+                            ? (hasRefreshedRoot ? `Refresh ${activeSeasonTab?.label || 'Season'} subfolder` : "Refresh Root folder")
+                            : "Refresh folder directory from OpenList"
+                        }
                         className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white border border-black/10 dark:border-white/10 text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
                       >
                         <RefreshCw size={14} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
-                        <span className="hidden sm:inline">{refreshing ? "Refreshing..." : "Refresh Folder"}</span>
+                        <span className="hidden sm:inline">
+                          {refreshing 
+                            ? "Refreshing..." 
+                            : (!isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath && hasRefreshedRoot
+                                ? `Refresh ${activeSeasonTab?.label || 'Season'}` 
+                                : "Refresh Folder")}
+                        </span>
                       </button>
                     </div>
                   </div>
