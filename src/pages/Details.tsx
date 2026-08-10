@@ -203,23 +203,25 @@ function IntentPlayerModal({
                 </a>
               )}
 
-              <button
-                onClick={() => {
-                  if (url) {
-                    onPlayWeb(url);
-                    onClose();
-                  }
-                }}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 text-black dark:text-white transition text-left cursor-pointer"
-              >
-                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs shrink-0">
-                  <Play size={14} fill="currentColor" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold">Play Here</div>
-                  <div className="text-[10px] text-gray-500 truncate">play in browser</div>
-                </div>
-              </button>
+              {os !== 'ios' && os !== 'macos' && (
+                <button
+                  onClick={() => {
+                    if (url) {
+                      onPlayWeb(url);
+                      onClose();
+                    }
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                >
+                  <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs shrink-0">
+                    <Play size={14} fill="currentColor" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold">Play Here</div>
+                    <div className="text-[10px] text-gray-500 truncate">play in browser</div>
+                  </div>
+                </button>
+              )}
             </div>
             <div className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 text-center italic">
               Streaming in browsers do not support embedded soft subtitles, use {os === 'android' ? 'mpv' : os === 'ios' ? 'VLC or Infuse' : os === 'macos' ? 'IINA' : os === 'windows' ? 'PotPlayer' : 'an external player'} for the best experience.
