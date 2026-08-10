@@ -1093,7 +1093,7 @@ export default function Details() {
     }
   };
 
-  if (loading) return <DetailsSkeleton onRefresh={() => {}} refreshingFolder={false} />;
+  if (loading && loadingFiles && baseItems.length === 0) return <DetailsSkeleton onRefresh={() => {}} refreshingFolder={false} />;
 
   const backdrop = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` : null;
   const displayGenres = tmdb?.genres 
@@ -1924,7 +1924,7 @@ export default function Details() {
                   </div>
 
                   {/* Episodes List */}
-                  {loadingFiles || loadingSeasonTmdb ? (
+                  {loadingFiles ? (
                     <div className="space-y-3">
                       {[1, 2, 3, 4].map(i => (
                         <div key={i} className="h-24 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl animate-pulse"></div>
