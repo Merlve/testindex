@@ -113,6 +113,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
     const items = res.data || [];
     const seenNames = new Set<string>();
     const toSearch: { name: string, year: number | null, isSeries: boolean, jfItem: any, addedText: string }[] = [];
+    const seriesYearCache = new Map<string, number | null>();
 
     for (const item of items) {
       let name = item.Name;
@@ -124,6 +125,29 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
         name = item.SeriesName || item.Name;
         isSeries = true;
         targetYear = item.SeriesYear || null;
+        
+        if (item.SeriesId) {
+          if (seriesYearCache.has(item.SeriesId)) {
+            const cachedYear = seriesYearCache.get(item.SeriesId);
+            if (cachedYear) targetYear = cachedYear;
+          } else {
+            try {
+              const seriesRes = await axios.get(`${url.replace(/\/$/, '')}/Users/${userId}/Items/${item.SeriesId}`, {
+                params: { Fields: "ProductionYear,PremiereDate" },
+                headers: { 'X-Emby-Token': apiKey }
+              });
+              const sYear = seriesRes.data?.ProductionYear || (seriesRes.data?.PremiereDate ? new Date(seriesRes.data.PremiereDate).getFullYear() : null);
+              if (sYear) {
+                targetYear = sYear;
+                seriesYearCache.set(item.SeriesId, sYear);
+              } else {
+                seriesYearCache.set(item.SeriesId, targetYear);
+              }
+            } catch (err) {
+              seriesYearCache.set(item.SeriesId, targetYear);
+            }
+          }
+        }
         
         const s = item.ParentIndexNumber !== undefined ? String(item.ParentIndexNumber).padStart(2, '0') : '';
         const e = item.IndexNumber !== undefined ? String(item.IndexNumber).padStart(2, '0') : '';
