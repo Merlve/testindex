@@ -68,3 +68,52 @@ body {
   animation-play-state: paused;
 }
 
+/* Video.js custom styles */
+.video-js {
+  width: 100% !important;
+  height: 100% !important;
+  font-family: inherit;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.video-js .vjs-tech {
+  object-fit: contain !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.video-js .vjs-big-play-button {
+  background-color: rgba(147, 51, 234, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 9999px !important;
+  width: 3.5rem !important;
+  height: 3.5rem !important;
+  line-height: 3.5rem !important;
+  margin-top: -1.75rem !important;
+  margin-left: -1.75rem !important;
+  backdrop-filter: blur(8px);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.video-js:hover .vjs-big-play-button {
+  background-color: rgba(147, 51, 234, 1) !important;
+  transform: scale(1.1);
+}
+
+.video-js .vjs-control-bar {
+  background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.3) 70%, transparent) !important;
+  height: 3.5rem !important;
+  padding: 0 0.5rem;
+  align-items: center;
+}
+
+.video-js .vjs-play-progress {
+  background-color: #9333ea !important;
+}
+
+.video-js .vjs-volume-level {
+  background-color: #9333ea !important;
+}
+
+

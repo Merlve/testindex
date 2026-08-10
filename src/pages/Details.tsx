@@ -14,6 +14,7 @@ import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameP
 import { getGenresWithIds } from '../utils/genres';
 import { clearRecommendationsCache } from './Recommendations';
 import { MediaItem, TMDBData } from '../types';
+import VideoPlayer from '../components/VideoPlayer';
 
 // Player Selection Intent Modal Component
 function IntentPlayerModal({ 
@@ -34,6 +35,17 @@ function IntentPlayerModal({
   const [url, setUrl] = useState(item.url || '');
   const [loading, setLoading] = useState(!item.url);
   const [copied, setCopied] = useState(false);
+  const [os, setOs] = useState<'unknown' | 'android' | 'ios' | 'macos' | 'windows'>('unknown');
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      const ua = navigator.userAgent;
+      if (/android/i.test(ua)) setOs('android');
+      else if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) setOs('ios');
+      else if (/Mac/i.test(ua)) setOs('macos');
+      else if (/Win/i.test(ua)) setOs('windows');
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -126,73 +138,91 @@ function IntentPlayerModal({
         ) : (
           <div className="space-y-2.5">
             <div className="grid grid-cols-2 gap-2">
-              <a
-                href={`vlc://${url}`}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 text-black dark:text-white transition text-left cursor-pointer"
-              >
-                <div className="p-1.5 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs shrink-0">VLC</div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold">VLC</div>
-                  <div className="text-[10px] text-gray-500 truncate">VLC iOS</div>
-                </div>
-              </a>
+              {os === 'ios' && (
+                <>
+                  <a
+                    href={`vlc://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                  >
+                    <div className="p-1.5 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs shrink-0">VLC</div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold">VLC</div>
+                      <div className="text-[10px] text-gray-500 truncate">iOS</div>
+                    </div>
+                  </a>
 
-              <a
-                href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-blue-500/50 text-black dark:text-white transition text-left cursor-pointer"
-              >
-                <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-500 font-bold text-xs shrink-0">INF</div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold">Infuse</div>
-                  <div className="text-[10px] text-gray-500 truncate">iOS / Apple TV</div>
-                </div>
-              </a>
+                  <a
+                    href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-blue-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                  >
+                    <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-500 font-bold text-xs shrink-0">INF</div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold">Infuse</div>
+                      <div className="text-[10px] text-gray-500 truncate">iOS / Apple TV</div>
+                    </div>
+                  </a>
+                </>
+              )}
 
-              <a
-                href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 text-black dark:text-white transition text-left cursor-pointer"
-              >
-                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs shrink-0">MPV</div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold">MPV</div>
-                  <div className="text-[10px] text-gray-500 truncate">Android Intent</div>
-                </div>
-              </a>
+              {os === 'android' && (
+                <a
+                  href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                >
+                  <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs shrink-0">MPV</div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold">MPV</div>
+                    <div className="text-[10px] text-gray-500 truncate">Android</div>
+                  </div>
+                </a>
+              )}
 
-              <a
-                href={`potplayer://${url}`}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-yellow-500/50 text-black dark:text-white transition text-left cursor-pointer"
-              >
-                <div className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-500 font-bold text-xs shrink-0">POT</div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold">PotPlayer</div>
-                  <div className="text-[10px] text-gray-500 truncate">Windows</div>
-                </div>
-              </a>
+              {os === 'windows' && (
+                <a
+                  href={`potplayer://${url}`}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-yellow-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                >
+                  <div className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-500 font-bold text-xs shrink-0">POT</div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold">PotPlayer</div>
+                    <div className="text-[10px] text-gray-500 truncate">Windows</div>
+                  </div>
+                </a>
+              )}
 
-              <a
-                href={`iina://weblink?url=${encodeURIComponent(url)}`}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 text-black dark:text-white transition text-left cursor-pointer"
-              >
-                <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs shrink-0">IINA</div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold">IINA</div>
-                  <div className="text-[10px] text-gray-500 truncate">macOS</div>
-                </div>
-              </a>
+              {os === 'macos' && (
+                <a
+                  href={`iina://weblink?url=${encodeURIComponent(url)}`}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                >
+                  <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs shrink-0">IINA</div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold">IINA</div>
+                    <div className="text-[10px] text-gray-500 truncate">macOS</div>
+                  </div>
+                </a>
+              )}
 
               <button
-                onClick={copyToClipboard}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-emerald-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                onClick={() => {
+                  if (url) {
+                    onPlayWeb(url);
+                    onClose();
+                  }
+                }}
+                className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 text-black dark:text-white transition text-left cursor-pointer"
               >
-                <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-500 font-bold text-xs shrink-0">
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs shrink-0">
+                  <Play size={14} fill="currentColor" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold">{copied ? 'Copied!' : 'Copy Link'}</div>
-                  <div className="text-[10px] text-gray-500 truncate">Stream URL</div>
+                  <div className="text-xs font-bold">Play Here</div>
+                  <div className="text-[10px] text-gray-500 truncate">play in browser</div>
                 </div>
               </button>
+            </div>
+            <div className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 text-center italic">
+              Streaming in browsers do not support embedded soft subtitles, use {os === 'android' ? 'mpv' : os === 'ios' ? 'VLC or Infuse' : os === 'macos' ? 'IINA' : os === 'windows' ? 'PotPlayer' : 'an external player'} for the best experience.
             </div>
           </div>
         )}
@@ -1086,11 +1116,22 @@ export default function Details() {
     >
       {/* Video Modal (Web Player) */}
       {playingUrl && (
-        <div className="fixed inset-0 z-[120] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md">
-          <button onClick={() => setPlayingUrl('')} className="absolute top-6 right-6 text-white/70 hover:text-white transition bg-white/10 p-2.5 rounded-full z-10 cursor-pointer">
-            <X size={24} />
-          </button>
-          <video src={playingUrl} controls autoPlay className="w-full max-w-6xl max-h-[85vh] rounded-2xl shadow-2xl outline-none bg-black" />
+        <div className="fixed inset-0 z-[130] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md p-4 sm:p-6">
+          <div className="relative w-full max-w-6xl aspect-video max-h-[85vh]" style={{ transform: 'translate3d(0,0,0)', willChange: 'transform' }}>
+            <button 
+              onClick={() => setPlayingUrl('')} 
+              className="absolute -top-12 right-0 text-white/70 hover:text-white transition bg-white/10 hover:bg-white/20 p-1.5 rounded-full z-30 cursor-pointer flex items-center gap-1 text-xs font-bold px-3 py-1.5 backdrop-blur-sm"
+              title="Close Player"
+            >
+              <X size={16} /> Close
+            </button>
+            <VideoPlayer
+              src={playingUrl}
+              title={tmdb?.title || tmdb?.name || name}
+              poster={tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` : undefined}
+              onClose={() => setPlayingUrl('')}
+            />
+          </div>
         </div>
       )}
 
