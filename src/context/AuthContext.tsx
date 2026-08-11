@@ -64,6 +64,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       response => {
+        const currentBootId = response.headers['x-server-boot-id'];
+        if (currentBootId) {
+           const storedBootId = localStorage.getItem('qs_server_boot_id');
+           if (!storedBootId) {
+               localStorage.setItem('qs_server_boot_id', currentBootId);
+           } else if (storedBootId !== currentBootId) {
+               localStorage.setItem('qs_server_boot_id', currentBootId);
+               logout();
+               window.location.reload();
+               return Promise.reject(new Error("Server restarted, refreshing app..."));
+           }
+        }
+
         if (response.data && (response.data.code === 401 || (typeof response.data === 'string' && response.data.toLowerCase().includes('invalidated')) || (response.data.message && typeof response.data.message === 'string' && response.data.message.toLowerCase().includes('invalidated')))) {
           logout();
           const err: any = new Error(response.data.message || 'Unauthorized');
@@ -73,6 +86,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         return response;
       },
       async error => {
+        const currentBootId = error.response?.headers?.['x-server-boot-id'];
+        if (currentBootId) {
+           const storedBootId = localStorage.getItem('qs_server_boot_id');
+           if (!storedBootId) {
+               localStorage.setItem('qs_server_boot_id', currentBootId);
+           } else if (storedBootId !== currentBootId) {
+               localStorage.setItem('qs_server_boot_id', currentBootId);
+               logout();
+               window.location.reload();
+               return Promise.reject(new Error("Server restarted, refreshing app..."));
+           }
+        }
+
         const config = error?.config;
         if (error?.response?.status === 429 && config && (config._retryCount || 0) < 3) {
           config._retryCount = (config._retryCount || 0) + 1;
