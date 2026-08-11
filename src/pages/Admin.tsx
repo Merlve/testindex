@@ -29,6 +29,9 @@ export default function Admin() {
   // Scans
   const [creditsScanLoading, setCreditsScanLoading] = useState(false);
   const [creditsScanMsg, setCreditsScanMsg] = useState('');
+  
+  const [imagesScanLoading, setImagesScanLoading] = useState(false);
+  const [imagesScanMsg, setImagesScanMsg] = useState('');
 
   const [actorSyncLoading, setActorSyncLoading] = useState(false);
   const [actorSyncMsg, setActorSyncMsg] = useState('');
@@ -203,6 +206,14 @@ export default function Admin() {
       } catch(e) {}
       
       try {
+        const res = await axios.get('/api/meta/scan_images/status');
+        setImagesScanLoading(res.data.isRunning);
+        if (res.data.message) {
+          setImagesScanMsg(res.data.message);
+        }
+      } catch(e) {}
+      
+      try {
         const res = await axios.get('/api/meta/scan_collections/status');
         setCollectionScanLoading(res.data.isRunning);
         if (res.data.message) {
@@ -273,6 +284,22 @@ export default function Admin() {
     } catch (e: any) {
       setCreditsScanMsg(`Error: ${e.message}`);
       setCreditsScanLoading(false);
+    }
+  };
+
+  const handleImagesScan = async () => {
+    if (imagesScanLoading) {
+      await axios.post('/api/meta/scan_images/stop', {}, { headers: { Authorization: token } });
+      setImagesScanLoading(false);
+      return;
+    }
+    setImagesScanLoading(true);
+    setImagesScanMsg('Starting images/logos scan...');
+    try {
+      await axios.post('/api/meta/scan_images/start', {}, { headers: { Authorization: token } });
+    } catch (e: any) {
+      setImagesScanMsg(`Error: ${e.message}`);
+      setImagesScanLoading(false);
     }
   };
 
@@ -477,6 +504,23 @@ export default function Admin() {
              </div>
              {creditsScanMsg && (
                 <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{creditsScanMsg}</p>
+             )}
+          </div>
+          
+          <div className="h-px w-full bg-black/10 dark:bg-white/10"></div>
+
+          <div>
+             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex-1">
+                   <h4 className="font-bold text-sm text-black dark:text-white">Images & Logos Scan</h4>
+                   <p className="text-xs text-gray-500">Fetch high-quality images and transparent logos for all library items.</p>
+                </div>
+                <button onClick={handleImagesScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${imagesScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
+                  {imagesScanLoading ? 'Stop Images Scan' : 'Start Images Scan'}
+                </button>
+             </div>
+             {imagesScanMsg && (
+                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{imagesScanMsg}</p>
              )}
           </div>
           

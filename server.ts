@@ -2278,6 +2278,96 @@ app.post('/api/meta/scan_credits/stop', adminMiddleware, (req, res) => {
   res.json({ success: true, message: 'Stopped' });
 });
 
+let imagesScanJob = {
+  isRunning: false,
+  message: '',
+  count: 0,
+  total: 0,
+  failedItems: [] as string[]
+};
+
+app.get('/api/meta/scan_images/status', (req, res) => {
+  res.json(imagesScanJob);
+});
+
+app.post('/api/meta/scan_images/start', adminMiddleware, (req, res) => {
+  if (imagesScanJob.isRunning) {
+    return res.json({ success: false, message: 'Already running' });
+  }
+
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.status(500).json({ error: 'TMDB key missing' });
+
+  imagesScanJob = {
+    isRunning: true,
+    message: 'Starting images/logos scan...',
+    count: 0,
+    total: 0,
+    failedItems: []
+  };
+  
+  (async () => {
+    try {
+      const keys = Object.keys(tmdbCache).filter(k => tmdbCache[k] && tmdbCache[k].id);
+      
+      const keysToScan = keys.filter(k => {
+          const item = tmdbCache[k];
+          return item && item.id && !item.images;
+      });
+
+      imagesScanJob.total = keysToScan.length;
+      
+      let modified = false;
+      for (let i = 0; i < keysToScan.length; i++) {
+        if (!imagesScanJob.isRunning) break;
+        
+        const key = keysToScan[i];
+        const item = tmdbCache[key];
+        
+        if (item && item.id) {
+          const category = key.split('-')[0];
+          if (category) {
+            imagesScanJob.message = `Scanning images for: ${item.title || item.name} (${i + 1}/${keysToScan.length})`;
+            
+            try {
+              const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t.toUpperCase());
+              const searchType = isTvType(category) ? 'tv' : 'movie';
+              const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
+              if (response.data) {
+                tmdbCache[key].images = response.data;
+                modified = true;
+                imagesScanJob.count++;
+              }
+            } catch (err) {
+               imagesScanJob.failedItems.push(item.title || item.name || String(item.id));
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+      }
+      
+      if (modified) {
+        await writeSQLiteJSON('db', tmdbCache);
+      }
+      
+      imagesScanJob.isRunning = false;
+      imagesScanJob.message = `Finished images scan. Processed ${imagesScanJob.count} items.`;
+    } catch (error: any) {
+      imagesScanJob.isRunning = false;
+      imagesScanJob.message = `Error during scan: ${error.message}`;
+    }
+  })();
+  
+  res.json({ success: true, message: 'Started' });
+});
+
+app.post('/api/meta/scan_images/stop', adminMiddleware, (req, res) => {
+  imagesScanJob.isRunning = false;
+  imagesScanJob.message = 'Scan stopped.';
+  res.json({ success: true, message: 'Stopped' });
+});
+
 app.get('/api/meta/credits', cacheMiddleware(3600, true), async (req, res) => {
   const { id, type } = req.query;
   if (!id || !type) return res.status(400).json({ error: 'id and type required' });

@@ -1424,7 +1424,7 @@ export default function Details() {
               onContextMenu={(e) => e.preventDefault()} 
             />
           ) : (
-            <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight drop-shadow-xl text-black dark:text-white">
+            <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight drop-shadow-xl text-black dark:text-white break-words w-full text-balance">
               {tmdb?.title || tmdb?.name || name}
               {releaseYear ? <span className="font-normal ml-3 text-2xl text-gray-500 dark:text-gray-300">({releaseYear})</span> : null}
             </h1>
@@ -1498,10 +1498,10 @@ export default function Details() {
         )}
 
         {/* Overview */}
-        <motion.div layout className="max-w-3xl flex flex-col items-center overflow-hidden">
+        <motion.div layout className="max-w-3xl flex flex-col items-center overflow-hidden w-full">
           <motion.p 
             layout="position"
-            className={`leading-relaxed text-sm md:text-base text-center text-gray-700 dark:text-gray-300 ${isOverviewExpanded ? '' : 'line-clamp-4'}`}
+            className={`leading-relaxed text-sm md:text-base text-center text-gray-700 dark:text-gray-300 break-words w-full ${isOverviewExpanded ? '' : 'line-clamp-4'}`}
           >
             {tmdb?.overview}
           </motion.p>
