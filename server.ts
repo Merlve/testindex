@@ -1221,34 +1221,26 @@ app.get('/api/admin/diagnostic', adminMiddleware, async (req, res) => {
   const result: any = {
     sqliteFileAccessible: false,
     sqliteDbQueryable: false,
-    dbPath: path.join(process.cwd(), 'data', 'shindex.db'),
-    dbUrl: process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || ('file:' + path.join(process.cwd(), 'data', 'shindex.db')),
-    env: {
-      DATABASE_URL: !!process.env.DATABASE_URL,
-      TURSO_DATABASE_URL: !!process.env.TURSO_DATABASE_URL,
-    }
+    dbPath: path.join(process.cwd(), 'data', 'shindex.db')
   };
 
   try {
-    if (!result.dbUrl.startsWith('libsql://') && !result.dbUrl.startsWith('https://')) {
-        const actualPath = result.dbUrl.replace('file:', '');
-        result.sqliteFileAccessible = fs.existsSync(actualPath);
-        if (result.sqliteFileAccessible) {
-          const stats = fs.statSync(actualPath);
-          result.fileStats = { size: stats.size, mtime: stats.mtime };
-        }
-    } else {
-        result.sqliteFileAccessible = true;
+    const actualPath = result.dbPath;
+    result.sqliteFileAccessible = fs.existsSync(actualPath);
+    if (result.sqliteFileAccessible) {
+      const stats = fs.statSync(actualPath);
+      result.fileStats = { size: stats.size, mtime: stats.mtime };
     }
   } catch (e: any) {
     result.sqliteFileAccessibleError = e.message;
   }
 
   try {
-    const { sqliteDb } = require('./sqlite_db');
-    const rs = await sqliteDb.execute('SELECT count(*) as count FROM kv_store');
+    const { getDB } = require('./sqlite_db');
+    const database = await getDB();
+    const rs = await database.get('SELECT count(*) as count FROM kv_store');
     result.sqliteDbQueryable = true;
-    result.kvStoreCount = rs.rows[0].count;
+    result.kvStoreCount = rs.count;
   } catch (e: any) {
     result.sqliteDbQueryableError = e.message;
   }
@@ -1551,14 +1543,42 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`;
     const payload: any = { path: reqPath, password: "" };
     if (refresh) payload.refresh = true;
-
-
+    
+    const cacheKey = `fs_list_${token}_${normalizedPath}`;
+    
+    if (refresh) {
+        apiCache.delete(cacheKey);
+    } else {
+        let cached = apiCache.get(cacheKey);
+        if (!cached) {
+            const sqliteCached = await readSQLiteJSON(cacheKey);
+            if (sqliteCached) {
+                cached = sqliteCached;
+                apiCache.set(cacheKey, sqliteCached, 86400);
+            }
+        }
+        if (cached) {
+            res.json(cached);
+            
+            // Background refresh (stale-while-revalidate)
+            axios.post(url, payload, { headers: { Authorization: token } }).then(response => {
+                if (response.data?.code === 200) {
+                    apiCache.set(cacheKey, response.data, 86400);
+                    writeSQLiteJSON(cacheKey, response.data).catch(console.error);
+                }
+            }).catch(e => console.error('Background refresh failed for fs/list:', e.message));
+            return;
+        }
+    }
 
     const response = await axios.post(url, payload, {
       headers: { Authorization: token }
     });
     
-
+    if (response.data?.code === 200) {
+        apiCache.set(cacheKey, response.data, 86400); // 24 hours
+        writeSQLiteJSON(cacheKey, response.data).catch(console.error);
+    }
 
     res.json(response.data);
   } catch (error: any) {
@@ -1588,9 +1608,40 @@ app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
     }
 
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/get`;
+    
+    const cacheKey = `fs_get_${token}_${normalizedPath}`;
+    
+    let cached = apiCache.get(cacheKey);
+    if (!cached) {
+        const sqliteCached = await readSQLiteJSON(cacheKey);
+        if (sqliteCached) {
+            cached = sqliteCached;
+            apiCache.set(cacheKey, sqliteCached, 7200);
+        }
+    }
+    
+    if (cached) {
+        res.json(cached);
+        
+        // Background refresh
+        axios.post(url, { path: reqPath, password: "" }, { headers: { Authorization: token } }).then(response => {
+            if (response.data?.code === 200) {
+                apiCache.set(cacheKey, response.data, 7200);
+                writeSQLiteJSON(cacheKey, response.data).catch(console.error);
+            }
+        }).catch(e => console.error('Background refresh failed for fs/get:', e.message));
+        return;
+    }
+
     const response = await axios.post(url, { path: reqPath, password: "" }, {
       headers: { Authorization: token }
     });
+    
+    if (response.data?.code === 200) {
+        apiCache.set(cacheKey, response.data, 7200);
+        writeSQLiteJSON(cacheKey, response.data).catch(console.error);
+    }
+
     res.json(response.data);
   } catch (error: any) {
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to get file info' });
@@ -2186,6 +2237,109 @@ app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
   } catch (err: any) {
     res.json(null);
   }
+});
+
+let filesScanJob = {
+  isRunning: false,
+  message: '',
+  count: 0,
+  total: 0,
+  failedItems: [] as string[]
+};
+
+app.get('/api/meta/scan_files/status', (req, res) => {
+  res.json(filesScanJob);
+});
+
+app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
+  if (filesScanJob.isRunning) {
+    return res.json({ success: false, message: 'Already running' });
+  }
+
+  const token = getOpenlistApiKey();
+  if (!token) return res.status(500).json({ error: 'Openlist API key missing' });
+
+  filesScanJob = {
+    isRunning: true,
+    message: 'Starting files & folders scan...',
+    count: 0,
+    total: 0,
+    failedItems: []
+  };
+  
+  (async () => {
+    try {
+      const index = await getLibraryIndex(token, true); // true forces refresh of library root
+      filesScanJob.total = index.length;
+      
+      const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
+      const listUrl = `${openlistUrl}/api/fs/list`;
+      
+      for (let i = 0; i < index.length; i++) {
+        if (!filesScanJob.isRunning) break;
+        
+        const item = index[i];
+        filesScanJob.message = `Scanning folder: ${item.name} (${i + 1}/${index.length})`;
+        
+        const reqPath = item.openlist_path || (item.path ? item.path : `${appConfig.basePath}/${item.category}/${item.name}`);
+        const normalizedPath = path.posix.normalize(reqPath);
+        
+        try {
+            const payload: any = { path: normalizedPath, password: "", refresh: true };
+            const response = await axios.post(listUrl, payload, {
+              headers: { Authorization: token }
+            });
+            
+            if (response.data?.code === 200) {
+                const cacheKey = `fs_list_${token}_${normalizedPath}`;
+                apiCache.set(cacheKey, response.data, 86400); // cache for 24 hours
+                writeSQLiteJSON(cacheKey, response.data).catch(console.error);
+                filesScanJob.count++;
+                
+                // If TV series, optionally scan seasons recursively
+                const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes((item.category || '').toUpperCase());
+                if (isTvCategory && response.data.data?.content) {
+                    const content = response.data.data.content;
+                    for (const subItem of content) {
+                        if (subItem.is_dir) {
+                            const seasonPath = `${normalizedPath}/${subItem.name}`;
+                            const seasonNormPath = path.posix.normalize(seasonPath);
+                            try {
+                                const subPayload: any = { path: seasonNormPath, password: "", refresh: true };
+                                const subRes = await axios.post(listUrl, subPayload, { headers: { Authorization: token } });
+                                if (subRes.data?.code === 200) {
+                                    const subCacheKey = `fs_list_${token}_${seasonNormPath}`;
+                                    apiCache.set(subCacheKey, subRes.data, 86400);
+                                    writeSQLiteJSON(subCacheKey, subRes.data).catch(console.error);
+                                }
+                            } catch (e) {}
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            filesScanJob.failedItems.push(item.name);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      filesScanJob.isRunning = false;
+      filesScanJob.message = `Finished files scan. Processed ${filesScanJob.count} folders.`;
+    } catch (error: any) {
+      filesScanJob.isRunning = false;
+      filesScanJob.message = `Error during scan: ${error.message}`;
+    }
+  })();
+  
+  res.json({ success: true, message: 'Started' });
+});
+
+app.post('/api/meta/scan_files/stop', adminMiddleware, (req, res) => {
+  filesScanJob.isRunning = false;
+  filesScanJob.message = 'Scan stopped.';
+  res.json({ success: true, message: 'Stopped' });
 });
 
 let creditsScanJob = {

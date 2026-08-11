@@ -33,6 +33,9 @@ export default function Admin() {
   const [imagesScanLoading, setImagesScanLoading] = useState(false);
   const [imagesScanMsg, setImagesScanMsg] = useState('');
 
+  const [filesScanLoading, setFilesScanLoading] = useState(false);
+  const [filesScanMsg, setFilesScanMsg] = useState('');
+
   const [actorSyncLoading, setActorSyncLoading] = useState(false);
   const [actorSyncMsg, setActorSyncMsg] = useState('');
 
@@ -169,7 +172,13 @@ export default function Admin() {
 
   useEffect(() => {
     if (activeTab === 'logs') {
-      axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => setLogs(res.data));
+      axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => {
+        if (Array.isArray(res.data)) {
+          setLogs(res.data);
+        } else {
+          setLogs([]);
+        }
+      });
 
     } else if (activeTab === 'downloads') {
       fetchTopDownloads();
@@ -210,6 +219,14 @@ export default function Admin() {
         setImagesScanLoading(res.data.isRunning);
         if (res.data.message) {
           setImagesScanMsg(res.data.message);
+        }
+      } catch(e) {}
+      
+      try {
+        const res = await axios.get('/api/meta/scan_files/status');
+        setFilesScanLoading(res.data.isRunning);
+        if (res.data.message) {
+          setFilesScanMsg(res.data.message);
         }
       } catch(e) {}
       
@@ -300,6 +317,22 @@ export default function Admin() {
     } catch (e: any) {
       setImagesScanMsg(`Error: ${e.message}`);
       setImagesScanLoading(false);
+    }
+  };
+
+  const handleFilesScan = async () => {
+    if (filesScanLoading) {
+      await axios.post('/api/meta/scan_files/stop', {}, { headers: { Authorization: token } });
+      setFilesScanLoading(false);
+      return;
+    }
+    setFilesScanLoading(true);
+    setFilesScanMsg('Starting files/folders pre-cache scan...');
+    try {
+      await axios.post('/api/meta/scan_files/start', {}, { headers: { Authorization: token } });
+    } catch (e: any) {
+      setFilesScanMsg(`Error: ${e.message}`);
+      setFilesScanLoading(false);
     }
   };
 
@@ -529,6 +562,23 @@ export default function Admin() {
           <div>
              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                 <div className="flex-1">
+                   <h4 className="font-bold text-sm text-black dark:text-white">Files & Folders Pre-Cache Scan</h4>
+                   <p className="text-xs text-gray-500">Recursively list all directories to warm up the cache so episodes load instantly on the details page.</p>
+                </div>
+                <button onClick={handleFilesScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${filesScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
+                  {filesScanLoading ? 'Stop Pre-Cache' : 'Start Pre-Cache'}
+                </button>
+             </div>
+             {filesScanMsg && (
+                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{filesScanMsg}</p>
+             )}
+          </div>
+          
+          <div className="h-px w-full bg-black/10 dark:bg-white/10"></div>
+          
+          <div>
+             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex-1">
                    <h4 className="font-bold text-sm text-black dark:text-white">Collections Scan</h4>
                    <p className="text-xs text-gray-500">Check movies for collections they belong to.</p>
                 </div>
@@ -623,7 +673,10 @@ export default function Admin() {
           <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 sm:mb-4 tracking-tight flex justify-between items-center gap-2">
             <span>System Activity Logs</span>
             <button 
-              onClick={() => axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => setLogs(res.data))}
+              onClick={() => axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => {
+                if (Array.isArray(res.data)) setLogs(res.data);
+                else setLogs([]);
+              })}
               className="text-xs bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded-lg border border-black/5 dark:border-white/5 font-semibold text-black dark:text-white cursor-pointer shrink-0"
             >
               Refresh

@@ -250,7 +250,11 @@ export default function Details() {
   const [config, setConfig] = useState<any>({});
 
   useEffect(() => {
-    axios.get('/api/config').then(res => setConfig(res.data));
+    axios.get('/api/config').then(res => {
+      if (res.data && typeof res.data === 'object' && !Array.isArray(res.data)) {
+        setConfig(res.data);
+      }
+    });
   }, []);
 
   // Directory items & state
@@ -391,7 +395,13 @@ export default function Details() {
   useEffect(() => {
     if (user && user !== 'guest') {
       axios.get('/api/watched', { headers: { 'x-user': user } })
-        .then(res => setWatchedItems(res.data))
+        .then(res => {
+          if (Array.isArray(res.data)) {
+            setWatchedItems(res.data);
+          } else {
+            setWatchedItems([]);
+          }
+        })
         .catch(console.error);
     }
   }, [user]);
@@ -902,7 +912,7 @@ export default function Details() {
     try {
       const res = await axios.post('/api/meta/unrelease', { tmdbId: Number(tmdb.id), unrelease: !isCurrentlyUnreleased }, { headers: { Authorization: token } });
       if (res.data.success) {
-        setUnreleasedIds(res.data.unreleasedTmdbIds);
+        setUnreleasedIds(res.data.unreleasedTmdbIds || []);
         setToast(isCurrentlyUnreleased ? 'Marked as Released' : 'Marked as Not Released');
         setTimeout(() => setToast(''), 3000);
       }

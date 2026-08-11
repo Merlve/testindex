@@ -69,15 +69,15 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
 
 
 
-  if (loading || trendingItems.length === 0) {
-    return null; // Don't show anything if no trending matches or still loading
-  }
-
   const renderedItems = useMemo(() => {
     return trendingItems.slice(0, 10).map((item, i) => (
       <ItemCard key={`${item.id || item.name}-${i}`} item={item} category={item.category} parentPath={`/home/${item.category}`} />
     ));
   }, [trendingItems]);
+
+  if (loading || trendingItems.length === 0) {
+    return null; // Don't show anything if no trending matches or still loading
+  }
 
   return (
     <div className="relative">

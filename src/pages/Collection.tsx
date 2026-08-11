@@ -1044,7 +1044,7 @@ export default function Collection() {
                   </div>
                 ) : (
                   providerResults.map((res, i) => {
-                    const isAdded = collection?.items.some((item: any) => item.id === res.id || item.name === res.name);
+                    const isAdded = Array.isArray(collection?.items) && collection.items.some((item: any) => item.id === res.id || item.name === res.name);
                     return (
                       <ProviderResultItem 
                         key={res.id || i}
