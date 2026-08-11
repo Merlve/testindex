@@ -15,6 +15,7 @@ import { getGenresWithIds } from '../utils/genres';
 import { clearRecommendationsCache } from './Recommendations';
 import { MediaItem, TMDBData } from '../types';
 import VideoPlayer from '../components/VideoPlayer';
+import { FastAverageColor } from "fast-average-color";
 
 // Player Selection Intent Modal Component
 function IntentPlayerModal({ 
@@ -260,9 +261,34 @@ export default function Details() {
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [toast, setToast] = useState('');
+  const [isOverviewExpanded, setIsOverviewExpanded] = useState(false);
   
   const [showPathModal, setShowPathModal] = useState(false);
   const [manualPathInput, setManualPathInput] = useState(fullPath.replace(/^\//, ''));
+  const [dominantColor, setDominantColor] = useState<string | null>(null);
+
+  useEffect(() => {
+    const rawPosterUrl = tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w780${tmdb.backdrop_path}` : null;
+    if (rawPosterUrl) {
+      const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(rawPosterUrl)}`;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const fac = new FastAverageColor();
+          const color = fac.getColor(img, { algorithm: 'dominant' });
+          setDominantColor(color.rgba);
+          fac.destroy();
+        } catch (e) {
+          console.error('[FAC] Error processing image', e);
+        }
+      };
+      img.onerror = (e) => {
+        console.error('[FAC] Error loading image', e);
+      };
+      img.src = proxyUrl;
+    }
+  }, [tmdb?.poster_path, tmdb?.backdrop_path]);
 
   const handleUpdateDigitalPath = async () => {
     if (user !== 'admin' || !tmdb?.id) return;
@@ -1108,14 +1134,26 @@ export default function Details() {
       ? new Date(tmdb.first_air_date).getFullYear() 
       : null;
 
+  const logoPath = tmdb?.images?.logos?.find((l: any) => l.iso_639_1 === 'en')?.file_path 
+    || tmdb?.images?.logos?.[0]?.file_path;
+  const logoUrl = logoPath ? `https://image.tmdb.org/t/p/w500${logoPath}` : null;
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className="-mt-16 min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-24 relative overflow-x-hidden max-w-full"
+      className="-mt-16 min-h-screen pb-24 relative overflow-x-hidden max-w-full z-0"
     >
+      <div className="fixed inset-0 pointer-events-none z-[-2] bg-[#fffcf9] dark:bg-[#08080a]" />
+      <div 
+        className="fixed inset-0 pointer-events-none transition-all duration-1000 z-[-1]" 
+        style={{ 
+          background: dominantColor ? `linear-gradient(to bottom, ${dominantColor} 0%, transparent 100%)` : 'transparent',
+          opacity: 0.5
+        }} 
+      />
       {/* Video Modal (Web Player) */}
       {playingUrl && (
         <div className="fixed inset-0 z-[130] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md p-4 sm:p-6">
@@ -1361,125 +1399,125 @@ export default function Details() {
 
       {/* Backdrop Image */}
       {backdrop && (
-        <div className="absolute top-0 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/80 dark:via-[#08080a]/80 to-transparent z-10"></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] via-[#fffcf9]/30 dark:via-[#08080a]/30 to-transparent z-10"></div>
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 dark:from-black/40 via-transparent to-transparent z-10"></div>
-          <img src={backdrop} className="w-full h-full object-cover opacity-50 md:opacity-40" alt="Backdrop" />
+        <div 
+           className="absolute top-0 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0"
+           style={{ WebkitMaskImage: 'linear-gradient(to top, transparent 0%, black 80%)', maskImage: 'linear-gradient(to top, transparent 0%, black 80%)' }}
+        >
+          <img 
+             src={backdrop} 
+             className="w-full h-full object-cover opacity-100 md:opacity-80" 
+             alt="Backdrop" 
+          />
         </div>
       )}
 
       {/* Main Details Section */}
-      <div className="px-4 sm:px-8 md:px-12 pt-20 sm:pt-24 md:pt-28 relative z-20 flex flex-col md:flex-row gap-6 md:gap-10 mb-8">
-        <div className="flex flex-row md:flex-col gap-5 md:gap-6 items-start">
-          {tmdb?.poster_path && (
-            <img src={`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`} className="w-32 sm:w-40 md:w-64 rounded-xl md:rounded-2xl shadow-2xl shrink-0 border border-black/5 dark:border-white/5" alt="Poster" />
-          )}
-          <div className="flex-1 min-w-0 md:hidden flex flex-col gap-2 pt-2">
-            <h1 className="text-2xl font-bold text-black dark:text-white tracking-tight leading-tight line-clamp-3">
+      <div className="px-4 sm:px-8 md:px-12 pt-[40vh] sm:pt-[45vh] md:pt-[55vh] relative z-20 flex flex-col items-center text-center gap-6 mb-8 max-w-4xl mx-auto">
+        {/* Logo / Title */}
+        <div className="flex flex-col items-center gap-4 w-full">
+          {logoUrl ? (
+            <img 
+              src={logoUrl} 
+              alt={tmdb?.title || tmdb?.name || name} 
+              className="w-64 sm:w-80 md:w-96 max-h-40 object-contain drop-shadow-2xl select-none pointer-events-none" 
+              draggable={false} 
+              onContextMenu={(e) => e.preventDefault()} 
+            />
+          ) : (
+            <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight drop-shadow-xl text-black dark:text-white">
               {tmdb?.title || tmdb?.name || name}
-              {releaseYear ? <span className="text-gray-500 font-normal ml-2">({releaseYear})</span> : null}
+              {releaseYear ? <span className="font-normal ml-3 text-2xl text-gray-500 dark:text-gray-300">({releaseYear})</span> : null}
             </h1>
-            <p className="text-[10px] font-mono text-gray-600 dark:text-gray-400 break-words break-all line-clamp-2">{fullPath}</p>
-            {!isMovieCategory && tmdb?.status && (
-              <span className={`self-start px-2 py-0.5 mt-1 rounded text-[10px] font-bold tracking-wider uppercase ${tmdb.status.toLowerCase() === 'ended' || tmdb.status.toLowerCase() === 'canceled' ? 'bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>{tmdb.status === 'Returning Series' ? 'Ongoing' : tmdb.status}</span>
-            )}
-            <button onClick={() => {
-              if (user === 'guest') {
-                setToast('Sign up for the website plan to use this feature');
-                setTimeout(() => setToast(''), 3000);
-              } else {
-                setShowMetadataModal(true);
-              }
-            }} className="bg-purple-500/10 dark:bg-white/10 border border-purple-500/20 dark:border-white/10 text-purple-700 dark:text-purple-300 hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white dark:hover:text-white p-2 rounded-xl transition self-start mt-2 cursor-pointer shadow-sm" title="Fix Metadata">
-              <Edit2 size={16} />
-            </button>
-            {user === 'admin' && isMovieCategory && tmdb?.id && (
-               <button onClick={handleToggleUnrelease} className={`p-1.5 rounded-xl transition self-start mt-2 cursor-pointer shadow-sm border text-[10px] font-bold ${unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'bg-red-500/20 border-red-500/30 text-red-600 dark:text-red-400' : 'bg-gray-500/10 dark:bg-white/10 border-gray-500/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20'}`} title="Toggle Released Status">
-                  {unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'Not Released' : 'Released'}
-               </button>
-            )}
-            {user === 'admin' && location.state?.item?._digital_release && (
-               <button onClick={() => setShowPathModal(true)} className="p-1.5 rounded-xl transition self-start mt-2 cursor-pointer shadow-sm border text-[10px] font-bold bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300 hover:bg-blue-600 hover:text-white" title="Edit Path">
-                  Edit Path
-               </button>
-            )}
-          </div>
+          )}
+
+          {!isMovieCategory && tmdb?.status && (
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${tmdb.status.toLowerCase() === 'ended' || tmdb.status.toLowerCase() === 'canceled' ? 'bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>{tmdb.status === 'Returning Series' ? 'Ongoing' : tmdb.status}</span>
+          )}
         </div>
 
-        <div className="flex-1 min-w-0 text-left">
-          <div className="hidden md:flex flex-row items-center gap-4 mb-2">
-            <h1 className="text-4xl lg:text-5xl font-extrabold text-black dark:text-white tracking-tight">
-              {tmdb?.title || tmdb?.name || name}
-              {releaseYear ? <span className="text-gray-500 font-normal ml-3">({releaseYear})</span> : null}
-            </h1>
-            <button onClick={() => {
-              if (user === 'guest') {
-                setToast('Sign up for the website plan to use this feature');
-                setTimeout(() => setToast(''), 3000);
-              } else {
-                setShowMetadataModal(true);
-              }
-            }} className="bg-purple-500/10 dark:bg-white/10 border border-purple-500/20 dark:border-white/10 text-purple-700 dark:text-purple-300 hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white dark:hover:text-white p-2 rounded-xl transition shrink-0 cursor-pointer shadow-sm" title="Fix Metadata">
-              <Edit2 size={16} />
-            </button>
-            {user === 'admin' && isMovieCategory && tmdb?.id && (
-               <button onClick={handleToggleUnrelease} className={`p-2 rounded-xl transition shrink-0 cursor-pointer shadow-sm border text-xs font-bold flex items-center ${unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'bg-red-500/20 border-red-500/30 text-red-600 dark:text-red-400' : 'bg-gray-500/10 dark:bg-white/10 border-gray-500/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20'}`} title="Toggle Released Status">
-                  {unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'Not Released' : 'Released'}
-               </button>
-            )}
-            {user === 'admin' && location.state?.item?._digital_release && (
-               <button onClick={() => setShowPathModal(true)} className="p-2 rounded-xl transition shrink-0 cursor-pointer shadow-sm border text-xs font-bold flex items-center bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300 hover:bg-blue-600 hover:text-white" title="Edit Path">
-                  Edit Path
-               </button>
-            )}
-          </div>
+        {/* Action Row: Watchlist & Trailer & Admin Buttons */}
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <button 
+            onClick={handleToggleWatchlist}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer ${
+              inWatchlist 
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' 
+                : 'bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20'
+            }`}
+          >
+            {inWatchlist ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+            {inWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
+          </button>
+          
+          <button
+            onClick={handleWatchTrailer}
+            disabled={loadingTrailer}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20 disabled:opacity-50"
+          >
+            {loadingTrailer ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+            Watch Trailer
+          </button>
 
-          <div className="hidden md:flex flex-col items-start gap-2 mb-4">
-            <p className="text-xs md:text-sm font-mono text-gray-600 dark:text-gray-400 break-words break-all m-0">{fullPath}</p>
-            {!isMovieCategory && tmdb?.status && (
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${tmdb.status.toLowerCase() === 'ended' || tmdb.status.toLowerCase() === 'canceled' ? 'bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>{tmdb.status === 'Returning Series' ? 'Ongoing' : tmdb.status}</span>
-            )}
-          </div>
-
-          {displayGenres && displayGenres.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {displayGenres.map((g: any, i: number) => (
-                <button 
-                  key={i} 
-                  onClick={() => navigate(`/genre/${g.id}?name=${encodeURIComponent(g.name)}`, { state: { from: location.pathname + location.search + location.hash } })}
-                  className="px-3 py-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-full text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
-                >
-                  {g.name}
-                </button>
-              ))}
-            </div>
+          <button onClick={() => {
+            if (user === 'guest') {
+              setToast('Sign up for the website plan to use this feature');
+              setTimeout(() => setToast(''), 3000);
+            } else {
+              setShowMetadataModal(true);
+            }
+          }} className="flex items-center gap-1.5 bg-purple-500/10 dark:bg-white/10 border border-purple-500/20 dark:border-white/10 text-purple-700 dark:text-purple-300 hover:bg-purple-600 dark:hover:bg-white/20 hover:text-white p-2 rounded-lg transition cursor-pointer shadow-sm text-xs font-bold" title="Fix Metadata">
+            <Edit2 size={16} />
+          </button>
+          
+          {user === 'admin' && isMovieCategory && tmdb?.id && (
+             <button onClick={handleToggleUnrelease} className={`flex items-center gap-1.5 p-2 rounded-lg transition cursor-pointer shadow-sm border text-xs font-bold ${unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'bg-red-500/20 border-red-500/30 text-red-600 dark:text-red-400' : 'bg-gray-500/10 dark:bg-white/10 border-gray-500/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20'}`} title="Toggle Released Status">
+                {unreleasedIds.some(id => Number(id) === Number(tmdb.id)) ? 'Not Released' : 'Released'}
+             </button>
           )}
+          
+          {user === 'admin' && location.state?.item?._digital_release && (
+             <button onClick={() => setShowPathModal(true)} className="flex items-center gap-1.5 p-2 rounded-lg transition cursor-pointer shadow-sm border text-xs font-bold bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300 hover:bg-blue-600 hover:text-white" title="Edit Path">
+                Edit Path
+             </button>
+          )}
+        </div>
 
-          <p className="text-gray-700 dark:text-gray-300 max-w-3xl leading-relaxed text-sm md:text-base mb-6 line-clamp-4 md:line-clamp-none">{tmdb?.overview}</p>
-
-          {/* Action Row: Watchlist & Trailer */}
-          <div className="flex flex-wrap items-center gap-3 mb-6">
-            <button 
-              onClick={handleToggleWatchlist}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm cursor-pointer ${
-                inWatchlist 
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' 
-                  : 'bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20'
-              }`}
-            >
-              {inWatchlist ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
-              {inWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
-            </button>
-            <button
-              onClick={handleWatchTrailer}
-              disabled={loadingTrailer}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm cursor-pointer bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20 disabled:opacity-50"
-            >
-              {loadingTrailer ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-              Watch Trailer
-            </button>
+        {/* Genres */}
+        {displayGenres && displayGenres.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2">
+            {displayGenres.map((g: any, i: number) => (
+              <button 
+                key={i} 
+                onClick={() => navigate(`/genre/${g.id}?name=${encodeURIComponent(g.name)}`, { state: { from: location.pathname + location.search + location.hash } })}
+                className="px-3 py-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-full text-xs font-semibold hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer text-gray-700 dark:text-gray-300"
+              >
+                {g.name}
+              </button>
+            ))}
           </div>
+        )}
+
+        {/* Overview */}
+        <motion.div layout className="max-w-3xl flex flex-col items-center overflow-hidden">
+          <motion.p 
+            layout="position"
+            className={`leading-relaxed text-sm md:text-base text-center text-gray-700 dark:text-gray-300 ${isOverviewExpanded ? '' : 'line-clamp-4'}`}
+          >
+            {tmdb?.overview}
+          </motion.p>
+          {tmdb?.overview && tmdb.overview.length > 200 && (
+            <motion.button 
+              layout="position"
+              onClick={() => setIsOverviewExpanded(!isOverviewExpanded)}
+              className="mt-2 text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors cursor-pointer"
+            >
+              {isOverviewExpanded ? 'Read less' : 'Read more'}
+            </motion.button>
+          )}
+        </motion.div>
+      </div>
+
+      <div className="px-4 sm:px-8 md:px-12 max-w-7xl mx-auto w-full">
 
           {/* CAST & CREW SECTION */}
           {(loadingCredits || castAndCrewList.length > 0) && (
@@ -2068,7 +2106,6 @@ export default function Details() {
             </div>
           )}
         </div>
-      </div>
     </motion.div>
   );
 }

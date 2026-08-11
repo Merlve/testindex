@@ -711,6 +711,29 @@ app.post('/api/downloads/track', async (req, res) => {
   }
 });
 
+app.get('/api/image-proxy', async (req, res) => {
+  try {
+    const imageUrl = req.query.url as string;
+    if (!imageUrl) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+    const response = await axios({
+      method: 'GET',
+      url: imageUrl,
+      responseType: 'stream'
+    });
+    // Copy the content-type header
+    if (response.headers['content-type']) {
+      res.setHeader('Content-Type', response.headers['content-type'] as string);
+    }
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    response.data.pipe(res);
+  } catch (err: any) {
+    console.error('[Image Proxy] Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch image' });
+  }
+});
+
 app.get('/api/downloads/top', async (req, res) => {
   try {
     const list = Object.values(downloadTracker || {});
@@ -1955,7 +1978,7 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
   res.json(results);
 });
 
-// Helper to attach status and credits if missing in full mode
+// Helper to attach status, credits, and images if missing in full mode
 async function attachFullDataToItem(item: any, searchType: string, tmdbKey: string) {
    if (!item || !item.id || !tmdbKey) return false;
    let modified = false;
@@ -1974,6 +1997,15 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
            const creditsRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/credits?api_key=${tmdbKey}`);
            if (creditsRes.data) {
                item.credits = creditsRes.data;
+               modified = true;
+           }
+       } catch(e) {}
+   }
+   if (!item.images) {
+       try {
+           const imagesRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
+           if (imagesRes.data) {
+               item.images = imagesRes.data;
                modified = true;
            }
        } catch(e) {}

@@ -317,13 +317,15 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-[#fffcf9] dark:bg-[#08080a] text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
 
-      {/* Floating Top Left Brand Pill (Persistent) */}
+      {/* Floating Top Left Brand Pill */}
       <div 
         id="floating-top-left-nav"
         className={`fixed top-4 left-4 md:left-6 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out ${
           isUnderlyingDark 
             ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
             : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
+        } ${
+          location.pathname.startsWith('/home') && isIdle && !sidebarOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >
         <Link to="/" className="flex items-center gap-2.5">
