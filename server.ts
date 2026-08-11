@@ -207,7 +207,7 @@ const adminMiddleware = async (req: express.Request, res: express.Response, next
 
   try {
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/me`;
-    const response = await axios.get(url, { headers: { Authorization: token } });
+    let response = await axios.get(url, { headers: { Authorization: token } });
     const role = response.data?.data?.role;
     if (response.data?.code === 200 && role !== undefined) {
       adminRoleCache.set(token, { role, expiry: Date.now() + 5 * 60 * 1000 });
@@ -258,6 +258,12 @@ async function saveConfig() {
 let tmdbCache: Record<string, any> = {};
 async function saveDb() {
   await writeSQLiteJSON('db', tmdbCache);
+}
+
+// TV Seasons persistence cache
+let tmdbSeasonCache: Record<string, any> = {};
+async function saveSeasonCache() {
+  await writeSQLiteJSON('tmdb_season_cache', tmdbSeasonCache);
 }
 
 // Actor filmography persistence cache
@@ -732,7 +738,7 @@ app.get('/api/image-proxy', async (req, res) => {
     if (!imageUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
-    const response = await axios({
+    let response = await axios({
       method: 'GET',
       url: imageUrl,
       responseType: 'stream'
@@ -1174,7 +1180,7 @@ async function syncLibraryToDatabase() {
           else if (year && searchType === 'tv') url += `&first_air_date_year=${year}`;
           
           try {
-             const response = await axios.get(url);
+             let response = await axios.get(url);
              if (response.data && response.data.results && response.data.results.length > 0) {
                  tmdbCache[cacheKey] = response.data.results[0];
                  newItemsAdded = true;
@@ -1428,7 +1434,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/auth/login`;
     console.log(`[LOGIN] Attempting to login via Openlist at: ${url}`);
-    const response = await axios.post(url, { username, password });
+    let response = await axios.post(url, { username, password });
     
     if (response.data.code === 200) {
       const masterApiKey = getOpenlistApiKey();
@@ -1530,7 +1536,7 @@ app.get('/api/auth/me', async (req, res) => {
        });
     }
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/me`;
-    const response = await axios.get(url, {
+    let response = await axios.get(url, {
       headers: { Authorization: token }
     });
     res.json(response.data);
@@ -1649,22 +1655,40 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
             }
         }
         if (cached) {
-            res.json(cached);
-            
-            // Background refresh (stale-while-revalidate)
-            axios.post(url, payload, { headers: { Authorization: token } }).then(response => {
-                if (response.data?.code === 200) {
-                    apiCache.set(cacheKey, response.data, 86400);
-                    writeSQLiteJSON(cacheKey, response.data).catch(console.error);
-                }
-            }).catch(e => console.error('Background refresh failed for fs/list:', e.message));
-            return;
+            const content = cached.data?.content;
+            if (!content || content.length === 0) {
+                cached = null;
+            } else {
+                res.json(cached);
+                
+                // Background refresh (stale-while-revalidate)
+                axios.post(url, payload, { headers: { Authorization: token } }).then(response => {
+                    if (response.data?.code === 200) {
+                        apiCache.set(cacheKey, response.data, 86400);
+                        writeSQLiteJSON(cacheKey, response.data).catch(console.error);
+                    }
+                }).catch(e => console.error('Background refresh failed for fs/list:', e.message));
+                return;
+            }
         }
     }
 
-    const response = await axios.post(url, payload, {
+    let response = await axios.post(url, payload, {
       headers: { Authorization: token }
     });
+    if (response.data?.code === 200 && (!response.data.data?.content || response.data.data.content.length === 0) && !payload.refresh) {
+        payload.refresh = true;
+        try {
+            const retryResponse = await axios.post(url, payload, {
+                headers: { Authorization: token }
+            });
+            if (retryResponse.data?.code === 200) {
+                response = retryResponse;
+            }
+        } catch (e) {
+            console.error('Auto-refresh empty folder failed:', e);
+        }
+    }
     
     if (response.data?.code === 200) {
         apiCache.set(cacheKey, response.data, 86400); // 24 hours
@@ -1724,7 +1748,7 @@ app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
         return;
     }
 
-    const response = await axios.post(url, { path: reqPath, password: "" }, {
+    let response = await axios.post(url, { path: reqPath, password: "" }, {
       headers: { Authorization: token }
     });
     
@@ -1751,7 +1775,7 @@ app.post('/api/fs/remove', async (req, res) => {
     if (!names || !dir) return res.status(400).json({ error: 'Names and dir required' });
 
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/remove`;
-    const response = await axios.post(url, { names, dir }, {
+    let response = await axios.post(url, { names, dir }, {
       headers: { Authorization: token }
     });
     res.json(response.data);
@@ -1984,7 +2008,7 @@ app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) =>
     if (year && typeof year === 'string') {
       url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
     }
-    const response = await axios.get(url);
+    let response = await axios.get(url);
     
     let results = response.data.results || [];
     
@@ -2068,7 +2092,7 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
           url += searchType === 'movie' ? `&primary_release_year=${item.year}` : `&first_air_date_year=${item.year}`;
         }
         
-        const response = await axios.get(url);
+        let response = await axios.get(url);
         let data = response.data;
         
         if (data.results && data.results.length === 0) {
@@ -2124,12 +2148,17 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
 async function attachFullDataToItem(item: any, searchType: string, tmdbKey: string) {
    if (!item || !item.id || !tmdbKey) return false;
    let modified = false;
-   if (searchType === 'tv' && !item.status) {
+   if (searchType === 'tv' && (!item.status || !item.seasons)) {
        try {
            const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${tmdbKey}`);
-           if (idRes.data && idRes.data.status) {
-               item.status = idRes.data.status;
-               item.in_production = idRes.data.in_production;
+           if (idRes.data) {
+               if (idRes.data.status) {
+                   item.status = idRes.data.status;
+                   item.in_production = idRes.data.in_production;
+               }
+               if (idRes.data.seasons) {
+                   item.seasons = idRes.data.seasons;
+               }
                modified = true;
            }
        } catch(e) {}
@@ -2245,7 +2274,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
           url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
         }
         try {
-            const response = await axios.get(url);
+            let response = await axios.get(url);
             data = response.data;
         } catch(e) {}
     }
@@ -2325,7 +2354,7 @@ app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
 
   try {
     const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(String(type).toUpperCase()) ? 'tv' : 'movie';
-    const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/videos?api_key=${tmdbKey}`);
+    let response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/videos?api_key=${tmdbKey}`);
     res.json(response.data);
   } catch (err: any) {
     res.json(null);
@@ -2379,7 +2408,7 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
         
         try {
             const payload: any = { path: normalizedPath, password: "", refresh: true };
-            const response = await axios.post(listUrl, payload, {
+            let response = await axios.post(listUrl, payload, {
               headers: { Authorization: token }
             });
             
@@ -2489,7 +2518,7 @@ app.post('/api/meta/scan_credits/start', adminMiddleware, (req, res) => {
             try {
               const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t.toUpperCase());
               const searchType = isTvType(category) ? 'tv' : 'movie';
-              const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/credits?api_key=${tmdbKey}`);
+              let response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/credits?api_key=${tmdbKey}`);
               if (response.data) {
                 tmdbCache[key].credits = response.data;
                 modified = true;
@@ -2579,7 +2608,7 @@ app.post('/api/meta/scan_images/start', adminMiddleware, (req, res) => {
             try {
               const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t.toUpperCase());
               const searchType = isTvType(category) ? 'tv' : 'movie';
-              const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
+              let response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
               if (response.data) {
                 tmdbCache[key].images = response.data;
                 modified = true;
@@ -2642,7 +2671,7 @@ app.get('/api/meta/credits', cacheMiddleware(3600, true), async (req, res) => {
   try {
     const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t.toUpperCase());
     const searchType = isTvType(String(type)) ? 'tv' : 'movie';
-    const response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/credits?api_key=${tmdbKey}`);
+    let response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/credits?api_key=${tmdbKey}`);
     const data = response.data || { cast: [], crew: [] };
     
     let dbUpdated = false;
@@ -2887,7 +2916,7 @@ app.get('/api/meta/tv_details', cacheMiddleware(3600, true), async (req, res) =>
   if (!tmdbKey) return res.json(null);
 
   try {
-    const response = await axios.get(`https://api.themoviedb.org/3/tv/${tvId}?api_key=${tmdbKey}`);
+    let response = await axios.get(`https://api.themoviedb.org/3/tv/${tvId}?api_key=${tmdbKey}`);
     res.json(response.data);
   } catch (err: any) {
     res.json(null);
@@ -2897,11 +2926,21 @@ app.get('/api/meta/tv_details', cacheMiddleware(3600, true), async (req, res) =>
 app.get('/api/meta/tv_season', cacheMiddleware(3600, true), async (req, res) => {
   const { tvId, season } = req.query;
   if (!tvId || !season) return res.status(400).json({ error: 'tvId and season required' });
+  
+  const cacheKey = `${tvId}_${season}`;
+  if (tmdbSeasonCache[cacheKey]) {
+      return res.json(tmdbSeasonCache[cacheKey]);
+  }
+
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return res.json(null);
 
   try {
-    const response = await axios.get(`https://api.themoviedb.org/3/tv/${tvId}/season/${season}?api_key=${tmdbKey}`);
+    let response = await axios.get(`https://api.themoviedb.org/3/tv/${tvId}/season/${season}?api_key=${tmdbKey}`);
+    if (response.data) {
+        tmdbSeasonCache[cacheKey] = response.data;
+        saveSeasonCache();
+    }
     res.json(response.data);
   } catch (err: any) {
     res.json(null);
@@ -3393,7 +3432,7 @@ app.get('/api/meta/discover', cacheMiddleware(3600, true), async (req, res) => {
     const params = new URLSearchParams(req.query as any);
     params.set('api_key', tmdbKey);
     const url = `https://api.themoviedb.org/3/discover/movie?${params.toString()}`;
-    const response = await axios.get(url);
+    let response = await axios.get(url);
     res.json(response.data);
   } catch (error: any) {
     console.error('TMDB Discover Error', error.message);
@@ -3407,7 +3446,7 @@ app.get('/api/meta/trending', cacheMiddleware(3600, true), async (req, res) => {
   
   try {
     const url = `https://api.themoviedb.org/3/trending/all/day?api_key=${tmdbKey}`;
-    const response = await axios.get(url);
+    let response = await axios.get(url);
     res.json(response.data);
   } catch (error: any) {
     console.error('TMDB Trending Error', error.message);
@@ -3486,11 +3525,11 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     
     let data = null;
     try {
-      const response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}`);
+      let response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}`);
       data = response.data;
     } catch (e) {
       try {
-        const response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}`);
+        let response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}`);
         data = response.data;
       } catch (e2) {
         return res.status(404).json({ error: 'Not found on TMDB' });
@@ -3941,7 +3980,7 @@ app.post('/api/meta/autofetch/start', adminMiddleware, (req, res) => {
               if (year) {
                 url += searchType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
               }
-              const response = await axios.get(url);
+              let response = await axios.get(url);
               let data = response.data;
 
               if (data.results && data.results.length === 0) {
@@ -3983,12 +4022,17 @@ app.post('/api/meta/autofetch/start', adminMiddleware, (req, res) => {
 
               if (data.results && data.results.length > 0) {
                 let topResult = data.results[0];
-                if (searchType === 'tv' && topResult.id && !topResult.status) {
+                if (searchType === 'tv' && topResult.id && (!topResult.status || !topResult.seasons)) {
                     try {
                         const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${topResult.id}?api_key=${tmdbKey}`);
-                        if (idRes.data && idRes.data.status) {
-                            topResult.status = idRes.data.status;
-                            topResult.in_production = idRes.data.in_production;
+                        if (idRes.data) {
+                            if (idRes.data.status) {
+                                topResult.status = idRes.data.status;
+                                topResult.in_production = idRes.data.in_production;
+                            }
+                            if (idRes.data.seasons) {
+                                topResult.seasons = idRes.data.seasons;
+                            }
                         }
                     } catch(e) {}
                 }
@@ -4132,7 +4176,7 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
                         modified = true;
                     };
 
-                    const response = await axios.get(url);
+                    let response = await axios.get(url);
                     if (item._jf?.tmdbId && response.data) {
                         const targetData = response.data.results ? response.data.results[0] || response.data : response.data;
                         await setCacheKeys(targetData);
@@ -4241,6 +4285,7 @@ export async function initSQLiteState() {
     jfOverrides = (await readSQLiteJSON('jf_override')) || {};
     downloadTracker = (await readSQLiteJSON('download_tracker')) || {};
     actorCache = (await readSQLiteJSON('actor_cache')) || {};
+    tmdbSeasonCache = (await readSQLiteJSON('tmdb_season_cache')) || {};
   } catch (err) {
     console.error("Error during initSQLiteState:", err);
   }

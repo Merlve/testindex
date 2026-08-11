@@ -355,7 +355,7 @@ export default function Details() {
   const searchTimeoutRef = useRef<any>(null);
 
   // TV Shows Season State
-  const [activeSeasonIndex, setActiveSeasonIndex] = useState(0);
+  const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(null);
   const [seasonTmdb, setSeasonTmdb] = useState<any>(null);
   const [loadingSeasonTmdb, setLoadingSeasonTmdb] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -602,13 +602,13 @@ export default function Details() {
         })
       : [{ label: 'Season 1', seasonNum: 1, folderName: '' }];
 
-  const activeSeasonTab = seasonTabs[activeSeasonIndex] || seasonTabs[0];
+  const activeSeasonTab = activeSeasonIndex !== null ? seasonTabs[activeSeasonIndex] : null;
   const activeSeasonPath = activeSeasonTab?.folderName 
     ? `${actualOpenlistPath}/${activeSeasonTab.folderName}` 
     : (isVideoFile(name) ? actualOpenlistPath.split('/').slice(0, -1).join('/') : actualOpenlistPath);
 
   // Refresh folder directly bypassing cache
-  const handleRefreshFolder = async () => {
+  const handleRefreshFolder = async (target: 'root' | 'subfolder' | 'auto' = 'auto') => {
     if (refreshing || !token) return;
     setRefreshing(true);
     setLoadingFiles(true);
@@ -635,7 +635,9 @@ export default function Details() {
       } else {
         const isSubfolderActive = !isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath;
 
-        if (isSubfolderActive && hasRefreshedRoot) {
+        const shouldRefreshSubfolder = target === 'subfolder' || (target === 'auto' && isSubfolderActive && hasRefreshedRoot);
+
+        if (shouldRefreshSubfolder && isSubfolderActive) {
           // Refresh active subfolder directory (e.g. S01, S02, etc.)
           const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
           const seasonRes = await axios.post(
@@ -649,7 +651,7 @@ export default function Details() {
           const subfolderLabel = activeSeasonTab?.label || 'Subfolder';
           setToast(`${subfolderLabel} folder refreshed`);
           setTimeout(() => setToast(''), 3000);
-        } else {
+        } else if (target === 'root' || target === 'auto') {
           // Refresh parent/root directory list
           const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
           const baseRes = await axios.post(
@@ -665,12 +667,12 @@ export default function Details() {
             }
           }
 
-          // Fetch active season directory list if present
-          if (isSubfolderActive) {
+          // Fetch active season directory list if present (if we're inside one)
+          if (isSubfolderActive && activeSeasonIndex !== null) {
             const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
             const seasonRes = await axios.post(
               '/api/fs/list',
-              { reqPath: fetchSeasonPath },
+              { reqPath: fetchSeasonPath, refresh: true }, // We might want to force refresh it too if we just refreshed root, or maybe just standard fetch
               { headers: { Authorization: token } }
             );
             if (seasonRes.data?.code === 200) {
@@ -1718,7 +1720,7 @@ export default function Details() {
                       <Film size={15} /> Movie File{videoItems.length !== 1 ? 's' : ''} Available {videoItems.length > 1 ? `(${videoItems.length})` : ''}
                     </div>
                     <button
-                      onClick={handleRefreshFolder}
+                      onClick={() => handleRefreshFolder()}
                       disabled={refreshing}
                       title="Refresh folder directory from OpenList"
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
@@ -1996,11 +1998,87 @@ export default function Details() {
                     Log In
                   </button>
                 </div>
+              ) : activeSeasonIndex === null ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-extrabold text-black dark:text-white">Seasons</h3>
+                    <button
+                      onClick={() => handleRefreshFolder('root')}
+                      disabled={refreshing}
+                      title="Force refresh root folder to detect new seasons"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
+                    >
+                      <RefreshCw size={13} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+                      <span className="hidden sm:inline">{refreshing ? "Refreshing..." : "Refresh Root"}</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
+                    {seasonTabs.map((tab, idx) => {
+                      const seasonMeta = tmdb?.seasons?.find((s: any) => s.season_number === tab.seasonNum);
+                      const posterUrl = seasonMeta?.poster_path 
+                        ? `https://image.tmdb.org/t/p/w500${seasonMeta.poster_path}` 
+                        : (tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : null);
+                      
+                      return (
+                        <div key={idx} className="flex flex-col gap-1 sm:gap-2">
+                          <div 
+                            onClick={() => {
+                              setActiveSeasonIndex(idx);
+                              setSelectedItems([]);
+                            }}
+                            className="group relative rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 aspect-[2/3] transition-[transform,shadow] duration-300 sm:hover:-translate-y-2 sm:hover:scale-[1.02] sm:hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] shadow-xl active:scale-[0.98]"
+                          >
+                            {posterUrl ? (
+                              <img src={posterUrl} alt={tab.label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center">
+                                <MonitorPlay className="w-10 h-10 mb-2 opacity-30 text-black dark:text-white" />
+                                <span className="font-bold text-xs opacity-50 text-black dark:text-white text-center break-words">{tab.label}</span>
+                              </div>
+                            )}
+                            
+                            {/* Number badge on top right like jellyfin */}
+                            {tab.seasonNum !== undefined && tab.seasonNum !== 0 && (
+                              <div className="absolute top-0 right-0 bg-purple-900/60 backdrop-blur-md text-white font-black text-sm sm:text-lg w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-bl-2xl sm:rounded-bl-3xl shadow-lg border-l border-b border-purple-400/20">
+                                {tab.seasonNum}
+                              </div>
+                            )}
+                            
+                            {/* Play overlay button on bottom right */}
+                            <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-8 h-8 sm:w-10 sm:h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-900/50 opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 z-10 hover:bg-emerald-400">
+                               <Play size={16} className="ml-0.5 sm:w-5 sm:h-5 sm:ml-1 fill-current" />
+                            </div>
+                            
+                            {/* Subtle dark gradient at bottom for contrast */}
+                            <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                          </div>
+                          
+                          <div className="text-center px-1">
+                             <h4 className="text-black dark:text-white font-bold text-[11px] sm:text-sm truncate">{tab.label}</h4>
+                             {seasonMeta?.episode_count && (
+                               <p className="text-gray-500 dark:text-gray-400 text-[9px] sm:text-[11px] font-semibold">{seasonMeta.episode_count} Episodes</p>
+                             )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
                 <div className="space-y-6">
                   {/* Season Horizontal Selector Tabs */}
                   {seasonTabs.length > 0 && (
                     <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-black/10 dark:border-white/10 no-scrollbar">
+                      <button
+                        onClick={() => {
+                          setActiveSeasonIndex(null);
+                          setSelectedItems([]);
+                        }}
+                        className="px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all whitespace-nowrap cursor-pointer bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 flex items-center gap-1.5 shrink-0"
+                      >
+                        <ChevronLeft size={16} /> Seasons
+                      </button>
+                      <div className="w-px h-6 bg-black/10 dark:bg-white/10 mx-1 shrink-0"></div>
                       {seasonTabs.map((tab, idx) => (
                         <button
                           key={idx}
@@ -2083,22 +2161,14 @@ export default function Details() {
                       )}
 
                       <button
-                        onClick={handleRefreshFolder}
+                        onClick={() => handleRefreshFolder('subfolder')}
                         disabled={refreshing}
-                        title={
-                          !isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath
-                            ? (hasRefreshedRoot ? `Refresh ${activeSeasonTab?.label || 'Season'} subfolder` : "Refresh Root folder")
-                            : "Refresh folder directory from OpenList"
-                        }
+                        title={`Refresh ${activeSeasonTab?.label || 'Season'} subfolder`}
                         className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black dark:text-white border border-black/10 dark:border-white/10 text-xs font-bold transition cursor-pointer shrink-0 disabled:opacity-50"
                       >
                         <RefreshCw size={14} className={refreshing ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
                         <span className="hidden sm:inline">
-                          {refreshing 
-                            ? "Refreshing..." 
-                            : (!isMovieCategory && activeSeasonPath && activeSeasonPath !== actualOpenlistPath && hasRefreshedRoot
-                                ? `Refresh ${activeSeasonTab?.label || 'Season'}` 
-                                : "Refresh Folder")}
+                          {refreshing ? "Refreshing..." : `Refresh ${activeSeasonTab?.label || 'Folder'}`}
                         </span>
                       </button>
                     </div>
