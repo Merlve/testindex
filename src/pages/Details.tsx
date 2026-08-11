@@ -356,6 +356,8 @@ export default function Details() {
 
   // TV Shows Season State
   const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(null);
+  const clickedSeasonTab = useRef(false);
+  const prefetchedFirstSeasonRef = useRef(false);
   const [seasonTmdb, setSeasonTmdb] = useState<any>(null);
   const [loadingSeasonTmdb, setLoadingSeasonTmdb] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -364,6 +366,8 @@ export default function Details() {
 
   useEffect(() => {
     setHasRefreshedRoot(false);
+    prefetchedFirstSeasonRef.current = false;
+    clickedSeasonTab.current = false;
   }, [fullPath, actualOpenlistPath]);
 
   // Watched state
@@ -811,8 +815,11 @@ export default function Details() {
 
   // Fetch TV Show Season Items
   useEffect(() => {
-    if (isMovieCategory || preloaded) return;
+    if (isMovieCategory) return;
     
+    // If it's preloaded, and we haven't manually clicked a season tab yet, don't overwrite
+    if (preloaded && !clickedSeasonTab.current) return;
+
     let isMounted = true;
     const fetchSeasonList = async () => {
       setLoadingFiles(true);
@@ -822,7 +829,9 @@ export default function Details() {
           if (isMounted) setSeasonItems([{ name, is_dir: false }]);
         } else if (token) {
           const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
-          const res = await axios.post('/api/fs/list', { reqPath: fetchSeasonPath }, { headers: { Authorization: token } });
+          
+          const res = await axios.post('/api/fs/list', { reqPath: fetchSeasonPath, refresh: false }, { headers: { Authorization: token } });
+          
           if (isMounted && res.data.code === 200) {
             setSeasonItems(res.data.data?.content || []);
           }
@@ -843,6 +852,18 @@ export default function Details() {
     return () => { isMounted = false; };
   }, [activeSeasonPath, token, isMovieCategory, baseItems.length]);
 
+  // Pre-fetch the first season's episode list in the background to eliminate network waterfall on click
+  useEffect(() => {
+    if (isMovieCategory || !token || seasonTabs.length === 0 || prefetchedFirstSeasonRef.current) return;
+    
+    prefetchedFirstSeasonRef.current = true;
+    const firstSeasonFolder = seasonTabs[0].folderName;
+    const fetchPath = firstSeasonFolder ? `${actualOpenlistPath}/${firstSeasonFolder}` : actualOpenlistPath;
+    const normalizedFetchPath = fetchPath.startsWith('/') ? fetchPath : `/${fetchPath}`;
+    
+    // Silent background fetch to warm up backend SQLite cache
+    axios.post('/api/fs/list', { reqPath: normalizedFetchPath, refresh: false }, { headers: { Authorization: token } }).catch(() => {});
+  }, [isMovieCategory, token, seasonTabs, actualOpenlistPath]);
 
   // Save unified state to LocalDB and Backend SQLite
   useEffect(() => {
@@ -2023,6 +2044,7 @@ export default function Details() {
                         <div key={idx} className="flex flex-col gap-1 sm:gap-2">
                           <div 
                             onClick={() => {
+                              clickedSeasonTab.current = true;
                               setActiveSeasonIndex(idx);
                               setSelectedItems([]);
                             }}
