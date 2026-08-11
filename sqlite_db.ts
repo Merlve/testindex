@@ -25,11 +25,37 @@ export async function initSQLiteDB() {
   try {
     const database = await getDB();
     await database.exec('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)');
+    await database.exec('CREATE TABLE IF NOT EXISTS details_cache (path TEXT PRIMARY KEY, tmdb_data TEXT, base_items TEXT, season_items TEXT, updated_at INTEGER)');
   } catch (e) {
     console.error('Failed to initialize local SQLite database:', String(e));
   }
 
   try {
+    // Check if data/db.json or db.json exists on disk and import any saved corrections/metadata
+    let dbJsonPath = path.join(dbDir, 'db.json');
+    if (!fs.existsSync(dbJsonPath)) {
+      dbJsonPath = path.join(process.cwd(), 'db.json');
+    }
+    if (fs.existsSync(dbJsonPath)) {
+      try {
+        const raw = fs.readFileSync(dbJsonPath, 'utf8').trim();
+        if (raw) {
+          const diskDb = JSON.parse(raw);
+          const currentSqliteDb = await readSQLiteJSON('db') || {};
+          const merged = { ...diskDb, ...currentSqliteDb };
+          // Preserve overrides from diskDb
+          for (const k of Object.keys(diskDb)) {
+            if (diskDb[k]?._overridden) {
+              merged[k] = diskDb[k];
+            }
+          }
+          await writeSQLiteJSON('db', merged);
+        }
+      } catch (e) {
+        console.error('Failed to sync db.json on startup:', e);
+      }
+    }
+
     const migrationFlag = await readSQLiteJSON('_migration_complete');
     if (migrationFlag) {
       return; // Already migrated
@@ -171,7 +197,61 @@ export async function writeSQLiteJSON(key: string, value: any) {
       'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
       [key, valToStore]
     );
+
+    if (key === 'db') {
+      try {
+        fs.writeFileSync(path.join(dbDir, 'db.json'), JSON.stringify(value, null, 2), 'utf8');
+        fs.writeFileSync(path.join(process.cwd(), 'db.json'), JSON.stringify(value, null, 2), 'utf8');
+      } catch (e) {
+        console.error('Failed to sync db.json to disk:', e);
+      }
+    } else if (key === 'config') {
+      try {
+        fs.writeFileSync(path.join(dbDir, 'config.json'), JSON.stringify(value, null, 2), 'utf8');
+        fs.writeFileSync(path.join(process.cwd(), 'config.json'), JSON.stringify(value, null, 2), 'utf8');
+      } catch (e) {
+        console.error('Failed to sync config.json to disk:', e);
+      }
+    }
   } catch (e) {
     console.error(`Error writing ${key} to SQLite:`, e);
+  }
+}
+
+
+// Details Cache Service Layer
+export async function getDetailsCache(path: string) {
+  try {
+    const database = await getDB();
+    const row = await database.get('SELECT * FROM details_cache WHERE path = ?', path);
+    if (row) {
+      return {
+        tmdbData: row.tmdb_data ? JSON.parse(row.tmdb_data) : null,
+        baseItems: row.base_items ? JSON.parse(row.base_items) : [],
+        seasonItems: row.season_items ? JSON.parse(row.season_items) : [],
+        updatedAt: row.updated_at
+      };
+    }
+  } catch (e) {
+    console.error('Error reading details cache:', e);
+  }
+  return null;
+}
+
+export async function updateDetailsCache(path: string, tmdbData: any, baseItems: any[], seasonItems: any[]) {
+  try {
+    const database = await getDB();
+    await database.run(
+      'INSERT INTO details_cache (path, tmdb_data, base_items, season_items, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET tmdb_data=excluded.tmdb_data, base_items=excluded.base_items, season_items=excluded.season_items, updated_at=excluded.updated_at',
+      [
+        path,
+        tmdbData ? JSON.stringify(tmdbData) : null,
+        baseItems ? JSON.stringify(baseItems) : null,
+        seasonItems ? JSON.stringify(seasonItems) : null,
+        Date.now()
+      ]
+    );
+  } catch (e) {
+    console.error('Error updating details cache:', e);
   }
 }

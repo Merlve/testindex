@@ -10,14 +10,29 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+
+// Auto-retry outgoing Axios requests on HTTP 429 (rate limits) with exponential backoff
+axios.interceptors.response.use(
+  response => response,
+  async error => {
+    const config = error?.config;
+    if (error?.response?.status === 429 && config && (config._retryCount || 0) < 3) {
+      config._retryCount = (config._retryCount || 0) + 1;
+      const delay = config._retryCount * 1200;
+      console.warn(`[Server Axios] HTTP 429 Rate limited on ${config.url}. Retrying attempt ${config._retryCount}/3 in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return axios(config);
+    }
+    return Promise.reject(error);
+  }
+);
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import { createRequire } from 'module';
-import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB } from './sqlite_db';
+import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB, getDetailsCache, updateDetailsCache, getDB } from './sqlite_db';
 
-const _require = typeof require !== 'undefined' ? require : createRequire(import.meta.url);
-const _filename = typeof __filename !== 'undefined' ? __filename : fileURLToPath(import.meta.url);
-const _dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(_filename);
+const _filename = typeof __filename !== 'undefined' ? __filename : process.cwd();
+const _dirname = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
 
 
 
@@ -1236,7 +1251,7 @@ app.get('/api/admin/diagnostic', adminMiddleware, async (req, res) => {
   }
 
   try {
-    const { getDB } = require('./sqlite_db');
+    
     const database = await getDB();
     const rs = await database.get('SELECT count(*) as count FROM kv_store');
     result.sqliteDbQueryable = true;
@@ -1521,6 +1536,82 @@ app.get('/api/auth/me', async (req, res) => {
     res.json(response.data);
   } catch (error: any) {
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to verify auth' });
+  }
+});
+
+
+
+// API: Save Details to SQLite Cache
+app.post('/api/details/save', async (req, res) => {
+  try {
+    const { fullPath, tmdbData, baseItems, seasonItems } = req.body;
+    if (!fullPath) return res.status(400).json({ error: 'Missing fullPath' });
+    const cacheKey = `details_${fullPath}`;
+    await updateDetailsCache(cacheKey, tmdbData, baseItems, seasonItems);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save cache' });
+  }
+});
+
+// API: Unified Details Preload with Local SQLite Cache
+app.post('/api/details/preload', async (req, res) => {
+  try {
+    let token = req.headers.authorization;
+    const isGuest = isValidGuest(token || '');
+    if (isGuest) token = getOpenlistApiKey();
+    
+    const { fullPath, name, category, activeSeasonPath } = req.body;
+    if (!fullPath) return res.status(400).json({ error: 'Missing fullPath' });
+
+    // 1. Query Local SQLite Cache first
+    const cacheKey = `details_${fullPath}`;
+    const cached = await getDetailsCache(cacheKey);
+    
+    if (cached && cached.tmdbData && cached.baseItems && cached.baseItems.length > 0) {
+      res.json({ source: 'sqlite_cache', data: cached });
+      
+      // Background refresh (stale-while-revalidate)
+      (async () => {
+         try {
+           // Refetch tmdb skipped since it rarely changes
+           const typeStr = category || '';
+           const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(typeStr.toUpperCase()) ? 'tv' : 'movie';
+           const tmdbKey = process.env.TMDB_API_KEY;
+           
+           let newTmdb = cached.tmdbData;
+           // If we wanted to re-fetch TMDB we could, but it changes rarely.
+           // Let's just refetch file links
+           
+           const listUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`;
+           
+           // Fetch base
+           const baseRes = await axios.post(listUrl, { path: `/${fullPath}`, password: "" }, { headers: { Authorization: token } });
+           let newBaseItems = cached.baseItems;
+           if (baseRes.data?.code === 200) {
+              newBaseItems = baseRes.data.data?.content || [];
+           }
+
+           // Fetch season if TV
+           let newSeasonItems = cached.seasonItems;
+           if (searchType === 'tv' && activeSeasonPath) {
+              const seasonRes = await axios.post(listUrl, { path: `/${activeSeasonPath}`, password: "" }, { headers: { Authorization: token } });
+              if (seasonRes.data?.code === 200) {
+                 newSeasonItems = seasonRes.data.data?.content || [];
+              }
+           }
+           
+           await updateDetailsCache(cacheKey, newTmdb, newBaseItems, newSeasonItems);
+         } catch (e) {
+           console.error("Background refresh error in details/preload:", e.message);
+         }
+      })();
+      return;
+    }
+    
+    res.json({ source: 'network', data: null });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to preload details' });
   }
 });
 
@@ -2191,19 +2282,21 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
         } else {
           // STILL failing, try entirely WITHOUT a year!
           let urlNoYear = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
-          const noYearRes = await axios.get(urlNoYear);
-          if (noYearRes.data?.results?.length > 0) {
-             data = noYearRes.data;
-          } else {
-              let altQuery = null;
-              if (query.includes('&')) altQuery = query.replace(/&/g, 'and');
-              else if (query.match(/\band\b/i)) altQuery = query.replace(/\band\b/ig, '&');
-              if (altQuery) {
-                let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
-                const altPrevRes = await axios.get(altUrl);
-                if (altPrevRes.data?.results?.length > 0) data = altPrevRes.data;
-              }
-          }
+          try {
+            const noYearRes = await axios.get(urlNoYear);
+            if (noYearRes.data?.results?.length > 0) {
+               data = noYearRes.data;
+            } else {
+                let altQuery = null;
+                if (query.includes('&')) altQuery = query.replace(/&/g, 'and');
+                else if (query.match(/\band\b/i)) altQuery = query.replace(/\band\b/ig, '&');
+                if (altQuery) {
+                  let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
+                  const altPrevRes = await axios.get(altUrl);
+                  if (altPrevRes.data?.results?.length > 0) data = altPrevRes.data;
+                }
+            }
+          } catch(e) {}
         }
       } catch(e) {}
     }

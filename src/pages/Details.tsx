@@ -12,6 +12,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
 import { getGenresWithIds } from '../utils/genres';
+import { getLocalCache, setLocalCache } from '../services/localDB';
 import { clearRecommendationsCache } from './Recommendations';
 import { MediaItem, TMDBData } from '../types';
 import VideoPlayer from '../components/VideoPlayer';
@@ -269,30 +270,6 @@ export default function Details() {
   
   const [showPathModal, setShowPathModal] = useState(false);
   const [manualPathInput, setManualPathInput] = useState(fullPath.replace(/^\//, ''));
-  const [dominantColor, setDominantColor] = useState<string | null>(null);
-
-  useEffect(() => {
-    const rawPosterUrl = tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w780${tmdb.backdrop_path}` : null;
-    if (rawPosterUrl) {
-      const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(rawPosterUrl)}`;
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const fac = new FastAverageColor();
-          const color = fac.getColor(img, { algorithm: 'dominant' });
-          setDominantColor(color.rgba);
-          fac.destroy();
-        } catch (e) {
-          console.error('[FAC] Error processing image', e);
-        }
-      };
-      img.onerror = (e) => {
-        console.error('[FAC] Error loading image', e);
-      };
-      img.src = proxyUrl;
-    }
-  }, [tmdb?.poster_path, tmdb?.backdrop_path]);
 
   const handleUpdateDigitalPath = async () => {
     if (user !== 'admin' || !tmdb?.id) return;
@@ -742,8 +719,50 @@ export default function Details() {
     }
   };
 
+
+  // Local Database Cache Layer to instantly eliminate skeletons
+  const [preloaded, setPreloaded] = useState(false);
+  useEffect(() => {
+    let isMounted = true;
+    
+    // 1. Check local browser IndexedDB instantly
+    getLocalCache(fullPath).then(cachedLocal => {
+       if (isMounted && cachedLocal && !preloaded) {
+         if (cachedLocal.tmdbData) setTmdb(cachedLocal.tmdbData);
+         if (cachedLocal.baseItems && cachedLocal.baseItems.length > 0) setBaseItems(cachedLocal.baseItems);
+         if (cachedLocal.seasonItems && cachedLocal.seasonItems.length > 0) setSeasonItems(cachedLocal.seasonItems);
+         setLoading(false);
+         setLoadingFiles(false);
+         setPreloaded(true);
+       }
+    });
+
+    // 2. Fetch from the unified backend SQLite Preload API
+    if (token && !preloaded) {
+      axios.post('/api/details/preload', { fullPath, name, category, activeSeasonPath }, { headers: { Authorization: token } })
+        .then(res => {
+          if (isMounted && res.data && res.data.source === 'sqlite_cache') {
+             const data = res.data.data;
+             if (data.tmdbData) setTmdb(data.tmdbData);
+             if (data.baseItems && data.baseItems.length > 0) setBaseItems(data.baseItems);
+             if (data.seasonItems && data.seasonItems.length > 0) setSeasonItems(data.seasonItems);
+             
+             // Save to local IndexedDB for future instant loads
+             setLocalCache(fullPath, data).catch(console.error);
+             
+             setLoading(false);
+             setLoadingFiles(false);
+             setPreloaded(true);
+          }
+        })
+        .catch(console.error);
+    }
+    return () => { isMounted = false; };
+  }, [fullPath, name, category, activeSeasonPath, token, preloaded]);
+
   // Fetch Base Items
   useEffect(() => {
+    if (preloaded) return;
     let isMounted = true;
     const fetchBaseList = async () => {
       setLoadingFiles(true);
@@ -790,7 +809,7 @@ export default function Details() {
 
   // Fetch TV Show Season Items
   useEffect(() => {
-    if (isMovieCategory) return;
+    if (isMovieCategory || preloaded) return;
     
     let isMounted = true;
     const fetchSeasonList = async () => {
@@ -822,8 +841,28 @@ export default function Details() {
     return () => { isMounted = false; };
   }, [activeSeasonPath, token, isMovieCategory, baseItems.length]);
 
+
+  // Save unified state to LocalDB and Backend SQLite
+  useEffect(() => {
+    if (tmdb && baseItems.length > 0 && !preloaded) {
+      const data = { tmdbData: tmdb, baseItems, seasonItems };
+      setLocalCache(fullPath, data).catch(() => {});
+      
+      if (token) {
+        axios.post('/api/details/save', {
+           fullPath,
+           tmdbData: tmdb,
+           baseItems,
+           seasonItems
+        }, { headers: { Authorization: token } }).catch(() => {});
+      }
+    }
+  }, [tmdb, baseItems, seasonItems, fullPath, preloaded, token]);
+
+
   // Fetch TMDB Main Metadata
   useEffect(() => {
+    if (preloaded) return;
     let isMounted = true;
     const fetchMetadata = async () => {
       if (!tmdb) {
@@ -993,15 +1032,71 @@ export default function Details() {
     document.body.removeChild(a);
   };
 
-  // Bulk Link Copy
+  // Single or Bulk Link Copy
   const getSignedUrl = async (fileName: string) => {
+    const basePath = isMovieCategory ? (isVideoFile(name) ? fullPath.split('/').slice(0, -1).join('/') : fullPath) : activeSeasonPath;
     try {
-      const res = await axios.post('/api/fs/get', { reqPath: `${activeSeasonPath}/${fileName}` }, { headers: { Authorization: token } });
+      const cleanPath = basePath.replace(/\/+$/, '');
+      const res = await axios.post('/api/fs/get', { reqPath: `${cleanPath}/${fileName}` }, { headers: { Authorization: token } });
       if (res.data?.data?.raw_url) return res.data.data.raw_url;
     } catch (e) {
       console.error(e);
     }
-    return `${config.openlistUrl}/d/${activeSeasonPath}/${fileName}`;
+    return `${config.openlistUrl}/d/${basePath}/${fileName}`;
+  };
+
+  const handleCopySingleLink = async (item: any, itemPath: string) => {
+    try {
+      let fileUrl = item.url;
+      if (!fileUrl && token) {
+        try {
+          const cleanPath = itemPath.replace(/\/+$/, '');
+          const res = await axios.post('/api/fs/get', { reqPath: `${cleanPath}/${item.name}` }, { headers: { Authorization: token } });
+          fileUrl = res.data?.data?.raw_url;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (!fileUrl) {
+        fileUrl = `${config.openlistUrl}/d/${itemPath}/${item.name}`;
+      }
+
+      try {
+        await navigator.clipboard.writeText(fileUrl);
+      } catch (err) {
+        const textArea = document.createElement("textarea");
+        textArea.value = fileUrl;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+
+      let downloadTitle = isMovieCategory
+        ? (tmdb?.title || tmdb?.name || parseMediaName(item?.name || name).cleanName || item?.name || name)
+        : (tmdb?.name || tmdb?.title || parseMediaName(name).cleanName || name);
+
+      if (downloadTitle) {
+        axios.post('/api/downloads/track', {
+          title: downloadTitle,
+          category,
+          isShow: !isMovieCategory,
+          fileName: item?.name
+        }, {
+          headers: { Authorization: token || '', 'x-user': user || '' }
+        }).catch(() => {});
+      }
+
+      setToast('Link copied to clipboard!');
+      setTimeout(() => setToast(''), 3000);
+    } catch (e) {
+      setToast('Failed to copy link');
+      setTimeout(() => setToast(''), 3000);
+    }
   };
 
   const handleCopyLinks = async () => {
@@ -1157,13 +1252,16 @@ export default function Details() {
       className="-mt-16 min-h-screen pb-24 relative overflow-x-hidden max-w-full z-0"
     >
       <div className="fixed inset-0 pointer-events-none z-[-2] bg-[#fffcf9] dark:bg-[#08080a]" />
-      <div 
-        className="fixed inset-0 pointer-events-none transition-all duration-1000 z-[-1]" 
-        style={{ 
-          background: dominantColor ? `linear-gradient(to bottom, ${dominantColor} 0%, transparent 100%)` : 'transparent',
-          opacity: 0.5
-        }} 
-      />
+      {(tmdb?.poster_path || tmdb?.backdrop_path) && (
+        <div className="fixed inset-0 pointer-events-none z-[-1] opacity-30 dark:opacity-[0.15] overflow-hidden">
+          <img 
+            src={`https://image.tmdb.org/t/p/w92${tmdb.poster_path || tmdb.backdrop_path}`}
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[150%] object-cover blur-[120px] saturate-200"
+            alt=""
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#fffcf9]/50 to-[#fffcf9] dark:via-[#08080a]/50 dark:to-[#08080a]" />
+        </div>
+      )}
       {/* Video Modal (Web Player) */}
       {playingUrl && (
         <div className="fixed inset-0 z-[130] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md p-4 sm:p-6">
@@ -1678,27 +1776,44 @@ export default function Details() {
                           </div>
                         </button>
 
-                        {/* Download Button Below */}
-                        <button
-                          onClick={() => handleDirectDownload(singleMovie, resolvedMoviePath)}
-                          className="w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white font-extrabold transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-xl bg-black/10 dark:bg-white/10 text-black dark:text-white">
-                              <Download size={22} />
+                        {/* Action Buttons Below: Download Direct & Copy Link */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            onClick={() => handleDirectDownload(singleMovie, resolvedMoviePath)}
+                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white font-extrabold transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-xl bg-black/10 dark:bg-white/10 text-black dark:text-white">
+                                <Download size={18} />
+                              </div>
+                              <div className="text-left">
+                                <div className="text-sm font-bold">Download Direct</div>
+                                <div className="text-[11px] text-gray-500 dark:text-gray-400 font-normal">Save file to device</div>
+                              </div>
                             </div>
-                            <div className="text-left">
-                              <div className="text-base font-bold">Download Direct</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400 font-normal">Save file to device</div>
-                            </div>
-                          </div>
 
-                          {meta.formattedSize && (
-                            <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-black/10 dark:bg-white/10 text-black dark:text-white">
-                              {meta.formattedSize}
-                            </span>
-                          )}
-                        </button>
+                            {meta.formattedSize && (
+                              <span className="px-2 py-0.5 rounded-lg text-xs font-extrabold bg-black/10 dark:bg-white/10 text-black dark:text-white">
+                                {meta.formattedSize}
+                              </span>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => handleCopySingleLink(singleMovie, resolvedMoviePath)}
+                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white font-extrabold transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-xl bg-black/10 dark:bg-white/10 text-black dark:text-white">
+                                <Copy size={18} />
+                              </div>
+                              <div className="text-left">
+                                <div className="text-sm font-bold">Copy Link</div>
+                                <div className="text-[11px] text-gray-500 dark:text-gray-400 font-normal">Copy direct file link</div>
+                              </div>
+                            </div>
+                          </button>
+                        </div>
                       </div>
                     );
                   })()
@@ -1722,6 +1837,15 @@ export default function Details() {
                       </label>
 
                       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                        {selectedItems.length > 0 && (
+                          <button
+                            onClick={handleCopyLinks}
+                            className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-purple-600/15 hover:bg-purple-600/25 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs font-bold transition cursor-pointer shrink-0"
+                            title="Copy Selected Links"
+                          >
+                            <Copy size={14} /> <span className="hidden sm:inline">Copy Links</span>
+                          </button>
+                        )}
                         {selectedItems.length > 0 && user && user !== 'guest' && (
                           <>
                             <button
@@ -1832,6 +1956,13 @@ export default function Details() {
                               title="Download file"
                             >
                               <Download size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleCopySingleLink(mItem, fullPath)}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white font-semibold text-xs transition cursor-pointer"
+                              title="Copy direct file link"
+                            >
+                              <Copy size={14} />
                             </button>
                           </div>
                         </div>
@@ -2100,6 +2231,14 @@ export default function Details() {
                                 title="Download episode"
                               >
                                 <Download size={13} />
+                              </button>
+
+                              <button
+                                onClick={() => handleCopySingleLink(epItem, activeSeasonPath)}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-600/50 text-black dark:text-white font-semibold text-xs transition cursor-pointer"
+                                title="Copy episode direct link"
+                              >
+                                <Copy size={13} />
                               </button>
                             </div>
                           </div>

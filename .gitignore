@@ -18,3 +18,7 @@ users_expirations.json
 library_index.json
 genre_backdrops_cache.json
 data/
+*.patch
+*.diff
+patch*.js
+query*.cjs

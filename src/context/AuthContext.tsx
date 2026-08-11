@@ -72,7 +72,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         }
         return response;
       },
-      error => {
+      async error => {
+        const config = error?.config;
+        if (error?.response?.status === 429 && config && (config._retryCount || 0) < 3) {
+          config._retryCount = (config._retryCount || 0) + 1;
+          const delay = config._retryCount * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return axios(config);
+        }
         if (error.response && (error.response.status === 401 || (typeof error.response.data === 'string' && error.response.data.toLowerCase().includes('invalidated')) || (error.response.data && error.response.data.message && typeof error.response.data.message === 'string' && error.response.data.message.toLowerCase().includes('invalidated')))) {
           logout();
         }
