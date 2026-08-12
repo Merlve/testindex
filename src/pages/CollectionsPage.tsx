@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
+import { getTmdbImage } from '../utils/tmdbImage';
 import { 
   Library, ChevronLeft, Plus, Search, Filter, Globe, Lock, 
   ThumbsUp, Bookmark, Sparkles, X, Check, Eye, SlidersHorizontal, User, Trash2
@@ -502,9 +503,9 @@ export default function CollectionsPage() {
                       const posterPath = bgItem?.posterPath || bgItem?.poster_path;
                       
                       const bgUrl = backdropPath 
-                        ? (backdropPath.startsWith('http') ? backdropPath : `https://image.tmdb.org/t/p/w500${backdropPath.startsWith('/') ? backdropPath : `/${backdropPath}`}`)
+                        ? (backdropPath.startsWith('http') ? backdropPath : getTmdbImage(backdropPath, 'backdrop'))
                         : posterPath
-                          ? (posterPath.startsWith('http') ? posterPath : `https://image.tmdb.org/t/p/w500${posterPath.startsWith('/') ? posterPath : `/${posterPath}`}`)
+                          ? (posterPath.startsWith('http') ? posterPath : getTmdbImage(posterPath, 'backdrop'))
                           : null;
                       return bgUrl ? (
                         <div 
@@ -522,7 +523,7 @@ export default function CollectionsPage() {
                         {col.items.slice(0, 4).map((item, idx) => {
                           const itemPosterPath = item.posterPath || item.poster_path;
                           const posterUrl = itemPosterPath 
-                            ? (itemPosterPath.startsWith('http') ? itemPosterPath : `https://image.tmdb.org/t/p/w500${itemPosterPath}`)
+                            ? (itemPosterPath.startsWith('http') ? itemPosterPath : getTmdbImage(itemPosterPath, 'poster'))
                             : null;
                           const rotateDegs = [-12, -4, 4, 12];
                           const offsetX = [-50, -20, 10, 40];

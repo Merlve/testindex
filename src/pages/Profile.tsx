@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import { getTmdbImage } from '../utils/tmdbImage';
 import { 
   User, 
   Bookmark, 
@@ -471,7 +472,7 @@ export default function Profile() {
           ...item,
           displayTitle: episodeTitle,
           displaySubtitle: `${item.episodeInfo.showTitle}${item.episodeInfo.seasonNum !== null ? ` • Season ${item.episodeInfo.seasonNum}` : ''}`,
-          stillUrl: epTmdb.still_path ? `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w500${epTmdb.still_path}`)}` : (seasonTmdb?.poster_path ? `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w500${seasonTmdb.poster_path}`)}` : null),
+          stillUrl: epTmdb.still_path ? getTmdbImage(epTmdb.still_path, 'still') : (seasonTmdb?.poster_path ? getTmdbImage(seasonTmdb.poster_path, 'poster') : null),
           overview: epTmdb.overview || null,
           airDate: epTmdb.air_date || null,
           hasTmdbMeta: true
@@ -1434,6 +1435,28 @@ export default function Profile() {
               <div className="text-base sm:text-lg font-bold text-black dark:text-white flex items-center gap-2">
                 <Clock3 size={16} className="text-amber-400 shrink-0" />
                 <span>{inactivityTimeout > 0 ? `${inactivityTimeout} minutes auto-logout` : 'Disabled'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5">
+            <h4 className="text-sm font-bold text-black dark:text-white mb-4">App Preferences</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="p-4 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 space-y-2">
+                <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500">Image Quality</div>
+                <select 
+                  className="w-full bg-transparent border-none outline-none text-base font-bold text-black dark:text-white cursor-pointer"
+                  value={localStorage.getItem('shutter_image_quality') || 'high'}
+                  onChange={(e) => {
+                    localStorage.setItem('shutter_image_quality', e.target.value);
+                    window.location.reload();
+                  }}
+                >
+                  <option value="low" className="bg-white dark:bg-[#12121a]">Low (Faster Load, Saves Data)</option>
+                  <option value="medium" className="bg-white dark:bg-[#12121a]">Medium (Balanced)</option>
+                  <option value="high" className="bg-white dark:bg-[#12121a]">High (Default)</option>
+                  <option value="original" className="bg-white dark:bg-[#12121a]">Original (Max Quality)</option>
+                </select>
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router';
 import axios from 'axios';
+import { getTmdbImage } from '../utils/tmdbImage';
 import { useAuth } from '../context/AuthContext';
 import { Film } from 'lucide-react';
 
@@ -51,7 +52,7 @@ export default function GenresCarousel() {
         className="snap-start relative w-32 h-20 sm:w-56 sm:h-32 flex-shrink-0 rounded-2xl overflow-hidden isolate transform-gpu backface-hidden group hover:scale-105 transition-all shadow-md cursor-pointer border border-black/10 dark:border-white/10"
       >
         <img 
-          src={`https://image.tmdb.org/t/p/w500${genre.backdrop_path}`} 
+          src={getTmdbImage(genre.backdrop_path, 'backdrop') || ''} 
           alt={genre.name}
           className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
           loading="lazy"

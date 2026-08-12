@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import axios from 'axios';
+import { getTmdbImage } from '../utils/tmdbImage';
 import { useAuth } from '../context/AuthContext';
 import { User, Film, Tv, Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -54,7 +55,7 @@ export default function PersonDetails() {
   const person = data?.person || null;
   const movies = data?.movies || [];
   const shows = data?.shows || [];
-  const profileUrl = person?.profile_path ? (person.profile_path.startsWith('http') ? person.profile_path : `https://image.tmdb.org/t/p/w500${person.profile_path}`) : null;
+  const profileUrl = person?.profile_path ? (person.profile_path.startsWith('http') ? person.profile_path : getTmdbImage(person.profile_path, 'profile')) : null;
 
   const [bioExpanded, setBioExpanded] = useState(false);
   return (

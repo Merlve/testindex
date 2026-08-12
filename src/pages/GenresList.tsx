@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import axios from 'axios';
+import { getTmdbImage } from '../utils/tmdbImage';
 import { useAuth } from '../context/AuthContext';
 import { Film, ChevronLeft } from 'lucide-react';
 
@@ -74,7 +75,7 @@ export default function GenresList() {
             className="relative w-full aspect-video rounded-2xl overflow-hidden group hover:scale-105 transition-all shadow-md cursor-pointer border border-black/10 dark:border-white/10"
           >
             <img 
-              src={`https://image.tmdb.org/t/p/w500${genre.backdrop_path}`} 
+              src={getTmdbImage(genre.backdrop_path, 'backdrop') || ''} 
               alt={genre.name}
               className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
               loading="lazy"
