@@ -1531,7 +1531,7 @@ export default function Details() {
       {/* Backdrop Image */}
       {backdrop && (
         <div 
-           className="absolute top-0 left-0 right-0 h-[65vh] md:h-[75vh] pointer-events-none z-0"
+           className="absolute top-0 left-0 right-0 h-[52vh] sm:h-[60vh] md:h-[68vh] pointer-events-none z-0"
            style={{ WebkitMaskImage: 'linear-gradient(to top, transparent 0%, black 80%)', maskImage: 'linear-gradient(to top, transparent 0%, black 80%)' }}
         >
           <img 
@@ -1543,21 +1543,21 @@ export default function Details() {
       )}
 
       {/* Main Details Section */}
-      <div className="px-4 sm:px-8 md:px-12 pt-[40vh] sm:pt-[45vh] md:pt-[55vh] relative z-20 flex flex-col items-center text-center gap-6 mb-8 max-w-4xl mx-auto">
+      <div className="px-4 sm:px-8 md:px-12 pt-[32vh] sm:pt-[38vh] md:pt-[45vh] relative z-20 flex flex-col items-center text-center gap-6 mb-8 max-w-4xl mx-auto">
         {/* Logo / Title */}
         <div className="flex flex-col items-center gap-4 w-full">
           {logoUrl ? (
             <img 
               src={logoUrl} 
               alt={tmdb?.title || tmdb?.name || name} 
-              className="w-64 sm:w-80 md:w-96 max-h-40 object-contain drop-shadow-2xl select-none pointer-events-none" 
+              className="w-48 sm:w-60 md:w-72 max-h-28 sm:max-h-32 object-contain drop-shadow-2xl select-none pointer-events-none" 
               draggable={false} 
               onContextMenu={(e) => e.preventDefault()} 
             />
           ) : (
-            <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight drop-shadow-xl text-black dark:text-white break-words w-full text-balance">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight drop-shadow-xl text-black dark:text-white break-words w-full text-balance">
               {tmdb?.title || tmdb?.name || name}
-              {releaseYear ? <span className="font-normal ml-3 text-2xl text-gray-500 dark:text-gray-300">({releaseYear})</span> : null}
+              {releaseYear ? <span className="font-normal ml-3 text-xl sm:text-2xl text-gray-500 dark:text-gray-300">({releaseYear})</span> : null}
             </h1>
           )}
 
@@ -2339,7 +2339,7 @@ export default function Details() {
                     </div>
                   ) : (
                     <div className="text-gray-500 text-sm py-6 text-center">
-                      No episodes found in this season folder.
+                      Loading Episodes...
                     </div>
                   )}
                 </div>

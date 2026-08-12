@@ -11,11 +11,31 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 
+const invalidatedTokens = new Set<string>();
+
+function markTokenInvalidated(config: any) {
+    if (config?.headers?.Authorization || config?.headers?.authorization) {
+        const token = config.headers.Authorization || config.headers.authorization;
+        // Don't invalidate our own API key if we happen to get a 401 using it
+        if (token && token !== process.env.OPENLIST_API_KEY) {
+            invalidatedTokens.add(token);
+        }
+    }
+}
+
 // Auto-retry outgoing Axios requests on HTTP 429 (rate limits) with exponential backoff
 axios.interceptors.response.use(
-  response => response,
+  response => {
+      if (response.data && response.data.code === 401) {
+          markTokenInvalidated(response.config);
+      }
+      return response;
+  },
   async error => {
     const config = error?.config;
+    if (error?.response?.status === 401) {
+        markTokenInvalidated(config);
+    }
     if (error?.response?.status === 429 && config && (config._retryCount || 0) < 3) {
       config._retryCount = (config._retryCount || 0) + 1;
       const delay = config._retryCount * 1200;
@@ -129,7 +149,7 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
 
     const originalJson = res.json.bind(res);
     res.json = ((body: any) => {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (res.statusCode >= 200 && res.statusCode < 300 && (!body || body.code !== 401)) {
         apiCache.set(key, body, ttlSeconds);
         apiCache.set(normalKey, body, ttlSeconds);
         res.setHeader('Cache-Control', 'no-store');
@@ -151,7 +171,16 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use((req, res, next) => {
+  const token = req.headers.authorization;
+  if (token && invalidatedTokens.has(token)) {
+      return res.status(401).json({ code: 401, message: 'Token invalidated by server restart or expiry' });
+  }
+  next();
+});
+
+app.use((req, res, next) => {
   res.setHeader('x-server-boot-id', SERVER_BOOT_ID);
+  res.setHeader('Access-Control-Expose-Headers', 'x-server-boot-id');
   next();
 });
 
