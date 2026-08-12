@@ -471,7 +471,7 @@ export default function Profile() {
           ...item,
           displayTitle: episodeTitle,
           displaySubtitle: `${item.episodeInfo.showTitle}${item.episodeInfo.seasonNum !== null ? ` • Season ${item.episodeInfo.seasonNum}` : ''}`,
-          stillUrl: epTmdb.still_path ? `https://image.tmdb.org/t/p/w500${epTmdb.still_path}` : (seasonTmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${seasonTmdb.poster_path}` : null),
+          stillUrl: epTmdb.still_path ? `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w500${epTmdb.still_path}`)}` : (seasonTmdb?.poster_path ? `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w500${seasonTmdb.poster_path}`)}` : null),
           overview: epTmdb.overview || null,
           airDate: epTmdb.air_date || null,
           hasTmdbMeta: true

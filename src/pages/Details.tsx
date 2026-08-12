@@ -825,23 +825,10 @@ export default function Details() {
           }
         } else if (token) {
           const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
-          let searchSuccess = false;
-          try {
-             // Use Openlist Database Index for instant recursive fetch of all seasons and episodes
-             const res = await axios.post('/api/fs/search', { parent: fetchPath, keywords: "" }, { headers: { Authorization: token } });
-             if (res.data?.code === 200 && res.data?.data?.content && res.data.data.content.length > 0) {
-                setBaseItems(res.data.data.content);
-                searchSuccess = true;
-             }
-          } catch(err) {
-             console.error("Indexed search failed, falling back to list", err);
-          }
           
-          if (!searchSuccess) {
-            const res = await axios.post('/api/fs/list', { reqPath: fetchPath }, { headers: { Authorization: token } });
-            if (isMounted && res.data.code === 200) {
-              setBaseItems(res.data.data?.content || []);
-            }
+          const res = await axios.post('/api/fs/list', { reqPath: fetchPath }, { headers: { Authorization: token } });
+          if (isMounted && res.data.code === 200) {
+            setBaseItems(res.data.data?.content || []);
           }
         }
       } catch (err: any) {
@@ -2110,11 +2097,22 @@ export default function Details() {
                     </button>
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
-                    {seasonTabs.map((tab, idx) => {
+                    {loadingFiles && baseItems.length === 0 ? (
+                      [1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="flex flex-col gap-1 sm:gap-2 animate-pulse">
+                          <div className="rounded-xl sm:rounded-2xl bg-black/10 dark:bg-white/10 border border-black/5 dark:border-white/5 aspect-[2/3] w-full" />
+                          <div className="text-center px-1 flex flex-col items-center gap-1 mt-1">
+                             <div className="h-3 sm:h-4 w-2/3 bg-black/10 dark:bg-white/10 rounded" />
+                             <div className="h-2.5 sm:h-3 w-1/2 bg-black/10 dark:bg-white/10 rounded" />
+                          </div>
+                        </div>
+                      ))
+                    ) : seasonTabs.map((tab, idx) => {
                       const seasonMeta = tmdb?.seasons?.find((s: any) => s.season_number === tab.seasonNum);
-                      const posterUrl = seasonMeta?.poster_path 
+                      const rawPosterUrl = seasonMeta?.poster_path 
                         ? `https://image.tmdb.org/t/p/w500${seasonMeta.poster_path}` 
                         : (tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : null);
+                      const posterUrl = rawPosterUrl ? `/api/image-proxy?url=${encodeURIComponent(rawPosterUrl)}` : null;
                       
                       return (
                         <div key={idx} className="flex flex-col gap-1 sm:gap-2">
@@ -2292,7 +2290,8 @@ export default function Details() {
                           ? `${meta.episodeNum ? `E${meta.episodeNum < 10 ? '0' : ''}${meta.episodeNum}${meta.episodeNumEnd ? `-E${meta.episodeNumEnd < 10 ? '0' : ''}${meta.episodeNumEnd}` : ''}` : `Ep ${epIdx + 1}`} - ${epTmdb.name}`
                           : epItem.name.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
 
-                        const epStill = epTmdb?.still_path ? `https://image.tmdb.org/t/p/w500${epTmdb.still_path}` : null;
+                        const rawEpStill = epTmdb?.still_path ? `https://image.tmdb.org/t/p/w500${epTmdb.still_path}` : null;
+                        const epStill = rawEpStill ? `/api/image-proxy?url=${encodeURIComponent(rawEpStill)}` : null;
                         const epOverview = epTmdb?.overview;
                         const isSelected = selectedItems.includes(epItem.name);
                         const isEpWatched = user && user !== 'guest' && watchedItems.some(i => i.name === epItem.name && i.parentPath === activeSeasonPath);

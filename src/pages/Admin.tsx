@@ -32,6 +32,8 @@ export default function Admin() {
   
   const [imagesScanLoading, setImagesScanLoading] = useState(false);
   const [imagesScanMsg, setImagesScanMsg] = useState('');
+  const [seasonPostersScanLoading, setSeasonPostersScanLoading] = useState(false);
+  const [seasonPostersScanMsg, setSeasonPostersScanMsg] = useState('');
 
   const [filesScanLoading, setFilesScanLoading] = useState(false);
   const [filesScanMsg, setFilesScanMsg] = useState('');
@@ -215,6 +217,10 @@ export default function Admin() {
       } catch(e) {}
       
       try {
+        const res2 = await axios.get('/api/meta/scan_season_posters/status');
+        setSeasonPostersScanLoading(res2.data.isRunning);
+        if (res2.data.message) { setSeasonPostersScanMsg(res2.data.message); }
+
         const res = await axios.get('/api/meta/scan_images/status');
         setImagesScanLoading(res.data.isRunning);
         if (res.data.message) {
@@ -303,6 +309,24 @@ export default function Admin() {
       setCreditsScanLoading(false);
     }
   };
+
+  
+  const handleSeasonPostersScan = async () => {
+    if (seasonPostersScanLoading) {
+      await axios.post('/api/meta/scan_season_posters/stop', {}, { headers: { Authorization: token } });
+      setSeasonPostersScanLoading(false);
+      return;
+    }
+    setSeasonPostersScanLoading(true);
+    setSeasonPostersScanMsg('Starting season posters scan...');
+    try {
+      await axios.post('/api/meta/scan_season_posters/start', {}, { headers: { Authorization: token } });
+    } catch (e: any) {
+      setSeasonPostersScanMsg(`Error: ${e.message}`);
+      setSeasonPostersScanLoading(false);
+    }
+  };
+
 
   const handleImagesScan = async () => {
     if (imagesScanLoading) {

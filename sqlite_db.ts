@@ -26,6 +26,7 @@ export async function initSQLiteDB() {
     const database = await getDB();
     await database.exec('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)');
     await database.exec('CREATE TABLE IF NOT EXISTS details_cache (path TEXT PRIMARY KEY, tmdb_data TEXT, base_items TEXT, season_items TEXT, updated_at INTEGER)');
+    await database.exec('CREATE TABLE IF NOT EXISTS image_cache (url TEXT PRIMARY KEY, mime_type TEXT, data BLOB)');
   } catch (e) {
     console.error('Failed to initialize local SQLite database:', String(e));
   }
@@ -253,5 +254,27 @@ export async function updateDetailsCache(path: string, tmdbData: any, baseItems:
     );
   } catch (e) {
     console.error('Error updating details cache:', e);
+  }
+}
+
+export async function getImageFromCache(url: string) {
+  try {
+    const database = await getDB();
+    const row = await database.get('SELECT mime_type, data FROM image_cache WHERE url = ?', url);
+    return row || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function saveImageToCache(url: string, mimeType: string, data: Buffer) {
+  try {
+    const database = await getDB();
+    await database.run(
+      'INSERT INTO image_cache (url, mime_type, data) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET mime_type=excluded.mime_type, data=excluded.data',
+      [url, mimeType, data]
+    );
+  } catch (e) {
+    console.error('Error saving image cache:', e);
   }
 }

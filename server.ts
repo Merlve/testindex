@@ -49,7 +49,7 @@ axios.interceptors.response.use(
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import { createRequire } from 'module';
-import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB, getDetailsCache, updateDetailsCache, getDB } from './sqlite_db';
+import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB, getDetailsCache, updateDetailsCache, getDB, getImageFromCache, saveImageToCache } from './sqlite_db';
 
 const _filename = typeof __filename !== 'undefined' ? __filename : process.cwd();
 const _dirname = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
@@ -773,17 +773,29 @@ app.get('/api/image-proxy', async (req, res) => {
     if (!imageUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
+
+    const cachedImage = await getImageFromCache(imageUrl);
+    if (cachedImage && cachedImage.data) {
+       res.setHeader('Content-Type', cachedImage.mime_type || 'image/jpeg');
+       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+       return res.send(cachedImage.data);
+    }
+
     let response = await axios({
       method: 'GET',
       url: imageUrl,
-      responseType: 'stream'
+      responseType: 'arraybuffer'
     });
-    // Copy the content-type header
-    if (response.headers['content-type']) {
-      res.setHeader('Content-Type', response.headers['content-type'] as string);
+
+    const contentType = response.headers['content-type'] as string || 'image/jpeg';
+    
+    if (response.data) {
+        saveImageToCache(imageUrl, contentType, Buffer.from(response.data)).catch(console.error);
     }
+
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    response.data.pipe(res);
+    res.send(response.data);
   } catch (err: any) {
     console.error('[Image Proxy] Error:', err.message);
     res.status(500).json({ error: 'Failed to fetch image' });
@@ -2198,16 +2210,8 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
            }
        } catch(e) {}
    }
-   if (!item.credits) {
-       try {
-           const creditsRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/credits?api_key=${tmdbKey}`);
-           if (creditsRes.data) {
-               item.credits = creditsRes.data;
-               modified = true;
-           }
-       } catch(e) {}
-   }
-   if (!item.images) {
+   
+   if (!item.images || !item.images.logos || item.images.logos.length === 0) {
        try {
            const imagesRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
            if (imagesRes.data) {
@@ -2457,10 +2461,38 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
                 const isTvCategory = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes((item.category || '').toUpperCase());
                 if (isTvCategory && response.data.data?.content) {
                     const content = response.data.data.content;
+                    
+                    // Attempt to find TMDB ID for fetching episode metadata
+                    let tvId = null;
+                    const { cleanName, year } = parseMediaName(item.name);
+                    const baseQuery = cleanName.toLowerCase().trim();
+                    const searchType = 'tv';
+                    const cacheKeyItem = `${searchType}-${baseQuery}${year ? `-${year}` : ''}`;
+                    const baseKey = `${searchType}-${baseQuery}`;
+                    
+                    const cleanPathForOverride = normalizedPath.replace(/^\/+/, '');
+                    const overriddenKey = findOverriddenKeyInCache(tmdbCache, searchType, baseQuery, year, cleanPathForOverride);
+                    
+                    let cachedTmdb = null;
+                    if (overriddenKey && tmdbCache[overriddenKey]) {
+                        cachedTmdb = tmdbCache[overriddenKey];
+                    } else if (tmdbCache[cacheKeyItem]) {
+                        cachedTmdb = tmdbCache[cacheKeyItem];
+                    } else if (year && tmdbCache[baseKey]) {
+                        cachedTmdb = tmdbCache[baseKey];
+                    } else if (tmdbCache[`path-${cleanPathForOverride}`]) {
+                        cachedTmdb = tmdbCache[`path-${cleanPathForOverride}`];
+                    } else if (tmdbCache[`path-/${cleanPathForOverride}`]) {
+                        cachedTmdb = tmdbCache[`path-/${cleanPathForOverride}`];
+                    }
+                    if (cachedTmdb) tvId = cachedTmdb.id;
+                    const tmdbKey = process.env.TMDB_API_KEY;
+
                     for (const subItem of content) {
                         if (subItem.is_dir) {
                             const seasonPath = `${normalizedPath}/${subItem.name}`;
                             const seasonNormPath = path.posix.normalize(seasonPath);
+                            
                             try {
                                 const subPayload: any = { path: seasonNormPath, password: "", refresh: true };
                                 const subRes = await axios.post(listUrl, subPayload, { headers: { Authorization: token } });
@@ -2470,6 +2502,54 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
                                     writeSQLiteJSON(subCacheKey, subRes.data).catch(console.error);
                                 }
                             } catch (e) {}
+
+                            // --- Fetch Episode Metadata & Images ---
+                            if (tvId && tmdbKey) {
+                                const sMatch = subItem.name.match(/season\s*(\d+)/i) || subItem.name.match(/^s(\d+)/i);
+                                let seasonNum = sMatch ? parseInt(sMatch[1], 10) : null;
+                                if (seasonNum === null && subItem.name.toLowerCase().includes('specials')) {
+                                   seasonNum = 0;
+                                }
+                                
+                                if (seasonNum !== null) {
+                                    try {
+                                        const tmdbSeasonCacheKey = `${tvId}_${seasonNum}`;
+                                        let seasonData = tmdbSeasonCache[tmdbSeasonCacheKey];
+                                        
+                                        if (!seasonData) {
+                                            const seasonUrl = `https://api.themoviedb.org/3/tv/${tvId}/season/${seasonNum}?api_key=${tmdbKey}`;
+                                            const tmdbRes = await axios.get(seasonUrl);
+                                            if (tmdbRes.data) {
+                                                tmdbSeasonCache[tmdbSeasonCacheKey] = tmdbRes.data;
+                                                await writeSQLiteJSON('tmdb_season_cache', tmdbSeasonCache);
+                                                seasonData = tmdbRes.data;
+                                            }
+                                        }
+
+                                        if (seasonData && seasonData.episodes) {
+                                            for (const ep of seasonData.episodes) {
+                                                if (!filesScanJob.isRunning) break;
+                                                if (ep.still_path) {
+                                                    const epImgUrl = `https://image.tmdb.org/t/p/w500${ep.still_path}`;
+                                                    const cachedImg = await getImageFromCache(epImgUrl);
+                                                    if (!cachedImg) {
+                                                        try {
+                                                            const imgRes = await axios.get(epImgUrl, { responseType: 'arraybuffer' });
+                                                            if (imgRes.data) {
+                                                                await saveImageToCache(epImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
+                                                            }
+                                                        } catch (e) {}
+                                                        await new Promise(r => setTimeout(r, 100)); // Rate limit
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error(`Failed to fetch TMDB episode metadata for TV ${tvId} Season ${seasonNum}`);
+                                    }
+                                }
+                            }
+
                             await new Promise(resolve => setTimeout(resolve, 200));
                         }
                     }
@@ -3580,6 +3660,12 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
          data.release_date = customYear + '-01-01';
          data.first_air_date = customYear + '-01-01';
        }
+       
+       const tmdbKey = process.env.TMDB_API_KEY;
+       if (tmdbKey) {
+           await attachFullDataToItem(data, primaryType, tmdbKey);
+       }
+       
        setOverriddenDataInCache(data);
        saveDb();
        addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
