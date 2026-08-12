@@ -675,11 +675,24 @@ export default function Details() {
         } else if (target === 'root' || target === 'auto') {
           // Refresh parent/root directory list
           const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
-          const baseRes = await axios.post(
-            '/api/fs/list',
-            { reqPath: fetchPath, refresh: true },
-            { headers: { Authorization: token } }
-          );
+          
+          let baseRes;
+          let searchSuccess = false;
+          try {
+             baseRes = await axios.post('/api/fs/search', { parent: fetchPath, keywords: "" }, { headers: { Authorization: token } });
+             if (baseRes.data?.code === 200 && baseRes.data?.data?.content && baseRes.data.data.content.length > 0) {
+                searchSuccess = true;
+             }
+          } catch (e) {}
+
+          if (!searchSuccess) {
+             baseRes = await axios.post(
+               '/api/fs/list',
+               { reqPath: fetchPath, refresh: true },
+               { headers: { Authorization: token } }
+             );
+          }
+
           if (baseRes.data?.code === 200) {
             const newBaseItems = baseRes.data.data?.content || [];
             setBaseItems(newBaseItems);
@@ -812,9 +825,23 @@ export default function Details() {
           }
         } else if (token) {
           const fetchPath = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
-          const res = await axios.post('/api/fs/list', { reqPath: fetchPath }, { headers: { Authorization: token } });
-          if (isMounted && res.data.code === 200) {
-            setBaseItems(res.data.data?.content || []);
+          let searchSuccess = false;
+          try {
+             // Use Openlist Database Index for instant recursive fetch of all seasons and episodes
+             const res = await axios.post('/api/fs/search', { parent: fetchPath, keywords: "" }, { headers: { Authorization: token } });
+             if (res.data?.code === 200 && res.data?.data?.content && res.data.data.content.length > 0) {
+                setBaseItems(res.data.data.content);
+                searchSuccess = true;
+             }
+          } catch(err) {
+             console.error("Indexed search failed, falling back to list", err);
+          }
+          
+          if (!searchSuccess) {
+            const res = await axios.post('/api/fs/list', { reqPath: fetchPath }, { headers: { Authorization: token } });
+            if (isMounted && res.data.code === 200) {
+              setBaseItems(res.data.data?.content || []);
+            }
           }
         }
       } catch (err: any) {
@@ -847,10 +874,22 @@ export default function Details() {
         } else if (token) {
           const fetchSeasonPath = activeSeasonPath.startsWith('/') ? activeSeasonPath : `/${activeSeasonPath}`;
           
-          const res = await axios.post('/api/fs/list', { reqPath: fetchSeasonPath, refresh: false }, { headers: { Authorization: token } });
+          // If baseItems was populated via indexed search, it already contains the files for this season!
+          const seasonFiles = baseItems.filter((item: any) => {
+             if (item.is_dir) return false;
+             if (item.parent === fetchSeasonPath || item.parent === fetchSeasonPath.replace(/\/$/, '')) return true;
+             if (item.path && item.path.startsWith(fetchSeasonPath)) return true;
+             return false;
+          });
           
-          if (isMounted && res.data.code === 200) {
-            setSeasonItems(res.data.data?.content || []);
+          if (seasonFiles.length > 0) {
+             if (isMounted) setSeasonItems(seasonFiles);
+          } else {
+             // Fallback to list
+             const res = await axios.post('/api/fs/list', { reqPath: fetchSeasonPath, refresh: false }, { headers: { Authorization: token } });
+             if (isMounted && res.data.code === 200) {
+               setSeasonItems(res.data.data?.content || []);
+             }
           }
         }
       } catch (err: any) {
@@ -2123,27 +2162,31 @@ export default function Details() {
                 <div className="space-y-6">
                   {/* Season Horizontal Selector Tabs */}
                   {seasonTabs.length > 0 && (
-                    <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-black/10 dark:border-white/10 no-scrollbar">
-                      <button
-                        onClick={() => handleSelectSeason(null)}
-                        className="px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all whitespace-nowrap cursor-pointer bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 flex items-center gap-1.5 shrink-0"
-                      >
-                        <ChevronLeft size={16} /> Seasons
-                      </button>
-                      <div className="w-px h-6 bg-black/10 dark:bg-white/10 mx-1 shrink-0"></div>
-                      {seasonTabs.map((tab, idx) => (
+                    <div className="flex items-center gap-2 pb-2 border-b border-black/10 dark:border-white/10">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
-                          key={idx}
-                          onClick={() => handleSelectSeason(idx)}
-                          className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all whitespace-nowrap cursor-pointer ${
-                            activeSeasonIndex === idx
-                              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25 scale-105'
-                              : 'bg-black/5 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10'
-                          }`}
+                          onClick={() => handleSelectSeason(null)}
+                          className="px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all whitespace-nowrap cursor-pointer bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 flex items-center gap-1.5 shrink-0"
                         >
-                          {tab.label}
+                          <ChevronLeft size={16} /> Seasons
                         </button>
-                      ))}
+                        <div className="w-px h-6 bg-black/10 dark:bg-white/10 mx-1 shrink-0"></div>
+                      </div>
+                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0 py-2 -my-2">
+                        {seasonTabs.map((tab, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleSelectSeason(idx)}
+                            className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all whitespace-nowrap cursor-pointer shrink-0 ${
+                              activeSeasonIndex === idx
+                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25 scale-105'
+                                : 'bg-black/5 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
