@@ -10,6 +10,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import dns from 'dns';
+
+dns.setDefaultResultOrder('ipv4first');
 
 const invalidatedTokens = new Set<string>();
 
@@ -552,13 +555,13 @@ async function getLibraryIndex(token: string, forceRefresh = false) {
    libraryFetchPromise = (async () => {
        try {
             const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
-            const res = await axios.post(`${openlistUrl}/api/fs/list`, { path: appConfig.basePath, password: "" }, { headers: { Authorization: token } });
+            const res = await axios.post(`${openlistUrl}/api/fs/list`, { path: appConfig.basePath, password: "", page: 1, per_page: 0 }, { headers: { Authorization: token } });
             if (res.data.code !== 200) return libraryIndex;
             const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
             
             const catData = await Promise.all(dirs.map(async (dir: string) => {
                 try {
-                    const subRes = await axios.post(`${openlistUrl}/api/fs/list`, { path: `${appConfig.basePath}/${dir}`, password: "" }, { headers: { Authorization: token } });
+                    const subRes = await axios.post(`${openlistUrl}/api/fs/list`, { path: `${appConfig.basePath}/${dir}`, password: "", page: 1, per_page: 0 }, { headers: { Authorization: token } });
                     return {
                         name: dir,
                         items: subRes.data?.data?.content || []
@@ -1548,7 +1551,7 @@ app.post('/api/auth/guest_login', async (req, res) => {
 
   try {
     const testRes = await axios.post(`${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`, 
-      { path: '/', password: '' },
+      { path: '/', password: '', page: 1, per_page: 0 },
       { headers: { Authorization: getOpenlistApiKey() || '' } }
     );
     
@@ -1685,10 +1688,10 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
     }
     
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`;
-    const payload: any = { path: reqPath, password: "" };
+    const payload: any = { path: reqPath, password: "", page: 1, per_page: 0 };
     if (refresh) payload.refresh = true;
     
-    const cacheKey = `fs_list_${token}_${normalizedPath}`;
+    const cacheKey = `fs_list_shared_${normalizedPath}`;
     
     if (refresh) {
         apiCache.delete(cacheKey);
@@ -1723,20 +1726,7 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
     let response = await axios.post(url, payload, {
       headers: { Authorization: token }
     });
-    if (response.data?.code === 200 && (!response.data.data?.content || response.data.data.content.length === 0) && !payload.refresh) {
-        payload.refresh = true;
-        try {
-            const retryResponse = await axios.post(url, payload, {
-                headers: { Authorization: token }
-            });
-            if (retryResponse.data?.code === 200) {
-                response = retryResponse;
-            }
-        } catch (e) {
-            console.error('Auto-refresh empty folder failed:', e);
-        }
-    }
-    
+
     if (response.data?.code === 200) {
         apiCache.set(cacheKey, response.data, 86400); // 24 hours
         writeSQLiteJSON(cacheKey, response.data).catch(console.error);
@@ -2452,7 +2442,7 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
             });
             
             if (response.data?.code === 200) {
-                const cacheKey = `fs_list_${token}_${normalizedPath}`;
+                const cacheKey = `fs_list_shared_${normalizedPath}`;
                 apiCache.set(cacheKey, response.data, 86400); // cache for 24 hours
                 writeSQLiteJSON(cacheKey, response.data).catch(console.error);
                 filesScanJob.count++;
@@ -2494,10 +2484,10 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
                             const seasonNormPath = path.posix.normalize(seasonPath);
                             
                             try {
-                                const subPayload: any = { path: seasonNormPath, password: "", refresh: true };
+                                const subPayload: any = { path: seasonNormPath, password: "", refresh: true, page: 1, per_page: 0 };
                                 const subRes = await axios.post(listUrl, subPayload, { headers: { Authorization: token } });
                                 if (subRes.data?.code === 200) {
-                                    const subCacheKey = `fs_list_${token}_${seasonNormPath}`;
+                                    const subCacheKey = `fs_list_shared_${seasonNormPath}`;
                                     apiCache.set(subCacheKey, subRes.data, 86400);
                                     writeSQLiteJSON(subCacheKey, subRes.data).catch(console.error);
                                 }
@@ -2526,6 +2516,19 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
                                             }
                                         }
 
+                                        if (seasonData && seasonData.poster_path) {
+                                            const posterImgUrl = `https://image.tmdb.org/t/p/w500${seasonData.poster_path}`;
+                                            const cachedPoster = await getImageFromCache(posterImgUrl);
+                                            if (!cachedPoster) {
+                                                try {
+                                                    const imgRes = await axios.get(posterImgUrl, { responseType: 'arraybuffer' });
+                                                    if (imgRes.data) {
+                                                        await saveImageToCache(posterImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
+                                                    }
+                                                } catch (e) {}
+                                                await new Promise(r => setTimeout(r, 100)); // Rate limit
+                                            }
+                                        }
                                         if (seasonData && seasonData.episodes) {
                                             for (const ep of seasonData.episodes) {
                                                 if (!filesScanJob.isRunning) break;
