@@ -13,6 +13,7 @@ import axios from 'axios';
 import dns from 'dns';
 
 dns.setDefaultResultOrder('ipv4first');
+axios.defaults.timeout = 15000;
 
 const invalidatedTokens = new Set<string>();
 
@@ -2516,37 +2517,40 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
                                             }
                                         }
 
-                                        if (seasonData && seasonData.poster_path) {
-                                            const posterImgUrl = `https://image.tmdb.org/t/p/w500${seasonData.poster_path}`;
-                                            const cachedPoster = await getImageFromCache(posterImgUrl);
-                                            if (!cachedPoster) {
-                                                try {
-                                                    const imgRes = await axios.get(posterImgUrl, { responseType: 'arraybuffer' });
-                                                    if (imgRes.data) {
-                                                        await saveImageToCache(posterImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
-                                                    }
-                                                } catch (e) {}
-                                                await new Promise(r => setTimeout(r, 100)); // Rate limit
+                                        // Fetch images asynchronously without blocking the scan
+                                        (async () => {
+                                            if (seasonData && seasonData.poster_path) {
+                                                const posterImgUrl = `https://image.tmdb.org/t/p/w500${seasonData.poster_path}`;
+                                                const cachedPoster = await getImageFromCache(posterImgUrl);
+                                                if (!cachedPoster) {
+                                                    try {
+                                                        const imgRes = await axios.get(posterImgUrl, { responseType: 'arraybuffer' });
+                                                        if (imgRes.data) {
+                                                            await saveImageToCache(posterImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
+                                                        }
+                                                    } catch (e) {}
+                                                    await new Promise(r => setTimeout(r, 100)); // Rate limit
+                                                }
                                             }
-                                        }
-                                        if (seasonData && seasonData.episodes) {
-                                            for (const ep of seasonData.episodes) {
-                                                if (!filesScanJob.isRunning) break;
-                                                if (ep.still_path) {
-                                                    const epImgUrl = `https://image.tmdb.org/t/p/w500${ep.still_path}`;
-                                                    const cachedImg = await getImageFromCache(epImgUrl);
-                                                    if (!cachedImg) {
-                                                        try {
-                                                            const imgRes = await axios.get(epImgUrl, { responseType: 'arraybuffer' });
-                                                            if (imgRes.data) {
-                                                                await saveImageToCache(epImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
-                                                            }
-                                                        } catch (e) {}
-                                                        await new Promise(r => setTimeout(r, 100)); // Rate limit
+                                            if (seasonData && seasonData.episodes) {
+                                                for (const ep of seasonData.episodes) {
+                                                    if (!filesScanJob.isRunning) break;
+                                                    if (ep.still_path) {
+                                                        const epImgUrl = `https://image.tmdb.org/t/p/w500${ep.still_path}`;
+                                                        const cachedImg = await getImageFromCache(epImgUrl);
+                                                        if (!cachedImg) {
+                                                            try {
+                                                                const imgRes = await axios.get(epImgUrl, { responseType: 'arraybuffer' });
+                                                                if (imgRes.data) {
+                                                                    await saveImageToCache(epImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
+                                                                }
+                                                            } catch (e) {}
+                                                            await new Promise(r => setTimeout(r, 100)); // Rate limit
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
+                                        })();
                                     } catch (e) {
                                         console.error(`Failed to fetch TMDB episode metadata for TV ${tvId} Season ${seasonNum}`);
                                     }

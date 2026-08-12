@@ -2112,7 +2112,7 @@ export default function Details() {
                       const rawPosterUrl = seasonMeta?.poster_path 
                         ? `https://image.tmdb.org/t/p/w500${seasonMeta.poster_path}` 
                         : (tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : null);
-                      const posterUrl = rawPosterUrl ? `/api/image-proxy?url=${encodeURIComponent(rawPosterUrl)}` : null;
+                      const posterUrl = rawPosterUrl;
                       
                       return (
                         <div key={idx} className="flex flex-col gap-1 sm:gap-2">
@@ -2121,7 +2121,7 @@ export default function Details() {
                             className="group relative rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 aspect-[2/3] transition-[transform,shadow] duration-300 sm:hover:-translate-y-2 sm:hover:scale-[1.02] sm:hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] shadow-xl active:scale-[0.98]"
                           >
                             {posterUrl ? (
-                              <img src={posterUrl} alt={tab.label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                              <img src={posterUrl} alt={tab.label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                             ) : (
                               <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center">
                                 <MonitorPlay className="w-10 h-10 mb-2 opacity-30 text-black dark:text-white" />
@@ -2288,7 +2288,7 @@ export default function Details() {
                           : epItem.name.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
 
                         const rawEpStill = epTmdb?.still_path ? `https://image.tmdb.org/t/p/w500${epTmdb.still_path}` : null;
-                        const epStill = rawEpStill ? `/api/image-proxy?url=${encodeURIComponent(rawEpStill)}` : null;
+                        const epStill = rawEpStill;
                         const epOverview = epTmdb?.overview;
                         const isSelected = selectedItems.includes(epItem.name);
                         const isEpWatched = user && user !== 'guest' && watchedItems.some(i => i.name === epItem.name && i.parentPath === activeSeasonPath);
@@ -2316,7 +2316,7 @@ export default function Details() {
 
                               <div className="relative shrink-0">
                                 {epStill ? (
-                                  <img src={epStill} alt={epTitle} className="w-20 h-13 sm:w-28 sm:h-16 object-cover rounded-xl shadow border border-black/5 dark:border-white/5" />
+                                  <img src={epStill} alt={epTitle} className="w-20 h-13 sm:w-28 sm:h-16 object-cover rounded-xl shadow border border-black/5 dark:border-white/5" loading="lazy" />
                                 ) : (
                                   <div className="w-20 h-13 sm:w-28 sm:h-16 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center text-gray-500">
                                     <Tv size={18} />

@@ -147,7 +147,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       };
 
       checkAuth();
-      interval = setInterval(checkAuth, 15000);
+      interval = setInterval(checkAuth, 60000);
     }
 
     const handleStorage = (e: StorageEvent) => {
