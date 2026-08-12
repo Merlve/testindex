@@ -168,6 +168,11 @@ const PORT = Number(process.env.SERVER_PORT) || 3000;
 const SERVER_BOOT_ID = Date.now().toString();
 
 app.use(cors());
+app.use((req, res, next) => {
+  res.setHeader('x-server-boot-id', SERVER_BOOT_ID);
+  res.setHeader('Access-Control-Expose-Headers', 'x-server-boot-id');
+  next();
+});
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use((req, res, next) => {
@@ -175,12 +180,6 @@ app.use((req, res, next) => {
   if (token && invalidatedTokens.has(token)) {
       return res.status(401).json({ code: 401, message: 'Token invalidated by server restart or expiry' });
   }
-  next();
-});
-
-app.use((req, res, next) => {
-  res.setHeader('x-server-boot-id', SERVER_BOOT_ID);
-  res.setHeader('Access-Control-Expose-Headers', 'x-server-boot-id');
   next();
 });
 

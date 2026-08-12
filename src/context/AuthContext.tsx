@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface AuthContextType {
   user: string | null;
@@ -10,12 +10,74 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
+let isTerminatingSession = false;
+
+function terminateSessionAndRedirect() {
+  if (isTerminatingSession) return;
+  isTerminatingSession = true;
+  localStorage.removeItem('qs_user');
+  localStorage.removeItem('qs_token');
+  localStorage.removeItem('qs_guest_login_time');
+  localStorage.removeItem('qs_guest_last_login_date');
+  sessionStorage.clear();
+  window.location.href = '/login';
+}
+
+// Global response interceptor for server boot ID tracking & token invalidation
+axios.interceptors.response.use(
+  response => {
+    const currentBootId = response.headers?.['x-server-boot-id'];
+    if (currentBootId) {
+      const storedBootId = localStorage.getItem('qs_server_boot_id');
+      if (!storedBootId) {
+        localStorage.setItem('qs_server_boot_id', currentBootId);
+      } else if (storedBootId !== currentBootId) {
+        localStorage.setItem('qs_server_boot_id', currentBootId);
+        terminateSessionAndRedirect();
+        return Promise.reject(new Error("Server restarted or rebuilt, terminating session..."));
+      }
+    }
+
+    if (response.data && (response.data.code === 401 || (typeof response.data === 'string' && response.data.toLowerCase().includes('invalidated')) || (response.data.message && typeof response.data.message === 'string' && response.data.message.toLowerCase().includes('invalidated')))) {
+      terminateSessionAndRedirect();
+      const err: any = new Error(response.data.message || 'Unauthorized');
+      err.response = response;
+      return Promise.reject(err);
+    }
+    return response;
+  },
+  async error => {
+    const currentBootId = error.response?.headers?.['x-server-boot-id'];
+    if (currentBootId) {
+      const storedBootId = localStorage.getItem('qs_server_boot_id');
+      if (!storedBootId) {
+        localStorage.setItem('qs_server_boot_id', currentBootId);
+      } else if (storedBootId !== currentBootId) {
+        localStorage.setItem('qs_server_boot_id', currentBootId);
+        terminateSessionAndRedirect();
+        return Promise.reject(new Error("Server restarted or rebuilt, terminating session..."));
+      }
+    }
+
+    const config = error?.config;
+    if (error?.response?.status === 429 && config && (config._retryCount || 0) < 3) {
+      config._retryCount = (config._retryCount || 0) + 1;
+      const delay = config._retryCount * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return axios(config);
+    }
+
+    if (error.response && (error.response.status === 401 || (typeof error.response.data === 'string' && error.response.data.toLowerCase().includes('invalidated')) || (error.response.data && error.response.data.message && typeof error.response.data.message === 'string' && error.response.data.message.toLowerCase().includes('invalidated')))) {
+      terminateSessionAndRedirect();
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<string | null>(localStorage.getItem('qs_user'));
   const [token, setToken] = useState<string | null>(localStorage.getItem('qs_token'));
   const [inactivityTimeoutMinutes, setInactivityTimeoutMinutes] = useState<number>(0);
-
-  
 
   useEffect(() => {
     if (token) {
@@ -36,13 +98,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         logout();
-        
       }, inactivityTimeoutMinutes * 60 * 1000);
     };
 
     resetTimer();
 
-    // Throttle the activity handler to avoid excessive clearTimeout/setTimeout
     let throttled = false;
     const handleActivity = () => {
       if (!throttled) {
@@ -62,60 +122,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [token, inactivityTimeoutMinutes]);
 
   useEffect(() => {
-    const interceptor = axios.interceptors.response.use(
-      response => {
-        const currentBootId = response.headers['x-server-boot-id'];
-        if (currentBootId) {
-           const storedBootId = localStorage.getItem('qs_server_boot_id');
-           if (!storedBootId) {
-               localStorage.setItem('qs_server_boot_id', currentBootId);
-           } else if (storedBootId !== currentBootId) {
-               localStorage.setItem('qs_server_boot_id', currentBootId);
-               logout();
-               window.location.reload();
-               return Promise.reject(new Error("Server restarted, refreshing app..."));
-           }
-        }
-
-        if (response.data && (response.data.code === 401 || (typeof response.data === 'string' && response.data.toLowerCase().includes('invalidated')) || (response.data.message && typeof response.data.message === 'string' && response.data.message.toLowerCase().includes('invalidated')))) {
-          logout();
-          const err: any = new Error(response.data.message || 'Unauthorized');
-          err.response = response;
-          return Promise.reject(err);
-        }
-        return response;
-      },
-      async error => {
-        const currentBootId = error.response?.headers?.['x-server-boot-id'];
-        if (currentBootId) {
-           const storedBootId = localStorage.getItem('qs_server_boot_id');
-           if (!storedBootId) {
-               localStorage.setItem('qs_server_boot_id', currentBootId);
-           } else if (storedBootId !== currentBootId) {
-               localStorage.setItem('qs_server_boot_id', currentBootId);
-               logout();
-               window.location.reload();
-               return Promise.reject(new Error("Server restarted, refreshing app..."));
-           }
-        }
-
-        const config = error?.config;
-        if (error?.response?.status === 429 && config && (config._retryCount || 0) < 3) {
-          config._retryCount = (config._retryCount || 0) + 1;
-          const delay = config._retryCount * 1000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return axios(config);
-        }
-        if (error.response && (error.response.status === 401 || (typeof error.response.data === 'string' && error.response.data.toLowerCase().includes('invalidated')) || (error.response.data && error.response.data.message && typeof error.response.data.message === 'string' && error.response.data.message.toLowerCase().includes('invalidated')))) {
-          logout();
-        }
-        return Promise.reject(error);
-      }
-    );
-    return () => axios.interceptors.response.eject(interceptor);
-  }, []);
-
-  useEffect(() => {
     let interval: any;
     if (user === 'guest') {
       interval = setInterval(() => {
@@ -126,8 +132,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         }
       }, 1000);
     } else if (token) {
-      // Poll to check if the user is still logged into Openlist
-      interval = setInterval(async () => {
+      // Immediate session check on mount to detect server reboot instantly
+      const checkAuth = async () => {
         try {
           const res = await axios.get('/api/auth/me', { headers: { Authorization: token } });
           if (res.data && res.data.code === 401) {
@@ -138,7 +144,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             logout();
           }
         }
-      }, 30000);
+      };
+
+      checkAuth();
+      interval = setInterval(checkAuth, 15000);
     }
 
     const handleStorage = (e: StorageEvent) => {
@@ -149,12 +158,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     window.addEventListener('storage', handleStorage);
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       window.removeEventListener('storage', handleStorage);
     };
   }, [user, token]);
 
   const login = (newUser: string, newToken: string) => {
+    isTerminatingSession = false;
     setUser(newUser);
     setToken(newToken);
     localStorage.setItem('qs_user', newUser);
@@ -173,6 +183,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setToken(null);
     localStorage.removeItem('qs_user');
     localStorage.removeItem('qs_token');
+    localStorage.removeItem('qs_guest_login_time');
+    localStorage.removeItem('qs_guest_last_login_date');
     sessionStorage.removeItem('shindex-featured-items-session');
   };
 
