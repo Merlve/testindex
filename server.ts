@@ -214,7 +214,7 @@ app.use('/api', rateLimitMiddleware);
 
 // Simple file-based config storage
 let appConfig: Record<string, any> = {
-  openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://cdn.shutter.ng',
+  openlistUrl: process.env.OPENLIST_SERVER_URL || 'https://fox.oplist.org',
   basePath: '/home',
   inactivityTimeout: 0,
   announcement: ''
@@ -1470,10 +1470,10 @@ app.all('/api/admin/*', adminMiddleware, async (req, res) => {
 
     res.json(response.data);
   } catch (error: any) {
-    if (error.response?.data && typeof error.response.data === 'object') {
+    if (error.response?.data) {
       return res.status(error.response.status).json(error.response.data);
     }
-    res.status(error.response?.status || 500).json({ error: 'Proxy error', message: error.message });
+    res.status(500).json({ error: 'Proxy error' });
   }
 });
 
@@ -1513,14 +1513,14 @@ app.post('/api/auth/login', async (req, res) => {
     
     addLog('Login Failed', username, `Error: ${error.message}`);
     
-    // Pass through the original error response from Openlist if available and it's JSON
-    if (error.response?.data && typeof error.response.data === 'object') {
+    // Pass through the original error response from Openlist if available
+    if (error.response?.data) {
       return res.status(error.response.status).json(error.response.data);
     }
     
     res.status(error.response?.status || 500).json({ 
-      code: error.response?.status || 500,
-      message: `Openlist API Error ${error.response?.status || 500}: ${error.message}. The upstream server might be down or blocking the request.`
+      message: `Error ${error.response?.status || 500}: Failed to reach Openlist at ${targetUrl}. Check your OPENLIST_SERVER_URL environment variable.`,
+      details: error.message
     });
   }
 });

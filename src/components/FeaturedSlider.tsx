@@ -1,6 +1,5 @@
 import { useState, useEffect, memo, useMemo } from 'react';
 import axios from 'axios';
-import { getTmdbImage } from '../utils/tmdbImage';
 import { Link, useNavigate } from 'react-router';
 import { Play, Star, Cloud } from 'lucide-react';
 import { parseMediaName } from '../utils/nameParser';
@@ -91,8 +90,8 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
   });
 
   const backdrop = tmdb?.backdrop_path 
-    ? getTmdbImage(tmdb.backdrop_path, 'backdrop') 
-    : (tmdb?.poster_path ? getTmdbImage(tmdb.poster_path, 'poster') : null);
+    ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` 
+    : (tmdb?.poster_path ? `https://image.tmdb.org/t/p/w780${tmdb.poster_path}` : null);
     
   const title = tmdb?.title || tmdb?.name || item.name;
   const rating = tmdb?.vote_average ? tmdb.vote_average.toFixed(1) : null;

@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation, useNavigate } from 'react-router';
 import axios from 'axios';
-import { getTmdbImage } from '../utils/tmdbImage';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
@@ -304,9 +303,9 @@ export default function Details() {
 
       const overview = tmdb.overview ? tmdb.overview.trim() : `Watch ${mediaTitle} on SHUTTER!`;
       const poster = tmdb.poster_path
-        ? (tmdb.poster_path.startsWith('http') ? tmdb.poster_path : getTmdbImage(tmdb.poster_path, 'poster'))
+        ? (tmdb.poster_path.startsWith('http') ? tmdb.poster_path : `https://image.tmdb.org/t/p/w780${tmdb.poster_path}`)
         : tmdb.backdrop_path
-          ? (tmdb.backdrop_path.startsWith('http') ? tmdb.backdrop_path : getTmdbImage(tmdb.backdrop_path, 'backdrop'))
+          ? (tmdb.backdrop_path.startsWith('http') ? tmdb.backdrop_path : `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}`)
           : '';
 
       const setMetaTag = (attrName: string, attrVal: string, content: string) => {
@@ -1295,7 +1294,7 @@ export default function Details() {
 
   if (loading && loadingFiles && baseItems.length === 0) return <DetailsSkeleton onRefresh={() => {}} refreshingFolder={false} />;
 
-  const backdrop = tmdb?.backdrop_path ? getTmdbImage(tmdb.backdrop_path, 'backdrop') : null;
+  const backdrop = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` : null;
   const displayGenres = tmdb?.genres 
     ? tmdb.genres.map((g: any) => ({ id: g.id, name: g.name })) 
     : getGenresWithIds(tmdb?.genre_ids);
@@ -1308,7 +1307,7 @@ export default function Details() {
 
   const logoPath = tmdb?.images?.logos?.find((l: any) => l.iso_639_1 === 'en')?.file_path 
     || tmdb?.images?.logos?.[0]?.file_path;
-  const logoUrl = logoPath ? getTmdbImage(logoPath, 'poster') : null;
+  const logoUrl = logoPath ? `https://image.tmdb.org/t/p/w500${logoPath}` : null;
 
   return (
     <motion.div 
@@ -1322,7 +1321,7 @@ export default function Details() {
       {(tmdb?.poster_path || tmdb?.backdrop_path) && (
         <div className="fixed inset-0 pointer-events-none z-[-1] opacity-30 dark:opacity-[0.15] overflow-hidden">
           <img 
-            src={getTmdbImage(tmdb.poster_path || tmdb.backdrop_path, 'poster') || ''}
+            src={`https://image.tmdb.org/t/p/w92${tmdb.poster_path || tmdb.backdrop_path}`}
             className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[150%] object-cover blur-[120px] saturate-200"
             alt=""
           />
@@ -1343,7 +1342,7 @@ export default function Details() {
             <VideoPlayer
               src={playingUrl}
               title={tmdb?.title || tmdb?.name || name}
-              poster={tmdb?.backdrop_path ? getTmdbImage(tmdb.backdrop_path, 'backdrop') || undefined : undefined}
+              poster={tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` : undefined}
               onClose={() => setPlayingUrl('')}
             />
           </div>
@@ -1498,7 +1497,7 @@ export default function Details() {
                     className="flex items-center gap-3 p-2 hover:bg-black/5 dark:bg-white/5 rounded-xl cursor-pointer transition"
                   >
                     {result.poster_path ? (
-                      <img src={getTmdbImage(result.poster_path, 'poster') || ''} alt={result.title || result.name} className="w-12 h-16 object-cover rounded shadow" />
+                      <img src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} alt={result.title || result.name} className="w-12 h-16 object-cover rounded shadow" />
                     ) : (
                       <div className="w-12 h-16 bg-black/5 dark:bg-white/5 rounded flex items-center justify-center shadow text-xs text-gray-600 dark:text-gray-400">No Img</div>
                     )}
@@ -1736,7 +1735,7 @@ export default function Details() {
                       const profileUrl = person.profile_path
                         ? (person.profile_path.startsWith('http')
                             ? person.profile_path
-                            : getTmdbImage(person.profile_path, 'profile'))
+                            : `https://image.tmdb.org/t/p/w185${person.profile_path}`)
                         : null;
 
                       return (
@@ -2111,8 +2110,8 @@ export default function Details() {
                     ) : seasonTabs.map((tab, idx) => {
                       const seasonMeta = tmdb?.seasons?.find((s: any) => s.season_number === tab.seasonNum);
                       const rawPosterUrl = seasonMeta?.poster_path 
-                        ? getTmdbImage(seasonMeta.poster_path, 'poster') 
-                        : (tmdb?.poster_path ? getTmdbImage(tmdb.poster_path, 'poster') : null);
+                        ? `https://image.tmdb.org/t/p/w500${seasonMeta.poster_path}` 
+                        : (tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : null);
                       const posterUrl = rawPosterUrl;
                       
                       return (
@@ -2288,7 +2287,7 @@ export default function Details() {
                           ? `${meta.episodeNum ? `E${meta.episodeNum < 10 ? '0' : ''}${meta.episodeNum}${meta.episodeNumEnd ? `-E${meta.episodeNumEnd < 10 ? '0' : ''}${meta.episodeNumEnd}` : ''}` : `Ep ${epIdx + 1}`} - ${epTmdb.name}`
                           : epItem.name.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
 
-                        const rawEpStill = epTmdb?.still_path ? getTmdbImage(epTmdb.still_path, 'still') : null;
+                        const rawEpStill = epTmdb?.still_path ? `https://image.tmdb.org/t/p/w500${epTmdb.still_path}` : null;
                         const epStill = rawEpStill;
                         const epOverview = epTmdb?.overview;
                         const isSelected = selectedItems.includes(epItem.name);

@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
-import { getTmdbImage } from '../utils/tmdbImage';
 import { 
   ChevronLeft, Plus, ArrowUpDown, Search, Filter, Globe, Lock, ThumbsUp, Bookmark, 
   Trash2, Edit3, ChevronDown, ChevronUp, Play, Check, CheckCircle, Eye, EyeOff,
@@ -73,8 +72,8 @@ const ProviderResultItem = ({ res, handleAddItemToCollection, isAdded }: any) =>
 
   const displayTmdb = tmdbData || res;
   const posterUrl = displayTmdb.poster_path
-    ? (displayTmdb.poster_path.startsWith('http') ? displayTmdb.poster_path : getTmdbImage(displayTmdb.poster_path, 'poster'))
-    : (res.posterPath?.startsWith('http') ? res.posterPath : res.posterPath ? getTmdbImage(res.posterPath, 'poster') : null);
+    ? (displayTmdb.poster_path.startsWith('http') ? displayTmdb.poster_path : `https://image.tmdb.org/t/p/w500${displayTmdb.poster_path}`)
+    : (res.posterPath?.startsWith('http') ? res.posterPath : res.posterPath ? `https://image.tmdb.org/t/p/w500${res.posterPath}` : null);
   const title = displayTmdb.title || displayTmdb.name || res.title;
   const year = displayTmdb.release_date?.substring(0,4) || displayTmdb.first_air_date?.substring(0,4) || res.year;
 
@@ -555,9 +554,9 @@ export default function Collection() {
           const posterPath = bgItem?.posterPath || bgItem?.poster_path;
           
           const bgUrl = backdropPath 
-            ? (backdropPath.startsWith('http') ? backdropPath : getTmdbImage(backdropPath, 'backdrop'))
+            ? (backdropPath.startsWith('http') ? backdropPath : `https://image.tmdb.org/t/p/w1280${backdropPath.startsWith('/') ? backdropPath : `/${backdropPath}`}`)
             : posterPath
-              ? (posterPath.startsWith('http') ? posterPath : getTmdbImage(posterPath, 'backdrop'))
+              ? (posterPath.startsWith('http') ? posterPath : `https://image.tmdb.org/t/p/w1280${posterPath.startsWith('/') ? posterPath : `/${posterPath}`}`)
               : null;
           return bgUrl ? (
             <>

@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { getTmdbImage } from '../utils/tmdbImage';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
 import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud, Megaphone } from 'lucide-react';
@@ -962,7 +961,7 @@ export default function Admin() {
                       className="flex items-center gap-3 p-2 hover:bg-black/5 dark:bg-white/5 rounded-xl cursor-pointer transition"
                     >
                       {result.poster_path ? (
-                        <img src={getTmdbImage(result.poster_path, 'poster') || ''} alt={result.title || result.name} className="w-12 h-16 object-cover rounded shadow" />
+                        <img src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} alt={result.title || result.name} className="w-12 h-16 object-cover rounded shadow" />
                       ) : (
                         <div className="w-12 h-16 bg-black/5 dark:bg-white/5 rounded flex items-center justify-center shadow text-xs text-gray-600 dark:text-gray-400">No Img</div>
                       )}

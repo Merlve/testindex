@@ -1,7 +1,6 @@
 import React, { useState, useEffect, memo } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
-import { getTmdbImage } from '../utils/tmdbImage';
 import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Cloud } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
@@ -166,7 +165,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     <>
       <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 ${viewMode === 'grid' ? 'sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98]' : ''} flex-shrink-0`}>
         {displayTmdb?.poster_path ? (
-          <LazyImage src={getTmdbImage(displayTmdb.poster_path, 'poster') || ''} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
+          <LazyImage src={`https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 bg-[#fbf4eb] dark:bg-[#1a1a22] z-0">
             <Film size={32} className="mb-2 opacity-50 sm:w-12 sm:h-12" />

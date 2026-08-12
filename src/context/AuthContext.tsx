@@ -39,9 +39,7 @@ axios.interceptors.response.use(
     }
 
     if (response.data && (response.data.code === 401 || (typeof response.data === 'string' && response.data.toLowerCase().includes('invalidated')) || (response.data.message && typeof response.data.message === 'string' && response.data.message.toLowerCase().includes('invalidated')))) {
-      if (window.location.pathname !== '/login') {
-        terminateSessionAndRedirect();
-      }
+      terminateSessionAndRedirect();
       const err: any = new Error(response.data.message || 'Unauthorized');
       err.response = response;
       return Promise.reject(err);
@@ -70,9 +68,7 @@ axios.interceptors.response.use(
     }
 
     if (error.response && (error.response.status === 401 || (typeof error.response.data === 'string' && error.response.data.toLowerCase().includes('invalidated')) || (error.response.data && error.response.data.message && typeof error.response.data.message === 'string' && error.response.data.message.toLowerCase().includes('invalidated')))) {
-      if (window.location.pathname !== '/login') {
-        terminateSessionAndRedirect();
-      }
+      terminateSessionAndRedirect();
     }
     return Promise.reject(error);
   }

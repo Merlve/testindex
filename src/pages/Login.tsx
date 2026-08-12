@@ -96,7 +96,7 @@ export default function Login() {
         setError(errorMsg);
       }
     } catch (err: any) {
-      console.log('Login Error Details:', err, err.response, err.message); let errorMsg = err.response?.data?.message || err.message || 'An error occurred';
+      let errorMsg = err.response?.data?.message || err.message || 'An error occurred';
       if (errorMsg.toLowerCase().includes('disabled')) {
         errorMsg = 'Subscription Expired';
       }
