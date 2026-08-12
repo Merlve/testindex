@@ -2147,9 +2147,6 @@ export default function Details() {
                           
                           <div className="text-center px-1">
                              <h4 className="text-black dark:text-white font-bold text-[11px] sm:text-sm truncate">{tab.label}</h4>
-                             {seasonMeta?.episode_count && (
-                               <p className="text-gray-500 dark:text-gray-400 text-[9px] sm:text-[11px] font-semibold">{seasonMeta.episode_count} Episodes</p>
-                             )}
                           </div>
                         </div>
                       );

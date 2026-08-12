@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ItemCard from '../components/ItemCard';
 import { RefreshCw, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 
 const ALPHABET = ['#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
@@ -35,6 +35,7 @@ export default function Category() {
   const query = searchParams.get('q');
   
   const { token } = useAuth();
+  const queryClient = useQueryClient();
 
   const getInitialState = () => {
     const storageKey = `category_state_${name}_${query || ''}`;
@@ -108,6 +109,26 @@ export default function Category() {
     queryFn: fetchItems,
     enabled: !!token && (!!name || !!query),
     retry: 1,
+    placeholderData: () => {
+      if (query) return undefined;
+      
+      const dashboardData: any = queryClient.getQueryData(['dashboard']);
+      if (dashboardData) {
+        const cat = dashboardData.find((c: any) => c.name === name);
+        if (cat) return cat.items;
+      }
+      
+      try {
+        const cached = localStorage.getItem('dashboard_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const cat = parsed.find((c: any) => c.name === name);
+          if (cat) return cat.items;
+        }
+      } catch (e) {}
+      
+      return undefined;
+    }
   });
 
 

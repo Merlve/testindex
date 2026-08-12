@@ -32,10 +32,11 @@ body {
 /* Performance Optimizations */
 html {
   -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
 }
 
 body {
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 .swiper-wrapper {
