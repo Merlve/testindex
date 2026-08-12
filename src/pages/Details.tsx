@@ -368,6 +368,7 @@ export default function Details() {
     setHasRefreshedRoot(false);
     prefetchedFirstSeasonRef.current = false;
     clickedSeasonTab.current = false;
+    setActiveSeasonIndex(null);
   }, [fullPath, actualOpenlistPath]);
 
   // Watched state
@@ -610,6 +611,22 @@ export default function Details() {
   const activeSeasonPath = activeSeasonTab?.folderName 
     ? `${actualOpenlistPath}/${activeSeasonTab.folderName}` 
     : (isVideoFile(name) ? actualOpenlistPath.split('/').slice(0, -1).join('/') : actualOpenlistPath);
+
+  const showOverviewAndCast = isMovieCategory || activeSeasonIndex === null;
+
+  const handleSelectSeason = (idx: number | null) => {
+    clickedSeasonTab.current = true;
+    if (idx !== activeSeasonIndex) {
+      if (idx !== null) {
+        setLoadingFiles(true);
+        setSeasonItems([]);
+        setSeasonTmdb(null);
+        setLoadingSeasonTmdb(true);
+      }
+      setActiveSeasonIndex(idx);
+      setSelectedItems([]);
+    }
+  };
 
   // Refresh folder directly bypassing cache
   const handleRefreshFolder = async (target: 'root' | 'subfolder' | 'auto' = 'auto') => {
@@ -1629,99 +1646,119 @@ export default function Details() {
         )}
 
         {/* Overview */}
-        <motion.div layout className="max-w-3xl flex flex-col items-center overflow-hidden w-full">
-          <motion.p 
-            layout="position"
-            className={`leading-relaxed text-sm md:text-base text-center text-gray-700 dark:text-gray-300 break-words w-full ${isOverviewExpanded ? '' : 'line-clamp-4'}`}
-          >
-            {tmdb?.overview}
-          </motion.p>
-          {tmdb?.overview && tmdb.overview.length > 200 && (
-            <motion.button 
-              layout="position"
-              onClick={() => setIsOverviewExpanded(!isOverviewExpanded)}
-              className="mt-2 text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors cursor-pointer"
+        <AnimatePresence mode="wait">
+          {showOverviewAndCast && tmdb?.overview && (
+            <motion.div 
+              key="overview-section"
+              initial={{ opacity: 0, height: 0, scale: 0.98 }}
+              animate={{ opacity: 1, height: 'auto', scale: 1 }}
+              exit={{ opacity: 0, height: 0, scale: 0.98 }}
+              transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1.0] }}
+              className="max-w-3xl flex flex-col items-center overflow-hidden w-full"
             >
-              {isOverviewExpanded ? 'Read less' : 'Read more'}
-            </motion.button>
+              <motion.p 
+                layout="position"
+                className={`leading-relaxed text-sm md:text-base text-center text-gray-700 dark:text-gray-300 break-words w-full ${isOverviewExpanded ? '' : 'line-clamp-4'}`}
+              >
+                {tmdb?.overview}
+              </motion.p>
+              {tmdb?.overview && tmdb.overview.length > 200 && (
+                <motion.button 
+                  layout="position"
+                  onClick={() => setIsOverviewExpanded(!isOverviewExpanded)}
+                  className="mt-2 text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors cursor-pointer"
+                >
+                  {isOverviewExpanded ? 'Read less' : 'Read more'}
+                </motion.button>
+              )}
+            </motion.div>
           )}
-        </motion.div>
+        </AnimatePresence>
       </div>
 
       <div className="px-4 sm:px-8 md:px-12 max-w-7xl mx-auto w-full">
 
           {/* CAST & CREW SECTION */}
-          {(loadingCredits || castAndCrewList.length > 0) && (
-            <div className="mb-6">
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-3">
-                Cast & Crew
-              </h3>
+          <AnimatePresence mode="wait">
+            {showOverviewAndCast && (loadingCredits || castAndCrewList.length > 0) && (
+              <motion.div
+                key="cast-crew-section"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1.0] }}
+                className="mb-6 overflow-hidden"
+              >
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-3">
+                  Cast & Crew
+                </h3>
 
-              {loadingCredits ? (
-                <div className="flex gap-3 overflow-x-auto pb-3 pt-1 scrollbar-none">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="w-20 sm:w-24 md:w-28 shrink-0 flex flex-col items-center animate-pulse">
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl sm:rounded-2xl bg-black/10 dark:bg-white/10" />
-                      <div className="w-16 h-2.5 bg-black/10 dark:bg-white/10 rounded mt-2" />
-                      <div className="w-10 h-2 bg-black/10 dark:bg-white/10 rounded mt-1" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-start gap-3 sm:gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x">
-                  {castAndCrewList.map((person) => {
-                    const profileUrl = person.profile_path
-                      ? (person.profile_path.startsWith('http')
-                          ? person.profile_path
-                          : `https://image.tmdb.org/t/p/w185${person.profile_path}`)
-                      : null;
-
-                    return (
-                      <div
-                        key={person.id}
-                        onClick={() => navigate(`/person/${person.id}?name=${encodeURIComponent(person.name)}`)}
-                        className="w-20 sm:w-24 md:w-28 shrink-0 text-center flex flex-col items-center group cursor-pointer snap-start transition-transform duration-200 hover:scale-[1.03]"
-                        title={`View ${person.name}`}
-                      >
-                        <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 relative rounded-xl sm:rounded-2xl overflow-hidden bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 shadow-sm group-hover:shadow-md transition-all duration-300">
-                          {profileUrl ? (
-                            <img
-                              src={profileUrl}
-                              alt={person.name}
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                              loading="lazy"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                                const parent = (e.target as HTMLElement).parentElement;
-                                if (parent) {
-                                  const fallback = parent.querySelector('.avatar-fallback');
-                                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                                }
-                              }}
-                            />
-                          ) : null}
-                          <div
-                            className="avatar-fallback w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/30 to-slate-800/50 text-gray-400 font-bold text-xs"
-                            style={{ display: profileUrl ? 'none' : 'flex' }}
-                          >
-                            <User size={22} className="text-gray-400 mb-0.5 opacity-70" />
-                            <span className="text-[10px] text-gray-400 font-medium px-1 text-center line-clamp-1">{person.name}</span>
-                          </div>
-                        </div>
-
-                        <h4 className="text-[11px] sm:text-xs font-semibold text-gray-900 dark:text-white mt-1.5 line-clamp-2 px-0.5 leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                          {person.name}
-                        </h4>
-                        <p className="text-[10px] sm:text-[11px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 px-0.5 leading-tight">
-                          {person.role}
-                        </p>
+                {loadingCredits ? (
+                  <div className="flex gap-3 overflow-x-auto pb-3 pt-1 scrollbar-none">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="w-20 sm:w-24 md:w-28 shrink-0 flex flex-col items-center animate-pulse">
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl sm:rounded-2xl bg-black/10 dark:bg-white/10" />
+                        <div className="w-16 h-2.5 bg-black/10 dark:bg-white/10 rounded mt-2" />
+                        <div className="w-10 h-2 bg-black/10 dark:bg-white/10 rounded mt-1" />
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3 sm:gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x">
+                    {castAndCrewList.map((person) => {
+                      const profileUrl = person.profile_path
+                        ? (person.profile_path.startsWith('http')
+                            ? person.profile_path
+                            : `https://image.tmdb.org/t/p/w185${person.profile_path}`)
+                        : null;
+
+                      return (
+                        <div
+                          key={person.id}
+                          onClick={() => navigate(`/person/${person.id}?name=${encodeURIComponent(person.name)}`)}
+                          className="w-20 sm:w-24 md:w-28 shrink-0 text-center flex flex-col items-center group cursor-pointer snap-start transition-transform duration-200 hover:scale-[1.03]"
+                          title={`View ${person.name}`}
+                        >
+                          <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 relative rounded-xl sm:rounded-2xl overflow-hidden bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 shadow-sm group-hover:shadow-md transition-all duration-300">
+                            {profileUrl ? (
+                              <img
+                                src={profileUrl}
+                                alt={person.name}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                  const parent = (e.target as HTMLElement).parentElement;
+                                  if (parent) {
+                                    const fallback = parent.querySelector('.avatar-fallback');
+                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="avatar-fallback w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/30 to-slate-800/50 text-gray-400 font-bold text-xs"
+                              style={{ display: profileUrl ? 'none' : 'flex' }}
+                            >
+                              <User size={22} className="text-gray-400 mb-0.5 opacity-70" />
+                              <span className="text-[10px] text-gray-400 font-medium px-1 text-center line-clamp-1">{person.name}</span>
+                            </div>
+                          </div>
+
+                          <h4 className="text-[11px] sm:text-xs font-semibold text-gray-900 dark:text-white mt-1.5 line-clamp-2 px-0.5 leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                            {person.name}
+                          </h4>
+                          <p className="text-[10px] sm:text-[11px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 px-0.5 leading-tight">
+                            {person.role}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* MOVIE PLAY / DOWNLOAD SECTION */}
           {isMovieCategory && (
@@ -2043,11 +2080,7 @@ export default function Details() {
                       return (
                         <div key={idx} className="flex flex-col gap-1 sm:gap-2">
                           <div 
-                            onClick={() => {
-                              clickedSeasonTab.current = true;
-                              setActiveSeasonIndex(idx);
-                              setSelectedItems([]);
-                            }}
+                            onClick={() => handleSelectSeason(idx)}
                             className="group relative rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 aspect-[2/3] transition-[transform,shadow] duration-300 sm:hover:-translate-y-2 sm:hover:scale-[1.02] sm:hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] shadow-xl active:scale-[0.98]"
                           >
                             {posterUrl ? (
@@ -2092,10 +2125,7 @@ export default function Details() {
                   {seasonTabs.length > 0 && (
                     <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-black/10 dark:border-white/10 no-scrollbar">
                       <button
-                        onClick={() => {
-                          setActiveSeasonIndex(null);
-                          setSelectedItems([]);
-                        }}
+                        onClick={() => handleSelectSeason(null)}
                         className="px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all whitespace-nowrap cursor-pointer bg-black/10 dark:bg-white/10 text-black dark:text-white hover:bg-black/20 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 flex items-center gap-1.5 shrink-0"
                       >
                         <ChevronLeft size={16} /> Seasons
@@ -2104,10 +2134,7 @@ export default function Details() {
                       {seasonTabs.map((tab, idx) => (
                         <button
                           key={idx}
-                          onClick={() => {
-                            setActiveSeasonIndex(idx);
-                            setSelectedItems([]);
-                          }}
+                          onClick={() => handleSelectSeason(idx)}
                           className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all whitespace-nowrap cursor-pointer ${
                             activeSeasonIndex === idx
                               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25 scale-105'
