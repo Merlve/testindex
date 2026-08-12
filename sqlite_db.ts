@@ -10,15 +10,32 @@ if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 const dbPath = path.join(dbDir, 'shindex.db');
 
 let db: Database | null = null;
+let dbPromise: Promise<Database> | null = null;
 
-// Initialize the database connection
-export async function getDB() {
+// Initialize the database connection safely without concurrent race conditions
+export async function getDB(): Promise<Database> {
   if (db) return db;
-  db = await open({
-    filename: dbPath,
-    driver: sqlite3.Database
-  });
-  return db;
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      try {
+        const instance = await open({
+          filename: dbPath,
+          driver: sqlite3.Database
+        });
+        // Pragmas for stability and preventing database lock / memory corruption
+        await instance.exec('PRAGMA journal_mode = WAL;');
+        await instance.exec('PRAGMA busy_timeout = 5000;');
+        await instance.exec('PRAGMA synchronous = NORMAL;');
+        db = instance;
+        return instance;
+      } catch (err) {
+        dbPromise = null; // Reset so next call can retry
+        console.error('[SQLite] Connection error during open:', err);
+        throw err;
+      }
+    })();
+  }
+  return dbPromise;
 }
 
 export async function initSQLiteDB() {

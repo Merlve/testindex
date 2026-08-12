@@ -1,4 +1,18 @@
 import 'dotenv/config';
+
+// Global error boundaries and process crash logging for startup & runtime diagnostics
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL STARTUP/RUNTIME ERROR] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL STARTUP/RUNTIME ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('warning', (warning) => {
+  console.warn('[Process Warning]:', warning.name, warning.message, warning.stack);
+});
+
 import express from 'express';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
@@ -4440,66 +4454,84 @@ app.get('/api/jellyfin/overrides', adminMiddleware, (req, res) => {
 });
 
 async function startServer() {
-  await initSQLiteState();
+  console.log(`[Server Startup] Starting initialization in ${process.env.NODE_ENV || 'development'} mode...`);
+  const memStart = process.memoryUsage();
+  console.log(`[Server Memory] Initial RSS: ${(memStart.rss / 1024 / 1024).toFixed(2)} MB | Heap Used: ${(memStart.heapUsed / 1024 / 1024).toFixed(2)} MB`);
 
-  const isProd = process.env.NODE_ENV === "production" || _filename.endsWith('.cjs');
-  if (!isProd) {
-    const viteModule = 'vite';
-    const { createServer: createViteServer } = await import(viteModule);
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
+  try {
+    console.log('[Server Startup] Step 1/3: Initializing SQLite database and state...');
+    await initSQLiteState();
+    const memPostDb = process.memoryUsage();
+    console.log(`[Server Startup] Step 1/3 Complete. Heap Used: ${(memPostDb.heapUsed / 1024 / 1024).toFixed(2)} MB`);
 
-    app.use(async (req, res, next) => {
-      const isHtmlRequest = req.method === 'GET' && 
-        !req.path.startsWith('/api') && 
-        !req.path.startsWith('/@') && 
-        !req.path.startsWith('/src') && 
-        !req.path.startsWith('/node_modules') &&
-        !/\.[a-zA-Z0-9]+$/.test(req.path);
+    const isProd = process.env.NODE_ENV === "production" || _filename.endsWith('.cjs');
+    if (!isProd) {
+      console.log('[Server Startup] Step 2/3: Mounting Vite development server middleware...');
+      const viteModule = 'vite';
+      const { createServer: createViteServer } = await import(viteModule);
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
 
-      if (isHtmlRequest) {
+      app.use(async (req, res, next) => {
+        const isHtmlRequest = req.method === 'GET' && 
+          !req.path.startsWith('/api') && 
+          !req.path.startsWith('/@') && 
+          !req.path.startsWith('/src') && 
+          !req.path.startsWith('/node_modules') &&
+          !/\.[a-zA-Z0-9]+$/.test(req.path);
+
+        if (isHtmlRequest) {
+          try {
+            let template = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf-8');
+            template = await vite.transformIndexHtml(req.originalUrl, template);
+            const hostUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+            const ogMeta = await getOgMetadataForUrl(req.originalUrl, hostUrl, tmdbCache);
+            const finalHtml = injectOgTags(template, ogMeta);
+            return res.status(200).set({ 'Content-Type': 'text/html' }).send(finalHtml);
+          } catch (e: any) {
+            vite.ssrFixStacktrace(e);
+            next(e);
+            return;
+          }
+        }
+        next();
+      });
+
+      app.use(vite.middlewares);
+    } else {
+      console.log('[Server Startup] Step 2/3: Configuring static file routes for production...');
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath, { index: false }));
+      app.get('*', async (req, res) => {
         try {
-          let template = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf-8');
-          template = await vite.transformIndexHtml(req.originalUrl, template);
-          const hostUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-          const ogMeta = await getOgMetadataForUrl(req.originalUrl, hostUrl, tmdbCache);
-          const finalHtml = injectOgTags(template, ogMeta);
-          return res.status(200).set({ 'Content-Type': 'text/html' }).send(finalHtml);
-        } catch (e: any) {
-          vite.ssrFixStacktrace(e);
-          next(e);
-          return;
-        }
-      }
-      next();
-    });
+          const templatePath = path.join(distPath, 'index.html');
+          if (fs.existsSync(templatePath)) {
+            let template = fs.readFileSync(templatePath, 'utf-8');
+            const hostUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+            const ogMeta = await getOgMetadataForUrl(req.originalUrl, hostUrl, tmdbCache);
+            const finalHtml = injectOgTags(template, ogMeta);
+            return res.status(200).set({ 'Content-Type': 'text/html' }).send(finalHtml);
+          }
+        } catch (e) {}
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
 
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath, { index: false }));
-    app.get('*', async (req, res) => {
-      try {
-        const templatePath = path.join(distPath, 'index.html');
-        if (fs.existsSync(templatePath)) {
-          let template = fs.readFileSync(templatePath, 'utf-8');
-          const hostUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-          const ogMeta = await getOgMetadataForUrl(req.originalUrl, hostUrl, tmdbCache);
-          const finalHtml = injectOgTags(template, ogMeta);
-          return res.status(200).set({ 'Content-Type': 'text/html' }).send(finalHtml);
-        }
-      } catch (e) {}
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
-
-  const isWorker = typeof (globalThis as any).WebSocketPair !== 'undefined';
-  if (!isWorker && process.env.BUILDING_FOR_WORKER !== 'true') {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+    const isWorker = typeof (globalThis as any).WebSocketPair !== 'undefined';
+    if (!isWorker && process.env.BUILDING_FOR_WORKER !== 'true') {
+      console.log(`[Server Startup] Step 3/3: Binding HTTP listener to port ${PORT}...`);
+      const serverInstance = app.listen(PORT, "0.0.0.0", () => {
+        console.log(`[Server Ready] Express server successfully listening on http://0.0.0.0:${PORT}`);
+      });
+      serverInstance.on('error', (err) => {
+        console.error('[Server Error] HTTP server encountered an error:', err);
+      });
+    }
+  } catch (startupError) {
+    console.error('[Server Startup Fatal Error] Failed to start server:', startupError);
+    process.exit(1);
   }
 }
 
