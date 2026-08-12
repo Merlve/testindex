@@ -2526,7 +2526,7 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
                                                     try {
                                                         const imgRes = await axios.get(posterImgUrl, { responseType: 'arraybuffer' });
                                                         if (imgRes.data) {
-                                                            await saveImageToCache(posterImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
+                                                            await saveImageToCache(posterImgUrl, String(imgRes.headers['content-type'] || 'image/jpeg'), Buffer.from(imgRes.data));
                                                         }
                                                     } catch (e) {}
                                                     await new Promise(r => setTimeout(r, 100)); // Rate limit
@@ -2542,7 +2542,7 @@ app.post('/api/meta/scan_files/start', adminMiddleware, async (req, res) => {
                                                             try {
                                                                 const imgRes = await axios.get(epImgUrl, { responseType: 'arraybuffer' });
                                                                 if (imgRes.data) {
-                                                                    await saveImageToCache(epImgUrl, imgRes.headers['content-type'] || 'image/jpeg', Buffer.from(imgRes.data));
+                                                                    await saveImageToCache(epImgUrl, String(imgRes.headers['content-type'] || 'image/jpeg'), Buffer.from(imgRes.data));
                                                                 }
                                                             } catch (e) {}
                                                             await new Promise(r => setTimeout(r, 100)); // Rate limit
