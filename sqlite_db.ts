@@ -17,19 +17,7 @@ let dbPromise: Promise<Database> | null = null;
 
 // Initialize the database connection safely without concurrent race conditions
 export async function getDB(): Promise<Database> {
-  // --- Check-Before-Use Liveness Probe ---
-  if (db) {
-    try {
-      // Fire a near-instant lightweight query to verify the connection hasn't gone stale or dropped its file descriptor
-      await db.get('SELECT 1');
-      return db;
-    } catch (err) {
-      console.warn('[SQLite] Connection stale or unresponsive. Gracefully re-establishing...', err.message);
-      db = null;
-      dbPromise = null; // Clear the cached promise to force a fresh connection
-    }
-  }
-
+  if (db) return db;
   if (!dbPromise) {
     dbPromise = (async () => {
       try {
