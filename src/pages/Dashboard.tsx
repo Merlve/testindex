@@ -141,25 +141,6 @@ export default function Dashboard() {
 
 
 
-  if (isLoading) return <DashboardSkeleton />;
-
-  if (isError) {
-    return (
-      <div className="pb-20">
-        <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-4 rounded-xl mb-4 max-w-lg">
-            <p className="font-bold mb-2">Error loading dashboard</p>
-            <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
-          </div>
-          <button onClick={() => refetch()} className="flex items-center gap-2 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 text-black dark:text-white px-5 py-2.5 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm transition-all hover:scale-105">
-            <RefreshCw size={18} /> Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-
   const renderedCategories = useMemo(() => {
     return categories.map(cat => (
       <div key={cat.name}>
@@ -183,6 +164,24 @@ export default function Dashboard() {
       </div>
     ));
   }, [categories]);
+
+  if (isLoading) return <DashboardSkeleton />;
+
+  if (isError) {
+    return (
+      <div className="pb-20">
+        <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-4 rounded-xl mb-4 max-w-lg">
+            <p className="font-bold mb-2">Error loading dashboard</p>
+            <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
+          </div>
+          <button onClick={() => refetch()} className="flex items-center gap-2 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 text-black dark:text-white px-5 py-2.5 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm transition-all hover:scale-105">
+            <RefreshCw size={18} /> Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div 
