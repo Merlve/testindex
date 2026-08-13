@@ -14,8 +14,6 @@ process.on('warning', (warning) => {
 });
 
 import express from 'express';
-import swaggerUi from 'swagger-ui-express';
-import YAML from 'yamljs';
 import { getRecentlyAdded, getLocalItems, initJellyfinCache } from './jellyfin';
 import { getOgMetadataForUrl, injectOgTags } from './og_meta';
 
@@ -25,9 +23,30 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import dns from 'dns';
+import http from 'http';
+import https from 'https';
 
 dns.setDefaultResultOrder('ipv4first');
-axios.defaults.timeout = 60000;
+
+// Configure highly robust HTTP/HTTPS Keep-Alive agents to prevent stale socket hangs on VPS firewalls
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 10000, // Send TCP Keep-Alive every 10s
+  timeout: 30000,       // Socket timeout
+  scheduling: 'fifo'
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 10000,
+  timeout: 30000,
+  scheduling: 'fifo'
+});
+
+axios.defaults.httpAgent = httpAgent;
+axios.defaults.httpsAgent = httpsAgent;
+axios.defaults.timeout = 30000; // 30s timeout instead of 60s
+
 
 const logFile = path.join(process.cwd(), 'app-debug.log');
 const logStream = fs.createWriteStream(logFile, { flags: 'a' });
@@ -101,7 +120,6 @@ axios.interceptors.response.use(
   }
 );
 import crypto from 'crypto';
-import { GoogleGenAI } from '@google/genai';
 import { createRequire } from 'module';
 import { readSQLiteJSON, writeSQLiteJSON, initSQLiteDB, getDetailsCache, updateDetailsCache, getDB, getImageFromCache, saveImageToCache } from './sqlite_db';
 
@@ -217,7 +235,8 @@ function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
 // ----------------------------------------
 
 const app = express();
-const PORT = Number(process.env.SERVER_PORT) || 3000;
+const isAIStudio = !!process.env.APPLET_ID;
+const PORT = isAIStudio ? 3000 : (Number(process.env.SERVER_PORT) || 3000);
 
 const SERVER_BOOT_ID = Date.now().toString();
 
@@ -248,12 +267,27 @@ app.use((req, res, next) => {
   next();
 });
 
-try {
-  const swaggerDocument = YAML.load(path.join(process.cwd(), 'openapi.yaml'));
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-} catch (e) {
-  console.log('Failed to load openapi.yaml for Swagger UI', e);
-}
+app.use('/api-docs', async (req, res, next) => {
+  try {
+    const swaggerUi = (await import('swagger-ui-express')).default;
+    const YAML = (await import('yamljs')).default;
+    const swaggerDocument = YAML.load(path.join(process.cwd(), 'openapi.yaml'));
+    const handlers = ([] as any[]).concat(swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+    let i = 0;
+    const executeNext = (err?: any) => {
+      if (err) return next(err);
+      if (i < handlers.length) {
+        handlers[i++](req, res, executeNext);
+      } else {
+        next();
+      }
+    };
+    executeNext();
+  } catch (e) {
+    console.error('Failed to serve Swagger UI', e);
+    res.status(500).send('API documentation unavailable');
+  }
+});
 
 const rateLimitCache = new Map<string, { count: number, resetAt: number }>();
 const rateLimitMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -4410,6 +4444,7 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, history } = req.body;
+    const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
@@ -4514,6 +4549,18 @@ async function startServer() {
   console.log(`[Server Memory] Initial RSS: ${(memStart.rss / 1024 / 1024).toFixed(2)} MB | Heap Used: ${(memStart.heapUsed / 1024 / 1024).toFixed(2)} MB`);
 
   try {
+    const v8 = await import('v8');
+    const stats = v8.getHeapStatistics();
+    const maxHeapMB = stats.heap_size_limit / 1024 / 1024;
+    const usedHeapMB = stats.used_heap_size / 1024 / 1024;
+    const availableHeapMB = maxHeapMB - usedHeapMB;
+
+    if (availableHeapMB < 100) {
+      console.error(`[FATAL] Insufficient heap memory for safe database initialization. Available: ${availableHeapMB.toFixed(2)} MB, Required: 100 MB. Try increasing --max-old-space-size`);
+      process.exit(1);
+    }
+    console.log(`[Server Memory] Safe to initialize DB. Available Heap: ${availableHeapMB.toFixed(2)} MB`);
+
     console.log('[Server Startup] Step 1/3: Initializing SQLite database and state...');
     await initSQLiteState();
     const memPostDb = process.memoryUsage();

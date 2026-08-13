@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
+import type { Database } from 'sqlite';
 
 const dbDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
@@ -14,10 +13,24 @@ let dbPromise: Promise<Database> | null = null;
 
 // Initialize the database connection safely without concurrent race conditions
 export async function getDB(): Promise<Database> {
-  if (db) return db;
+  // --- Check-Before-Use Liveness Probe ---
+  if (db) {
+    try {
+      // Fire a near-instant lightweight query to verify the connection hasn't gone stale or dropped its file descriptor
+      await db.get('SELECT 1');
+      return db;
+    } catch (err) {
+      console.warn('[SQLite] Connection stale or unresponsive. Gracefully re-establishing...', err.message);
+      db = null;
+      dbPromise = null; // Clear the cached promise to force a fresh connection
+    }
+  }
+
   if (!dbPromise) {
     dbPromise = (async () => {
       try {
+        const sqlite3 = (await import('sqlite3')).default;
+        const { open } = await import('sqlite');
         const instance = await open({
           filename: dbPath,
           driver: sqlite3.Database
