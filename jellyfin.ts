@@ -86,7 +86,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
             }
         }
     } catch(e: any) {
-        console.error("[Jellyfin] Failed to fetch users list to verify userId", e.message || e);
+        // Silently ignore timeout errors for background user validation
     }
     
     if (!userId) {

@@ -93,6 +93,9 @@ export default function Dashboard() {
     queryFn: fetchHome,
     enabled: !!token,
     retry: 1, // Reduce retries so it doesn't spin too long on timeout
+    staleTime: Infinity, // Prevent automatic refetch on background/foreground
+    refetchOnMount: false, // Prevent automatic refetch when returning to the page
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
     placeholderData: () => {
       try {
         const cached = localStorage.getItem('dashboard_cache');
@@ -190,14 +193,10 @@ export default function Dashboard() {
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="pb-20"
     >
-      <div className="px-4 sm:px-8 flex items-center justify-between gap-2.5 mt-4 md:mt-6 mb-2 min-w-0">
-        <div className="flex-1 min-w-0">
-          <AnnouncementPill message={configData?.announcement} className="w-full" />
-        </div>
-        <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-4 py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105 shrink-0 h-9">
-          <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> {isFetching ? 'Refreshing...' : 'Refresh'}
-        </button>
+      <div className="px-4 sm:px-8 mt-4 md:mt-6 mb-2">
+        <AnnouncementPill message={configData?.announcement} className="w-full" />
       </div>
+
       {featuredItems && featuredItems.length > 0 && (
         <FeaturedSlider featuredItems={featuredItems} />
       )}

@@ -61,6 +61,24 @@ export default function Admin() {
     }
     setLoadingMissing(false);
   };
+
+  const downloadDebugLogs = async () => {
+    try {
+      const res = await axios.get('/api/admin/logs/download', {
+        headers: { Authorization: token },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'app-debug.log');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+    } catch (err: any) {
+      alert(`Failed to download logs: ${err.message}`);
+    }
+  };
   
   const handleFixMissing = (item: any) => {
     setFixModalItem(item);
@@ -217,10 +235,6 @@ export default function Admin() {
       } catch(e) {}
       
       try {
-        const res2 = await axios.get('/api/meta/scan_season_posters/status');
-        setSeasonPostersScanLoading(res2.data.isRunning);
-        if (res2.data.message) { setSeasonPostersScanMsg(res2.data.message); }
-
         const res = await axios.get('/api/meta/scan_images/status');
         setImagesScanLoading(res.data.isRunning);
         if (res.data.message) {
@@ -251,7 +265,7 @@ export default function Admin() {
           setActorSyncMsg(res.data.message);
         }
       } catch(e) {}
-    }, 1000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -694,18 +708,28 @@ export default function Admin() {
 
       {activeTab === 'logs' && (
         <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm">
-          <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 sm:mb-4 tracking-tight flex justify-between items-center gap-2">
-            <span>System Activity Logs</span>
-            <button 
-              onClick={() => axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => {
-                if (Array.isArray(res.data)) setLogs(res.data);
-                else setLogs([]);
-              })}
-              className="text-xs bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded-lg border border-black/5 dark:border-white/5 font-semibold text-black dark:text-white cursor-pointer shrink-0"
-            >
-              Refresh
-            </button>
-          </h3>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-2 sm:mb-4">
+            <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white tracking-tight">
+              System Activity Logs
+            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <button 
+                onClick={downloadDebugLogs}
+                className="text-xs bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-lg border border-purple-600/20 font-bold cursor-pointer flex items-center gap-1.5 transition-colors"
+              >
+                <Download size={14} /> <span className="hidden sm:inline">Download</span> Debug Logs
+              </button>
+              <button 
+                onClick={() => axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => {
+                  if (Array.isArray(res.data)) setLogs(res.data);
+                  else setLogs([]);
+                })}
+                className="text-xs bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded-lg border border-black/5 dark:border-white/5 font-semibold text-black dark:text-white cursor-pointer"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
           <p className="text-gray-600 dark:text-gray-400 mb-6 text-xs sm:text-sm">Tracks logins, batch updates, and sensitive operations.</p>
           
           <div className="space-y-3">

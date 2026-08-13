@@ -27,7 +27,43 @@ import axios from 'axios';
 import dns from 'dns';
 
 dns.setDefaultResultOrder('ipv4first');
-axios.defaults.timeout = 15000;
+axios.defaults.timeout = 60000;
+
+const logFile = path.join(process.cwd(), 'app-debug.log');
+const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+
+function formatLogMessage(level: string, ...args: any[]) {
+    const timestamp = new Date().toISOString();
+    const message = args.map(arg => {
+        if (arg instanceof Error) {
+            return `${arg.message}\n${arg.stack}`;
+        }
+        return typeof arg === 'object' ? JSON.stringify(arg) : arg;
+    }).join(' ');
+    return `[${timestamp}] [${level}] ${message}\n`;
+}
+
+console.log = function(...args) {
+    const msg = formatLogMessage('INFO', ...args);
+    logStream.write(msg);
+    originalLog.apply(console, args);
+};
+
+console.error = function(...args) {
+    const msg = formatLogMessage('ERROR', ...args);
+    logStream.write(msg);
+    originalError.apply(console, args);
+};
+
+console.warn = function(...args) {
+    const msg = formatLogMessage('WARN', ...args);
+    logStream.write(msg);
+    originalWarn.apply(console, args);
+};
 
 const invalidatedTokens = new Set<string>();
 
@@ -192,6 +228,17 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (!req.url.includes('/api/auth/me') && !req.url.includes('/status')) { // Don't spam the log with heartbeat requests
+      console.log(`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms - IP: ${req.ip}`);
+    }
+  });
+  next();
+});
 
 app.use((req, res, next) => {
   const token = req.headers.authorization;
@@ -1297,6 +1344,14 @@ app.get('/api/admin/logs', adminMiddleware, (req, res) => {
   res.json(activityLogs);
 });
 
+app.get('/api/admin/logs/download', adminMiddleware, (req, res) => {
+  if (fs.existsSync(logFile)) {
+    res.download(logFile, 'app-debug.log');
+  } else {
+    res.status(404).json({ error: 'Log file not found' });
+  }
+});
+
 app.post('/api/admin/log', adminMiddleware, async (req, res) => {
   const { action, username, details } = req.body;
   addLog(action, username || 'System/Admin', details);
@@ -1732,7 +1787,7 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
                         apiCache.set(cacheKey, response.data, 86400);
                         writeSQLiteJSON(cacheKey, response.data).catch(console.error);
                     }
-                }).catch(e => console.error('Background refresh failed for fs/list:', e.message));
+                }).catch(() => {});
                 return;
             }
         }
@@ -1796,7 +1851,7 @@ app.post('/api/fs/get', cacheMiddleware(600, true), async (req, res) => {
                 apiCache.set(cacheKey, response.data, 7200);
                 writeSQLiteJSON(cacheKey, response.data).catch(console.error);
             }
-        }).catch(e => console.error('Background refresh failed for fs/get:', e.message));
+        }).catch(() => {});
         return;
     }
 
