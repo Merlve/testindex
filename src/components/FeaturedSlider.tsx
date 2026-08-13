@@ -75,6 +75,7 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
 const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   const { data: tmdb } = useQuery({
     queryKey: ['tmdb', item.name, item.category, item.parentPath],
@@ -117,7 +118,21 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
       className="relative w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-lg border border-white/10 group cursor-pointer"
     >
        {backdrop ? (
-         <img src={backdrop} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={title} loading="eager" />
+         <div className="absolute inset-0 w-full h-full overflow-hidden">
+           <img 
+             src={`https://image.tmdb.org/t/p/w300${tmdb.backdrop_path || tmdb.poster_path}`} 
+             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 blur-xl scale-110 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} 
+             alt="" 
+             aria-hidden="true" 
+           />
+           <img 
+             src={backdrop} 
+             onLoad={() => setImgLoaded(true)}
+             className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-all duration-700 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`} 
+             alt={title} 
+             loading="eager" 
+           />
+         </div>
        ) : (
          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/40 via-gray-900 to-black flex items-center justify-center p-6 text-center">
             <span className="text-2xl font-bold text-white/40 italic">{title}</span>

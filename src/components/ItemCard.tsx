@@ -6,23 +6,34 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 
-const LazyImage = ({ src, alt, className }: { src: string, alt: string, className?: string }) => {
+const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: string | null, lowResSrc?: string | null, alt: string, className?: string, fallbackText?: string }) => {
   const [loaded, setLoaded] = useState(false);
   return (
-    <>
-      {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/10 dark:bg-white/10 z-0 animate-pulse">
-           <Film size={32} className="opacity-20" />
+    <div className={`overflow-hidden bg-black/5 dark:bg-white/5 ${className || ''}`}>
+      {(!loaded || !src) && !lowResSrc && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-0 animate-pulse text-gray-500 dark:text-gray-400">
+           <Film size={32} className="opacity-20 mb-2" />
+           {fallbackText && <span className="text-[10px] sm:text-xs text-center px-2 opacity-40 line-clamp-2">{fallbackText}</span>}
         </div>
       )}
-      <img
-        src={src}
-        alt={alt}
-        loading="lazy"
-        onLoad={() => setLoaded(true)}
-        className={`${className || ''} transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-      />
-    </>
+      {lowResSrc && (
+        <img
+          src={lowResSrc}
+          alt=""
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 blur-xl scale-110 ${loaded ? 'opacity-0' : 'opacity-100'}`}
+          aria-hidden="true"
+        />
+      )}
+      {src && (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+    </div>
   );
 };
 
@@ -164,14 +175,13 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     const innerContent = (
     <>
       <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 ${viewMode === 'grid' ? 'sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98]' : ''} flex-shrink-0`}>
-        {displayTmdb?.poster_path ? (
-          <LazyImage src={`https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}`} alt={item.name} className="absolute inset-0 w-full h-full object-cover z-0" />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 bg-[#fbf4eb] dark:bg-[#1a1a22] z-0">
-            <Film size={32} className="mb-2 opacity-50 sm:w-12 sm:h-12" />
-            <span className="text-[10px] sm:text-xs text-center px-2 line-clamp-2">{item.name}</span>
-          </div>
-        )}
+        <MoviePoster 
+          src={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}` : null}
+          lowResSrc={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w92${displayTmdb.poster_path}` : null}
+          alt={item.name} 
+          className="absolute inset-0 w-full h-full z-0" 
+          fallbackText={item.name}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
         {displayTmdb?.vote_average && (
           <div className={`absolute top-1 right-1 ${viewMode === 'grid' ? 'sm:top-2 sm:right-2' : ''} px-1 sm:px-1.5 py-0.5 bg-black/85  rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20`}>

@@ -2,7 +2,10 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.tsx';
+import { initMemoryTracker } from './utils/memoryTracker';
 import './index.css';
+
+initMemoryTracker();
 
 const queryClient = new QueryClient({
   defaultOptions: {

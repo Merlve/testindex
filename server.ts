@@ -233,7 +233,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    if (!req.url.includes('/api/auth/me') && !req.url.includes('/status')) { // Don't spam the log with heartbeat requests
+    if (res.statusCode >= 400) { // Only log errors and warnings to prevent log spam
       console.log(`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms - IP: ${req.ip}`);
     }
   });

@@ -215,22 +215,6 @@ export async function writeSQLiteJSON(key: string, value: any) {
       'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
       [key, valToStore]
     );
-
-    if (key === 'db') {
-      try {
-        fs.writeFileSync(path.join(dbDir, 'db.json'), JSON.stringify(value, null, 2), 'utf8');
-        fs.writeFileSync(path.join(process.cwd(), 'db.json'), JSON.stringify(value, null, 2), 'utf8');
-      } catch (e) {
-        console.error('Failed to sync db.json to disk:', e);
-      }
-    } else if (key === 'config') {
-      try {
-        fs.writeFileSync(path.join(dbDir, 'config.json'), JSON.stringify(value, null, 2), 'utf8');
-        fs.writeFileSync(path.join(process.cwd(), 'config.json'), JSON.stringify(value, null, 2), 'utf8');
-      } catch (e) {
-        console.error('Failed to sync config.json to disk:', e);
-      }
-    }
   } catch (e) {
     console.error(`Error writing ${key} to SQLite:`, e);
   }
