@@ -3179,11 +3179,11 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     
     let data = null;
     try {
-      let response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}`);
+      let response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=images&include_image_language=en,null`);
       data = response.data;
     } catch (e) {
       try {
-        let response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}`);
+        let response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=images&include_image_language=en,null`);
         data = response.data;
       } catch (e2) {
         return res.status(404).json({ error: 'Not found on TMDB' });

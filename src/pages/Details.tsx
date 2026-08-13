@@ -430,6 +430,8 @@ export default function Details() {
   const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(null);
   const [currentSeasonEpisodes, setCurrentSeasonEpisodes] = useState<any[]>([]);
   const [loadingSeasonFiles, setLoadingSeasonFiles] = useState(false);
+  const [baseRefresh, setBaseRefresh] = useState(0);
+  const [seasonRefresh, setSeasonRefresh] = useState(0);
 
   // Playing / Modal State
   const [playingUrl, setPlayingUrl] = useState('');
@@ -514,14 +516,14 @@ export default function Details() {
     if (tmdb?.id) {
       if (tmdb.images?.logos?.length > 0) {
         const logo = tmdb.images.logos.find((l: any) => l.iso_639_1 === 'en') || tmdb.images.logos[0];
-        if (logo) setLogoUrl(`https://image.tmdb.org/t/p/w300${logo.file_path}`);
+        if (logo) setLogoUrl(`https://image.tmdb.org/t/p/original${logo.file_path}`);
       } else {
         const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category) ? 'tv' : 'movie';
         axios.get(`/api/meta/images?id=${tmdb.id}&type=${searchType}`)
           .then(res => {
             if (isMounted && res.data?.logos?.length > 0) {
               const logo = res.data.logos.find((l: any) => l.iso_639_1 === 'en') || res.data.logos[0];
-              if (logo) setLogoUrl(`https://image.tmdb.org/t/p/w300${logo.file_path}`);
+              if (logo) setLogoUrl(`https://image.tmdb.org/t/p/original${logo.file_path}`);
             }
           })
           .catch(console.error);
@@ -556,7 +558,10 @@ export default function Details() {
     setLoadingFiles(true);
 
     const cleanPath = actualOpenlistPath.replace(/^\/+/, '');
-    axios.post('/api/fs/list', { reqPath: cleanPath }, { headers: token ? { Authorization: token } : {} })
+    const payload: any = { reqPath: cleanPath };
+    if (baseRefresh > 0) payload.refresh = true;
+
+    axios.post('/api/fs/list', payload, { headers: token ? { Authorization: token } : {} })
       .then(res => {
         if (!isMounted) return;
         const content = res.data?.data?.content || [];
@@ -584,7 +589,7 @@ export default function Details() {
       });
 
     return () => { isMounted = false; };
-  }, [actualOpenlistPath, token]);
+  }, [actualOpenlistPath, token, baseRefresh]);
 
   // Fetch Season Episodes when active season changes
   useEffect(() => {
@@ -597,7 +602,10 @@ export default function Details() {
     const selectedSeasonFolder = seasonItems[activeSeasonIndex];
     const seasonPath = `${actualOpenlistPath.replace(/^\/+/, '')}/${selectedSeasonFolder.name}`;
 
-    axios.post('/api/fs/list', { reqPath: seasonPath }, { headers: token ? { Authorization: token } : {} })
+    const payload: any = { reqPath: seasonPath };
+    if (seasonRefresh > 0) payload.refresh = true;
+
+    axios.post('/api/fs/list', payload, { headers: token ? { Authorization: token } : {} })
       .then(res => {
         if (!isMounted) return;
         const content = res.data?.data?.content || [];
@@ -611,7 +619,15 @@ export default function Details() {
       });
 
     return () => { isMounted = false; };
-  }, [activeSeasonIndex, seasonItems, actualOpenlistPath, token]);
+  }, [activeSeasonIndex, seasonItems, actualOpenlistPath, token, seasonRefresh]);
+
+  const handleRefresh = () => {
+    if (seasonItems.length > 0) {
+      setSeasonRefresh(r => r + 1);
+    } else {
+      setBaseRefresh(r => r + 1);
+    }
+  };
 
   // Toggle Watchlist
   const handleToggleWatchlist = async () => {
@@ -846,7 +862,7 @@ export default function Details() {
       </AnimatePresence>
 
       {/* Hero Backdrop Banner */}
-      <div className="relative w-full h-[60vh] sm:h-[70vh] md:h-[80vh]">
+      <div className="relative w-full h-[50vh] sm:h-[60vh] md:h-[70vh]">
         {backdropUrl && (
           <img 
             src={backdropUrl} 
@@ -861,7 +877,7 @@ export default function Details() {
       </div>
 
       {/* Content Section positioned below the backdrop with slight overlap */}
-      <div className="relative z-20 flex flex-col items-center max-w-4xl mx-auto space-y-5 px-4 sm:px-8 -mt-16 sm:-mt-24 text-center">
+      <div className="relative z-20 flex flex-col items-center max-w-4xl mx-auto space-y-5 px-4 sm:px-8 -mt-24 sm:-mt-32 text-center">
         {/* Title or Logo */}
         {logoUrl ? (
           <img 
@@ -1010,23 +1026,34 @@ export default function Details() {
           </div>
         ) : (
           <div>
-            {/* Select All Toggle */}
+            {/* Select All & Refresh Toggle */}
             {((seasonItems.length > 0 && currentSeasonEpisodes.length > 0) || (seasonItems.length === 0 && baseItems.length > 0)) && (
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <button 
-                  onClick={toggleSelectAll} 
-                  className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center ${
-                    (seasonItems.length > 0 ? currentSeasonEpisodes : baseItems).every(f => 
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={toggleSelectAll} 
+                    className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center ${
+                      (seasonItems.length > 0 ? currentSeasonEpisodes : baseItems).every(f => 
+                        selectedFiles.some(s => s.file.name === f.name)
+                      ) ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                    }`}
+                    title="Select All"
+                  >
+                    {(seasonItems.length > 0 ? currentSeasonEpisodes : baseItems).every(f => 
                       selectedFiles.some(s => s.file.name === f.name)
-                    ) ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                  }`}
-                  title="Select All"
+                    ) ? <CheckSquare size={20} /> : <Square size={20} />}
+                  </button>
+                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-pointer" onClick={toggleSelectAll}>Select All</span>
+                </div>
+
+                <button 
+                  onClick={handleRefresh}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition text-sm font-semibold cursor-pointer"
+                  title="Refresh folder contents"
                 >
-                  {(seasonItems.length > 0 ? currentSeasonEpisodes : baseItems).every(f => 
-                    selectedFiles.some(s => s.file.name === f.name)
-                  ) ? <CheckSquare size={20} /> : <Square size={20} />}
+                  <RefreshCw size={14} className={loadingFiles || loadingSeasonFiles ? "animate-spin text-purple-600" : "text-gray-600 dark:text-gray-300"} />
+                  <span className="hidden sm:inline text-gray-700 dark:text-gray-300">Refresh</span>
                 </button>
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-pointer" onClick={toggleSelectAll}>Select All</span>
               </div>
             )}
             
