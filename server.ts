@@ -67,21 +67,27 @@ function formatLogMessage(level: string, ...args: any[]) {
 }
 
 console.log = function(...args) {
-    const msg = formatLogMessage('INFO', ...args);
-    logStream.write(msg);
-    originalLog.apply(console, args);
+    try {
+        const msg = formatLogMessage('INFO', ...args);
+        logStream.write(msg);
+        originalLog.apply(console, args);
+    } catch(e) {}
 };
 
 console.error = function(...args) {
-    const msg = formatLogMessage('ERROR', ...args);
-    logStream.write(msg);
-    originalError.apply(console, args);
+    try {
+        const msg = formatLogMessage('ERROR', ...args);
+        logStream.write(msg);
+        originalError.apply(console, args);
+    } catch(e) {}
 };
 
 console.warn = function(...args) {
-    const msg = formatLogMessage('WARN', ...args);
-    logStream.write(msg);
-    originalWarn.apply(console, args);
+    try {
+        const msg = formatLogMessage('WARN', ...args);
+        logStream.write(msg);
+        originalWarn.apply(console, args);
+    } catch(e) {}
 };
 
 const invalidatedTokens = new Set<string>();
