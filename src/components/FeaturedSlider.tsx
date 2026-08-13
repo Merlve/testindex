@@ -91,7 +91,7 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
   });
 
   const backdrop = tmdb?.backdrop_path 
-    ? `https://image.tmdb.org/t/p/original${tmdb.backdrop_path}` 
+    ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` 
     : (tmdb?.poster_path ? `https://image.tmdb.org/t/p/w780${tmdb.poster_path}` : null);
     
   const title = tmdb?.title || tmdb?.name || item.name;

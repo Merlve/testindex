@@ -36,19 +36,6 @@ export default function DetailsSkeleton(_props?: { onRefresh?: () => void; refre
         </div>
       </div>
 
-      {/* Cast & Crew Skeleton */}
-      <div className="px-4 sm:px-8 md:px-12 max-w-7xl mx-auto w-full mb-8">
-        <div className="flex gap-3 sm:gap-4 overflow-x-hidden pb-3 pt-1 justify-center">
-           {[1, 2, 3, 4, 5, 6].map((i) => (
-             <div key={i} className="w-20 sm:w-24 md:w-28 shrink-0 flex flex-col items-center animate-pulse">
-               <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl sm:rounded-2xl bg-black/10 dark:bg-white/10" />
-               <div className="w-16 h-3 bg-black/10 dark:bg-white/10 rounded mt-2" />
-               <div className="w-10 h-2 bg-black/10 dark:bg-white/10 rounded mt-1" />
-             </div>
-           ))}
-        </div>
-      </div>
-
       {/* Files Section Skeleton */}
       <div className="px-4 sm:px-8 md:px-12 relative z-20 w-full max-w-7xl mx-auto">
         <div className="mt-8 space-y-3">

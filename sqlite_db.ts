@@ -47,8 +47,13 @@ export async function initSQLiteDB() {
   try {
     const database = await getDB();
     await database.exec('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)');
-    await database.exec('CREATE TABLE IF NOT EXISTS details_cache (path TEXT PRIMARY KEY, tmdb_data TEXT, base_items TEXT, season_items TEXT, updated_at INTEGER)');
-    await database.exec('CREATE TABLE IF NOT EXISTS image_cache (url TEXT PRIMARY KEY, mime_type TEXT, data BLOB)');
+    
+    // Purge old heavy caches as requested by user
+    await database.exec('DROP TABLE IF EXISTS details_cache');
+    await database.exec('DROP TABLE IF EXISTS image_cache');
+    
+    // Reclaim disk space after dropping tables
+    await database.exec('VACUUM');
   } catch (e) {
     console.error('Failed to initialize local SQLite database:', String(e));
   }
@@ -223,65 +228,5 @@ export async function writeSQLiteJSON(key: string, value: any) {
     );
   } catch (e) {
     console.error(`Error writing ${key} to SQLite:`, e);
-  }
-}
-
-
-// Details Cache Service Layer
-export async function getDetailsCache(path: string) {
-  try {
-    const database = await getDB();
-    const row = await database.get('SELECT * FROM details_cache WHERE path = ?', path);
-    if (row) {
-      return {
-        tmdbData: row.tmdb_data ? JSON.parse(row.tmdb_data) : null,
-        baseItems: row.base_items ? JSON.parse(row.base_items) : [],
-        seasonItems: row.season_items ? JSON.parse(row.season_items) : [],
-        updatedAt: row.updated_at
-      };
-    }
-  } catch (e) {
-    console.error('Error reading details cache:', e);
-  }
-  return null;
-}
-
-export async function updateDetailsCache(path: string, tmdbData: any, baseItems: any[], seasonItems: any[]) {
-  try {
-    const database = await getDB();
-    await database.run(
-      'INSERT INTO details_cache (path, tmdb_data, base_items, season_items, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET tmdb_data=excluded.tmdb_data, base_items=excluded.base_items, season_items=excluded.season_items, updated_at=excluded.updated_at',
-      [
-        path,
-        tmdbData ? JSON.stringify(tmdbData) : null,
-        baseItems ? JSON.stringify(baseItems) : null,
-        seasonItems ? JSON.stringify(seasonItems) : null,
-        Date.now()
-      ]
-    );
-  } catch (e) {
-    console.error('Error updating details cache:', e);
-  }
-}
-
-export async function getImageFromCache(url: string) {
-  try {
-    const database = await getDB();
-    const row = await database.get('SELECT mime_type, data FROM image_cache WHERE url = ?', url);
-    return row || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-export async function saveImageToCache(url: string, mimeType: string, data: Buffer) {
-  try {
-    const database = await getDB();
-    await database.run(
-      'INSERT INTO image_cache (url, mime_type, data) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET mime_type=excluded.mime_type, data=excluded.data',
-      [url, mimeType, data]
-    );
-  } catch (e) {
-    console.error('Error saving image cache:', e);
   }
 }
