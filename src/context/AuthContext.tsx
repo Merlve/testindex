@@ -15,10 +15,11 @@ let isTerminatingSession = false;
 function terminateSessionAndRedirect() {
   if (isTerminatingSession) return;
   isTerminatingSession = true;
-  localStorage.removeItem('qs_user');
-  localStorage.removeItem('qs_token');
-  localStorage.removeItem('qs_guest_login_time');
-  localStorage.removeItem('qs_guest_last_login_date');
+  sessionStorage.removeItem('qs_user');
+  sessionStorage.removeItem('qs_token');
+  sessionStorage.removeItem('qs_guest_login_time');
+  sessionStorage.removeItem('qs_guest_last_login_date');
+  sessionStorage.removeItem('qs_server_boot_id');
   sessionStorage.clear();
   window.location.href = '/login';
 }
@@ -28,11 +29,11 @@ axios.interceptors.response.use(
   response => {
     const currentBootId = response.headers?.['x-server-boot-id'];
     if (currentBootId) {
-      const storedBootId = localStorage.getItem('qs_server_boot_id');
+      const storedBootId = sessionStorage.getItem('qs_server_boot_id');
       if (!storedBootId) {
-        localStorage.setItem('qs_server_boot_id', currentBootId);
+        sessionStorage.setItem('qs_server_boot_id', currentBootId);
       } else if (storedBootId !== currentBootId) {
-        localStorage.setItem('qs_server_boot_id', currentBootId);
+        sessionStorage.setItem('qs_server_boot_id', currentBootId);
         terminateSessionAndRedirect();
         return Promise.reject(new Error("Server restarted or rebuilt, terminating session..."));
       }
@@ -49,11 +50,11 @@ axios.interceptors.response.use(
   async error => {
     const currentBootId = error.response?.headers?.['x-server-boot-id'];
     if (currentBootId) {
-      const storedBootId = localStorage.getItem('qs_server_boot_id');
+      const storedBootId = sessionStorage.getItem('qs_server_boot_id');
       if (!storedBootId) {
-        localStorage.setItem('qs_server_boot_id', currentBootId);
+        sessionStorage.setItem('qs_server_boot_id', currentBootId);
       } else if (storedBootId !== currentBootId) {
-        localStorage.setItem('qs_server_boot_id', currentBootId);
+        sessionStorage.setItem('qs_server_boot_id', currentBootId);
         terminateSessionAndRedirect();
         return Promise.reject(new Error("Server restarted or rebuilt, terminating session..."));
       }
@@ -75,8 +76,8 @@ axios.interceptors.response.use(
 );
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<string | null>(localStorage.getItem('qs_user'));
-  const [token, setToken] = useState<string | null>(localStorage.getItem('qs_token'));
+  const [user, setUser] = useState<string | null>(sessionStorage.getItem('qs_user'));
+  const [token, setToken] = useState<string | null>(sessionStorage.getItem('qs_token'));
   const [inactivityTimeoutMinutes, setInactivityTimeoutMinutes] = useState<number>(0);
 
   useEffect(() => {
@@ -125,10 +126,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     let interval: any;
     if (user === 'guest') {
       interval = setInterval(() => {
-        const loginTime = parseInt(localStorage.getItem('qs_guest_login_time') || '0');
+        const loginTime = parseInt(sessionStorage.getItem('qs_guest_login_time') || '0');
         if (Date.now() - loginTime > 60000) {
           logout();
-          localStorage.setItem('guest_timeout', 'true');
+          sessionStorage.setItem('guest_timeout', 'true');
         }
       }, 1000);
     } else if (token) {
@@ -167,24 +168,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     isTerminatingSession = false;
     setUser(newUser);
     setToken(newToken);
-    localStorage.setItem('qs_user', newUser);
-    localStorage.setItem('qs_token', newToken);
+    sessionStorage.setItem('qs_user', newUser);
+    sessionStorage.setItem('qs_token', newToken);
     if (newUser === 'guest') {
       const now = Date.now().toString();
-      localStorage.setItem('qs_guest_login_time', now);
-      localStorage.setItem('qs_guest_last_login_date', now);
+      sessionStorage.setItem('qs_guest_login_time', now);
+      sessionStorage.setItem('qs_guest_last_login_date', now);
     } else {
-      localStorage.removeItem('qs_guest_login_time');
+      sessionStorage.removeItem('qs_guest_login_time');
     }
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('qs_user');
-    localStorage.removeItem('qs_token');
-    localStorage.removeItem('qs_guest_login_time');
-    localStorage.removeItem('qs_guest_last_login_date');
+    sessionStorage.removeItem('qs_user');
+    sessionStorage.removeItem('qs_token');
+    sessionStorage.removeItem('qs_guest_login_time');
+    sessionStorage.removeItem('qs_guest_last_login_date');
     sessionStorage.removeItem('shindex-featured-items-session');
   };
 

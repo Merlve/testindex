@@ -255,7 +255,7 @@ export default function Profile() {
 
   const guestLoginTime = useMemo(() => {
     if (user === 'guest') {
-      const loginTime = localStorage.getItem('qs_guest_login_time');
+      const loginTime = sessionStorage.getItem('qs_guest_login_time');
       if (loginTime) {
         return new Date(parseInt(loginTime, 10)).toLocaleTimeString();
       }

@@ -22,9 +22,9 @@ export default function Login() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (localStorage.getItem('guest_timeout') === 'true') {
+    if (sessionStorage.getItem('guest_timeout') === 'true') {
       setError('Guest session expired. Sign up for the website plan.');
-      localStorage.removeItem('guest_timeout');
+      sessionStorage.removeItem('guest_timeout');
     }
   }, []);
 
