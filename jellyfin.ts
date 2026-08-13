@@ -46,14 +46,14 @@ function getCleanTitle(name: string): string {
 
 export function getLocalItems() { return recentlyAddedCache; }
 
-export async function getRecentlyAdded(getOpenlistUrl: () => string, getOpenlistApiKey: () => string | undefined, basePath: string, force: boolean = false) {
+export async function getRecentlyAdded(getOpenlistUrl: () => string, getOpenlistApiKey: () => string | undefined, basePath: string, force: boolean = false, jfOverrides: Record<string, any> = {}) {
   const now = Date.now();
   if (force) {
     isFetching = false;
     openlistSearchCache.clear();
-    await fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath);
+    await fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath, jfOverrides);
   } else if ((now - lastFetchTime > 3 * 60 * 1000) && !isFetching) {
-    fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath).catch(e => {
+    fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath, jfOverrides).catch(e => {
        console.error('[Jellyfin] Auto-fetch error:', e.response?.status || e.message);
        lastFetchTime = Date.now();
     });
@@ -61,7 +61,7 @@ export async function getRecentlyAdded(getOpenlistUrl: () => string, getOpenlist
   return recentlyAddedCache;
 }
 
-async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistApiKey: () => string | undefined, basePath: string) {
+async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistApiKey: () => string | undefined, basePath: string, jfOverrides: Record<string, any> = {}) {
   isFetching = true;
   try {
     const url = process.env.JELLYFIN_URL?.replace(/^["']|["']$/g, '');
@@ -182,10 +182,6 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
       throw new Error('No OpenList API key or authorization token available for matching directories.');
     }
 
-    let jfOverrides: Record<string, any> = {};
-    if (fs.existsSync('jf_override.json')) {
-        try { jfOverrides = JSON.parse(fs.readFileSync('jf_override.json', 'utf-8')); } catch(e){}
-    }
 
     for (const search of toSearch) {
 

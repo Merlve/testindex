@@ -3,7 +3,16 @@ build/
 dist/
 coverage/
 .DS_Store
+
+# Logs
 *.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+app-debug.log
+
 .env*
 !.env.example
 db.json
@@ -22,3 +31,7 @@ data/
 *.diff
 patch*.js
 query*.cjs
+*.db
+*.py
+*.tmp
+

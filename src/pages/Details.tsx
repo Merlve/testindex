@@ -1,3 +1,4 @@
+import { clearAllLocalCaches } from '../utils/cacheManager';
 import DetailsSkeleton from "../components/DetailsSkeleton";
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router';
@@ -11,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
 import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Helper to identify video files
 const isVideoFile = (filename: string) => {
@@ -405,6 +407,7 @@ export default function Details() {
   const [actualPathOverride, setActualPathOverride] = useState<string | null>(null);
 
   const { token, user } = useAuth();
+  const queryClient = useQueryClient();
   const [config, setConfig] = useState<any>({});
 
   const [tmdb, setTmdb] = useState<any>(location.state?.tmdbData || null);
@@ -445,6 +448,9 @@ export default function Details() {
   // Metadata Correction Modal
   const [showMetadataModal, setShowMetadataModal] = useState(false);
   const [searchTitle, setSearchTitle] = useState('');
+  const [customTitle, setCustomTitle] = useState('');
+  const [customYear, setCustomYear] = useState('');
+  const [savingCustom, setSavingCustom] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [manualTmdbId, setManualTmdbId] = useState('');
@@ -558,15 +564,50 @@ export default function Details() {
     setLoadingFiles(true);
 
     const cleanPath = actualOpenlistPath.replace(/^\/+/, '');
-    const payload: any = { reqPath: cleanPath };
+    // If it's a direct file path, we query its parent directory to get the file object
+    const targetFilename = cleanPath.split('/').pop();
+    const isDirectFile = targetFilename && isVideoFile(targetFilename);
+    const reqPath = isDirectFile ? cleanPath.substring(0, cleanPath.lastIndexOf('/')) || '' : cleanPath;
+    
+    const payload: any = { reqPath: reqPath };
     if (baseRefresh > 0) payload.refresh = true;
 
     axios.post('/api/fs/list', payload, { headers: token ? { Authorization: token } : {} })
       .then(res => {
         if (!isMounted) return;
         const content = res.data?.data?.content || [];
+        // If the path itself points to a file, just show the file directly
+        if (!Array.isArray(content)) {
+            // In case the API returns a single file object instead of an array when querying a file path directly
+            const singleFile = res.data?.data;
+            if (singleFile && !singleFile.is_dir && isVideoFile(singleFile.name)) {
+                setBaseItems([singleFile]);
+                setSeasonItems([]);
+                return;
+            }
+        }
+        
+        // If content is somehow empty but we have an item passed in state that is a file
+        if (content.length === 0 && location.state?.item && !location.state?.item?.is_dir && isVideoFile(location.state?.item?.name)) {
+             setBaseItems([location.state.item]);
+             setSeasonItems([]);
+             return;
+        }
+
         const dirFolders = content.filter((item: any) => item.is_dir);
         const dirFiles = content.filter((item: any) => !item.is_dir && isVideoFile(item.name));
+
+        // If we are looking at a path that is actually a file, and Openlist returned its parent dir contents,
+        // we should just isolate the file we care about.
+        const targetFilename = cleanPath.split('/').pop();
+        if (targetFilename && isVideoFile(targetFilename)) {
+            const exactFileMatch = dirFiles.find((f: any) => f.name === targetFilename);
+            if (exactFileMatch) {
+                setBaseItems([exactFileMatch]);
+                setSeasonItems([]);
+                return;
+            }
+        }
 
         dirFiles.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
         setBaseItems(dirFiles);
@@ -722,11 +763,59 @@ export default function Details() {
   };
 
   // Select TMDB Metadata Result
-  const handleSelectTMDBResult = (selected: any) => {
-    setTmdb(selected);
-    setShowMetadataModal(false);
-    setToast('Metadata updated');
-    setTimeout(() => setToast(''), 2000);
+  const handleSelectTMDBResult = async (selected: any) => {
+    try {
+      const parsed = parseMediaName(name || '');
+      await axios.post('/api/meta/override', {
+        query: parsed.cleanName,
+        type: category,
+        year: parsed.year,
+        tmdbId: selected.id,
+        path: actualOpenlistPath
+      }, { headers: { Authorization: token } });
+      
+      setTmdb(selected);
+      setShowMetadataModal(false);
+      setToast('Metadata updated globally');
+      setTimeout(() => setToast(''), 2000);
+      localStorage.setItem('meta_version', String(Date.now()));
+      clearAllLocalCaches(queryClient);
+    } catch (e: any) {
+      console.error(e);
+      setToast('Failed to save metadata globally');
+      setTimeout(() => setToast(''), 2000);
+    }
+  };
+
+  const handleSaveCustomMetadata = async () => {
+    if (!customTitle.trim()) return;
+    setSavingCustom(true);
+    try {
+      const parsed = parseMediaName(name || '');
+      const res = await axios.post('/api/meta/override', {
+        query: parsed.cleanName,
+        type: category,
+        year: parsed.year,
+        customTitle: customTitle.trim(),
+        customYear: customYear.trim() || undefined,
+        path: actualOpenlistPath
+      }, { headers: { Authorization: token } });
+      
+      if (res.data && res.data.data) {
+        setTmdb(res.data.data);
+      }
+      setShowMetadataModal(false);
+      setToast('Custom metadata saved');
+      setTimeout(() => setToast(''), 2000);
+      localStorage.setItem('meta_version', String(Date.now()));
+      clearAllLocalCaches(queryClient);
+    } catch (e: any) {
+      console.error(e);
+      setToast('Failed to save custom metadata');
+      setTimeout(() => setToast(''), 2000);
+    } finally {
+      setSavingCustom(false);
+    }
   };
 
   // Extract Genres
@@ -767,9 +856,17 @@ export default function Details() {
   // Batch Selection Logic
   const toggleSelectAll = () => {
     const currentList = seasonItems.length > 0 ? currentSeasonEpisodes : baseItems;
-    const currentPath = seasonItems.length > 0 && activeSeasonIndex !== null
+    let currentPath = seasonItems.length > 0 && activeSeasonIndex !== null
       ? `${actualOpenlistPath.replace(/^\/+/, '')}/${seasonItems[activeSeasonIndex].name}`
       : actualOpenlistPath.replace(/^\/+/, '');
+      
+    // Fix currentPath if actualOpenlistPath is a direct file
+    if (seasonItems.length === 0) {
+        const targetFilename = currentPath.split('/').pop();
+        if (targetFilename && isVideoFile(targetFilename)) {
+            currentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '';
+        }
+    }
 
     const allSelected = currentList.length > 0 && currentList.every(file => 
       selectedFiles.some(s => s.file.name === file.name && s.path === currentPath)
@@ -1093,7 +1190,11 @@ export default function Details() {
             ) : baseItems.length > 0 ? (
               <div className="grid grid-cols-1 gap-3">
                 {baseItems.map((file, idx) => {
-                  const itemPath = actualOpenlistPath.replace(/^\/+/, '');
+                  let itemPath = actualOpenlistPath.replace(/^\/+/, '');
+                  const targetFilename = itemPath.split('/').pop();
+                  if (targetFilename && isVideoFile(targetFilename)) {
+                      itemPath = itemPath.substring(0, itemPath.lastIndexOf('/')) || '';
+                  }
                   const meta = extractFileMetadata(file.name, file.size);
                   const isWatched = watchedItems.some(i => i.name === file.name && i.parentPath === itemPath);
                   const isSelected = selectedFiles.some(i => i.file.name === file.name && i.path === itemPath);
@@ -1200,69 +1301,107 @@ export default function Details() {
       {/* Metadata Correction Modal */}
       <AnimatePresence>
         {showMetadataModal && (
-          <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowMetadataModal(false)}>
+          <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto" onClick={() => setShowMetadataModal(false)}>
             <motion.div 
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#fffcf9] dark:bg-[#121218] border border-black/10 dark:border-white/10 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative space-y-4"
+              className="bg-[#fffcf9] dark:bg-[#121218] border border-black/10 dark:border-white/10 rounded-2xl p-4 sm:p-6 max-w-md w-full shadow-2xl relative space-y-4 my-auto overflow-hidden box-border"
             >
-              <button onClick={() => setShowMetadataModal(false)} className="absolute top-4 right-4 p-2 text-gray-500 hover:text-black dark:hover:text-white rounded-full bg-black/5 dark:bg-white/5 transition cursor-pointer">
-                <X size={20} />
+              <button 
+                onClick={() => setShowMetadataModal(false)} 
+                className="absolute top-3.5 right-3.5 p-2 text-gray-500 hover:text-black dark:hover:text-white rounded-full bg-black/5 dark:bg-white/5 transition cursor-pointer z-10"
+              >
+                <X size={18} />
               </button>
 
-              <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
-                <Edit2 size={18} className="text-purple-600 dark:text-purple-400" />
-                <span>Fix Metadata / Correct Match</span>
-              </h3>
-
-              <div className="flex gap-2">
-                <input 
-                  type="text"
-                  value={searchTitle}
-                  onChange={(e) => setSearchTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearchTMDB()}
-                  placeholder="Search TMDB for title..."
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
-                />
-                <button 
-                  onClick={handleSearchTMDB}
-                  disabled={searching}
-                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
-                >
-                  {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                  <span>Search</span>
-                </button>
+              <div className="pr-8">
+                <h3 className="text-base sm:text-lg font-bold text-black dark:text-white flex items-center gap-2 truncate">
+                  <Edit2 size={18} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span className="truncate">Fix Metadata</span>
+                </h3>
               </div>
 
-              {searchResults.length > 0 && (
-                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                  {searchResults.map((result, idx) => (
-                    <div 
-                      key={idx}
-                      onClick={() => handleSelectTMDBResult(result)}
-                      className="p-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-purple-600/10 border border-black/10 dark:border-white/10 hover:border-purple-500/40 cursor-pointer transition flex items-center gap-3"
+              <div className="space-y-4 w-full min-w-0">
+                <div className="w-full min-w-0">
+                  <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-[10px] font-bold uppercase tracking-wider">Search TMDB</label>
+                  <div className="flex items-center gap-2 w-full min-w-0">
+                    <input 
+                      type="text"
+                      value={searchTitle}
+                      onChange={(e) => setSearchTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearchTMDB()}
+                      placeholder="Search title..."
+                      className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                    />
+                    <button 
+                      onClick={handleSearchTMDB}
+                      disabled={searching}
+                      title="Search"
+                      className="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50"
                     >
-                      {result.poster_path && (
-                        <img 
-                          src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} 
-                          alt={result.title || result.name} 
-                          className="w-10 h-14 object-cover rounded-lg shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-xs font-bold text-black dark:text-white truncate">
-                          {result.title || result.name}
-                        </h4>
-                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                          {result.release_date || result.first_air_date || 'N/A'} • {result.media_type || category}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                      {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                    </button>
+                  </div>
                 </div>
-              )}
+
+                {searchResults.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar w-full min-w-0">
+                    {searchResults.map((result, idx) => (
+                      <div 
+                        key={idx}
+                        onClick={() => handleSelectTMDBResult(result)}
+                        className="p-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-purple-600/10 border border-black/10 dark:border-white/10 hover:border-purple-500/40 cursor-pointer transition flex items-center gap-3 w-full min-w-0"
+                      >
+                        {result.poster_path && (
+                          <img 
+                            src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} 
+                            alt={result.title || result.name} 
+                            className="w-10 h-14 object-cover rounded-lg shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-black dark:text-white truncate">
+                            {result.title || result.name}
+                          </h4>
+                          <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                            {result.release_date || result.first_air_date || 'N/A'} • {result.media_type || category}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="pt-2 border-t border-black/10 dark:border-white/10 w-full min-w-0">
+                  <label className="block text-gray-600 dark:text-gray-400 mb-2 text-[10px] font-bold uppercase tracking-wider">Or Set Custom Metadata</label>
+                  <div className="flex flex-col sm:flex-row gap-2 mb-2 w-full min-w-0">
+                    <input 
+                      type="text"
+                      value={customTitle}
+                      onChange={(e) => setCustomTitle(e.target.value)}
+                      placeholder="Custom Title..."
+                      className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                    />
+                    <input 
+                      type="text"
+                      value={customYear}
+                      onChange={(e) => setCustomYear(e.target.value)}
+                      placeholder="Year"
+                      className="w-full sm:w-28 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                    />
+                  </div>
+                  <button 
+                    onClick={handleSaveCustomMetadata}
+                    disabled={savingCustom || !customTitle.trim()}
+                    className="w-full px-4 py-2.5 rounded-xl bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 text-black dark:text-white font-semibold text-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {savingCustom ? <Loader2 size={16} className="animate-spin" /> : <Edit2 size={16} />}
+                    Save Custom Metadata
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

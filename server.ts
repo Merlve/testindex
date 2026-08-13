@@ -173,6 +173,11 @@ class MemoryCache {
 }
 
 const apiCache = new MemoryCache();
+let globalMetaVersion = Date.now();
+function bumpMetaVersion() {
+  globalMetaVersion = Date.now();
+  bumpMetaVersion();
+}
 
 function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
   return (req: any, res: any, next: any) => {
@@ -1033,7 +1038,7 @@ app.post('/api/meta/digital-path', adminMiddleware, (req, res) => {
   } else {
     delete appConfig.digitalReleasePaths[Number(tmdbId)];
   }
-  saveConfig();
+  bumpMetaVersion(); saveConfig();
   res.json({ success: true, digitalReleasePaths: appConfig.digitalReleasePaths });
 });
 app.post('/api/config', adminMiddleware, (req, res) => {
@@ -1121,7 +1126,7 @@ setInterval(() => {
 
 // Jellyfin auto-fetch job (runs every 3 minutes)
 setInterval(() => {
-  getRecentlyAdded(getOpenlistUrl, getOpenlistApiKey, appConfig.basePath, false).catch((err) => {
+  getRecentlyAdded(getOpenlistUrl, getOpenlistApiKey, appConfig.basePath, false, jfOverrides).catch((err) => {
     console.error('[Jellyfin Auto-Fetch Interval Error]', err.message || err);
   });
 }, 3 * 60 * 1000);
@@ -2099,6 +2104,13 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
    }
    return modified;
 }
+
+app.get('/api/meta/version', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.json({ version: globalMetaVersion });
+});
 
 app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   const { query, type, year, tmdbId, full, path: itemPath } = req.query; // type can be 'movie' or 'tv'
@@ -3116,7 +3128,7 @@ app.post('/api/meta/correct', adminMiddleware, (req, res) => {
   const baseKey = `${type}-${query.toLowerCase().trim()}`;
   data._overridden = true;
   tmdbCache[cacheKey] = data;
-  apiCache.clear();
+  bumpMetaVersion();
   saveDb();
   addLog('TMDB Corrected', 'Admin', `Corrected TMDB data for query: ${query} (Type: ${type})`);
   res.json({ success: true, data });
@@ -3137,7 +3149,7 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
 
     // Clear server response cache so all GET queries get fresh data immediately
-    apiCache.clear();
+    bumpMetaVersion();
 
     const setOverriddenDataInCache = (dataToStore: any) => {
       dataToStore._overridden = true;
@@ -3476,13 +3488,13 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
   try {
     const force = req.query.force === 'true';
     if (force) {
-      apiCache.clear();
+      bumpMetaVersion();
     }
     let userToken = req.headers.authorization as string | undefined;
     if (userToken && userToken.startsWith('Bearer ')) userToken = userToken.substring(7);
     const getToken = () => process.env.OPENLIST_API_KEY || userToken;
 
-    const items = await getRecentlyAdded(getOpenlistUrl, getToken, appConfig.basePath, force);
+    const items = await getRecentlyAdded(getOpenlistUrl, getToken, appConfig.basePath, force, jfOverrides);
     
     // Proactively fetch TMDB metadata for all recent items so they are instantly ready and cached
     const tmdbKey = process.env.TMDB_API_KEY;
@@ -3686,7 +3698,7 @@ app.post('/api/jellyfin/override', adminMiddleware, async (req, res) => {
     await writeSQLiteJSON('jf_override', jfOverrides);
     addLog("Jellyfin Override", "Admin", `Set override for ${jfName} to ${openlistPath}`);
     
-    apiCache.clear();
+    bumpMetaVersion();
     res.json({ success: true, overrides: jfOverrides });
 });
 

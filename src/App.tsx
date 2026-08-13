@@ -1,3 +1,6 @@
+import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+import { clearAllLocalCaches } from './utils/cacheManager';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -35,6 +38,34 @@ function ProtectedRoute({ children, requireAdmin = false }: { children: React.Re
 
 export default function App() {
   useKeyboardNavigation();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        const res = await axios.get('/api/meta/version?t=' + Date.now());
+        if (res.data && res.data.version) {
+          const serverVer = String(res.data.version);
+          const currentVer = localStorage.getItem('meta_version');
+          if (currentVer && currentVer !== serverVer) {
+            clearAllLocalCaches(queryClient);
+          }
+          localStorage.setItem('meta_version', serverVer);
+        }
+      } catch (e) {
+        // network or server error
+      }
+    };
+
+    checkVersion();
+    const interval = setInterval(checkVersion, 10000);
+    window.addEventListener('focus', checkVersion);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkVersion);
+    };
+  }, [queryClient]);
+
   useEffect(() => {
     const faviconUrl = import.meta.env.VITE_SITE_FAVICON;
     if (faviconUrl) {

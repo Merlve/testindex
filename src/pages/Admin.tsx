@@ -1,12 +1,15 @@
+import { clearAllLocalCaches } from '../utils/cacheManager';
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
 import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud, Megaphone } from 'lucide-react';
 import { useSearchParams } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import AnnouncementPill from '../components/AnnouncementPill';
 
 export default function Admin() {
+  const queryClient = useQueryClient();
   const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'settings';
@@ -125,6 +128,8 @@ export default function Admin() {
       }, { headers: { Authorization: token } });
       setFixModalItem(null);
       fetchMissingMetadata();
+      localStorage.setItem('meta_version', String(Date.now()));
+      clearAllLocalCaches(queryClient);
     } catch (e: any) {
       alert(`Failed to fix metadata: ${e.message}`);
     }
@@ -144,6 +149,8 @@ export default function Admin() {
       }, { headers: { Authorization: token } });
       setFixModalItem(null);
       fetchMissingMetadata();
+      localStorage.setItem('meta_version', String(Date.now()));
+      clearAllLocalCaches(queryClient);
     } catch (e: any) {
       alert(`Failed to fix metadata: ${e.message}`);
     }
@@ -158,6 +165,8 @@ export default function Admin() {
       setMsg(`Refreshed ${res.data.refreshedCount} items successfully!`);
       setTimeout(() => setMsg(''), 3000);
       fetchMissingMetadata();
+      queryClient.invalidateQueries({ queryKey: ['tmdb'] });
+      queryClient.invalidateQueries({ queryKey: ['recentlyAdded'] });
     } catch(e) {
        console.error(e);
        setMsg('Failed to refresh missing metadata.');
@@ -202,6 +211,8 @@ export default function Admin() {
       fetchTopDownloads();
     } else if (activeTab === 'missing-metadata') {
       fetchMissingMetadata();
+      queryClient.invalidateQueries({ queryKey: ['tmdb'] });
+      queryClient.invalidateQueries({ queryKey: ['recentlyAdded'] });
     }
 
   }, [activeTab, token]);

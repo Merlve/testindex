@@ -1,3 +1,4 @@
+import { clearAllLocalCaches } from '../utils/cacheManager';
 import React, { useState, useEffect, memo } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
@@ -8,25 +9,35 @@ import { useAuth } from '../context/AuthContext';
 
 const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: string | null, lowResSrc?: string | null, alt: string, className?: string, fallbackText?: string }) => {
   const [loaded, setLoaded] = useState(false);
+
+  const getCacheBustUrl = (url?: string | null) => {
+    if (!url) return null;
+    const ver = localStorage.getItem('meta_version') || '1';
+    return url.includes('?') ? `${url}&v=${ver}` : `${url}?v=${ver}`;
+  };
+
+  const finalSrc = getCacheBustUrl(src);
+  const finalLowRes = getCacheBustUrl(lowResSrc);
+
   return (
     <div className={`overflow-hidden bg-black/5 dark:bg-white/5 ${className || ''}`}>
-      {(!loaded || !src) && !lowResSrc && (
+      {(!loaded || !finalSrc) && !finalLowRes && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-0 animate-pulse text-gray-500 dark:text-gray-400">
            <Film size={32} className="opacity-20 mb-2" />
            {fallbackText && <span className="text-[10px] sm:text-xs text-center px-2 opacity-40 line-clamp-2">{fallbackText}</span>}
         </div>
       )}
-      {lowResSrc && (
+      {finalLowRes && (
         <img
-          src={lowResSrc}
+          src={finalLowRes}
           alt=""
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 blur-xl scale-110 ${loaded ? 'opacity-0' : 'opacity-100'}`}
           aria-hidden="true"
         />
       )}
-      {src && (
+      {finalSrc && (
         <img
-          src={src}
+          src={finalSrc}
           alt={alt}
           loading="lazy"
           onLoad={() => setLoaded(true)}
@@ -304,7 +315,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
                                    category: overrideCat
                                }, { headers: { Authorization: token } });
                                setShowOverrideModal(false);
-                               try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} queryClient.invalidateQueries(); alert('Saved!');
+                               try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} localStorage.setItem('meta_version', String(Date.now())); clearAllLocalCaches(queryClient); alert('Saved!');
                            } catch(e) {
                                alert('Failed to save override');
                            }
