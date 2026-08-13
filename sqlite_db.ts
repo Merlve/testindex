@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { promisify } from 'util';
 import type { Database } from 'sqlite';
+
+const inflateAsync = promisify(zlib.inflate);
+const deflateAsync = promisify(zlib.deflate);
 
 const dbDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
@@ -201,7 +205,8 @@ export async function readSQLiteJSON(key: string) {
       let valStr = row.value as string;
       if (valStr.startsWith('gz:')) {
         const buffer = Buffer.from(valStr.slice(3), 'base64');
-        valStr = zlib.inflateSync(buffer).toString('utf8');
+        const inflated = await inflateAsync(buffer);
+        valStr = inflated.toString('utf8');
       }
       return JSON.parse(valStr);
     }
@@ -220,7 +225,7 @@ export async function writeSQLiteJSON(key: string, value: any) {
     // We can keep compression to save disk space for huge objects,
     // and it maintains compatibility with existing data
     if (str.length > 30000) {
-      const buffer = zlib.deflateSync(str);
+      const buffer = await deflateAsync(str);
       valToStore = 'gz:' + buffer.toString('base64');
     }
     

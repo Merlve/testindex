@@ -389,22 +389,44 @@ async function saveConfig() {
 }
 
 // Simple JSON DB for TMDB corrections
+// Advanced debouncers to prevent massive CPU spikes and event loop blocking 
+// when stringifying huge JSON objects repeatedly during library syncs.
+const createDebouncer = (saveFn: () => Promise<void>, waitMs = 5000) => {
+  let timeout: NodeJS.Timeout | null = null;
+  let promiseResolve: ((value: void) => void) | null = null;
+  return () => {
+    if (!promiseResolve) {
+      // First call in a new batch, start tracking
+      promiseResolve = () => {}; 
+    }
+    if (timeout) clearTimeout(timeout);
+    
+    timeout = setTimeout(() => {
+      timeout = null;
+      promiseResolve = null;
+      saveFn().catch(err => console.error("Debounced save error:", err));
+    }, waitMs);
+    
+    return Promise.resolve(); // Return immediately, it saves in the background
+  };
+};
+
 let tmdbCache: Record<string, any> = {};
-async function saveDb() {
+const saveDb = createDebouncer(async () => {
   await writeSQLiteJSON('db', tmdbCache);
-}
+});
 
 // TV Seasons persistence cache
 let tmdbSeasonCache: Record<string, any> = {};
-async function saveSeasonCache() {
+const saveSeasonCache = createDebouncer(async () => {
   await writeSQLiteJSON('tmdb_season_cache', tmdbSeasonCache);
-}
+});
 
 // Actor filmography persistence cache
 let actorCache: Record<string, { person: any, credits: any[], lastUpdated: number }> = {};
-async function saveActorCache() {
+const saveActorCache = createDebouncer(async () => {
   await writeSQLiteJSON('actor_cache', actorCache);
-}
+});
 
 // Background batch pre-caching mechanism for actor filmography metadata
 async function preCacheActorFilmographyMetadata(matchedList: any[], tmdbKey: string) {
