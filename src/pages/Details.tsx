@@ -1456,13 +1456,13 @@ export default function Details() {
           <button
             onClick={handleWatchTrailer}
             disabled={loadingTrailer}
-            title="Watch Trailer"
-            className="p-3 sm:p-3.5 rounded-xl bg-black/80 dark:bg-white/10 hover:bg-black dark:hover:bg-white/20 active:scale-95 text-white font-medium transition flex items-center justify-center shadow-lg border border-transparent dark:border-white/15 cursor-pointer disabled:opacity-50"
+            title="Watch Trailer on YouTube"
+            className="p-3 sm:p-3.5 rounded-xl bg-red-600/15 dark:bg-red-500/20 hover:bg-red-600/25 dark:hover:bg-red-500/30 active:scale-95 text-red-600 dark:text-red-400 backdrop-blur-md border border-red-500/30 dark:border-red-500/30 transition flex items-center justify-center shadow-lg cursor-pointer disabled:opacity-50"
           >
             {loadingTrailer ? (
-              <Loader2 size={20} className="animate-spin text-white" />
+              <Loader2 size={20} className="animate-spin text-red-600 dark:text-red-400" />
             ) : (
-              <Play size={20} fill="currentColor" className="text-white" />
+              <Youtube size={20} className="text-red-600 dark:text-red-400" />
             )}
           </button>
 
@@ -1755,10 +1755,10 @@ export default function Details() {
                   href={trailerUrl.replace('/embed/', '/watch?v=').replace('?autoplay=1&rel=0', '')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-white bg-black/60 hover:bg-black rounded-full backdrop-blur-md transition cursor-pointer flex items-center justify-center"
+                  className="p-2 text-white bg-black/60 hover:bg-[#FF0000] rounded-full backdrop-blur-md transition cursor-pointer flex items-center justify-center shadow-lg"
                   title="Open on YouTube"
                 >
-                  <ExternalLink size={20} />
+                  <Youtube size={20} />
                 </a>
                 <button 
                   onClick={() => setShowTrailerModal(false)}
