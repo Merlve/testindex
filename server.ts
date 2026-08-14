@@ -417,7 +417,8 @@ const createDebouncer = (saveFn: () => Promise<void>, waitMs = 5000) => {
 };
 
 let tmdbCache: Record<string, any> = {};
-const saveDb = createDebouncer(async () => {
+
+async function saveDbImmediate() {
   // Purge massive TMDB API data, ONLY save metadata corrections
   const overridesOnly: Record<string, any> = {};
   for (const k of Object.keys(tmdbCache)) {
@@ -426,6 +427,10 @@ const saveDb = createDebouncer(async () => {
     }
   }
   await writeSQLiteJSON('db', overridesOnly);
+}
+
+const saveDb = createDebouncer(async () => {
+  await saveDbImmediate();
 });
 
 // TV Seasons persistence cache
@@ -442,14 +447,19 @@ async function preCacheActorFilmographyMetadata(matchedList: any[], tmdbKey: str
 async function syncAllActorsWithNewLibraryItems() { return; }
 
 function findOverriddenKeyInCache(cache: Record<string, any>, type: string, cleanQuery: string, year?: string | number, itemPath?: string): string | null {
-  if (!cleanQuery && !itemPath) return null;
+  if (!cleanQuery && !itemPath && !year) return null;
   const baseQuery = (cleanQuery || '').toLowerCase().trim();
-  const typeStr = (type || '').toUpperCase();
-  const baseKey = baseQuery ? `${typeStr}-${baseQuery}` : '';
-  const cacheKey = baseQuery ? `${typeStr}-${baseQuery}${year ? `-${year}` : ''}` : '';
+  const rawType = (type || '').toUpperCase().trim();
+  const isTvType = ['SERIES', 'TV', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(rawType);
+  const typesToCheck = isTvType ? [rawType, 'TV', 'SERIES', 'ANIME', 'KDRAMA', 'ADRAMA'] : [rawType, 'MOVIE'];
 
-  if (cacheKey && cache[cacheKey]?._overridden) return cacheKey;
-  if (baseKey && cache[baseKey]?._overridden) return baseKey;
+  for (const t of typesToCheck) {
+    if (!t) continue;
+    const cacheKey = baseQuery ? `${t}-${baseQuery}${year ? `-${year}` : ''}` : '';
+    const baseKey = baseQuery ? `${t}-${baseQuery}` : '';
+    if (cacheKey && cache[cacheKey]?._overridden) return cacheKey;
+    if (baseKey && cache[baseKey]?._overridden) return baseKey;
+  }
 
   if (itemPath) {
     const cleanP = itemPath.replace(/^\/+/, '');
@@ -457,19 +467,43 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
     const p2 = `path-/${cleanP}`;
     if (cache[p1]?._overridden) return p1;
     if (cache[p2]?._overridden) return p2;
+
+    const parentP = cleanP.split('/').slice(0, -1).join('/');
+    if (parentP) {
+      const pp1 = `path-${parentP}`;
+      const pp2 = `path-/${parentP}`;
+      if (cache[pp1]?._overridden) return pp1;
+      if (cache[pp2]?._overridden) return pp2;
+    }
   }
 
+  const normalizedBase = baseQuery.replace(/[^a-z0-9]/g, '');
   const found = Object.keys(cache).find(k => {
-    if (!cache[k]?._overridden) return false;
-    if (baseKey && (k === baseKey || k.startsWith(`${baseKey}-`))) {
-      return true;
-    }
+    const item = cache[k];
+    if (!item?._overridden) return false;
+
     if (itemPath) {
       const cleanP = itemPath.replace(/^\/+/, '');
       if (k === `path-${cleanP}` || k === `path-/${cleanP}` || k.endsWith(`/${cleanP}`)) {
         return true;
       }
+      const lastSegment = cleanP.split('/').pop();
+      if (lastSegment && k.includes(lastSegment)) {
+        return true;
+      }
     }
+
+    for (const t of typesToCheck) {
+      if (!t) continue;
+      const baseKey = `${t}-${baseQuery}`;
+      if (k === baseKey || k.startsWith(`${baseKey}-`)) return true;
+    }
+
+    if (normalizedBase && normalizedBase.length > 2) {
+      const normKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normKey.includes(normalizedBase)) return true;
+    }
+
     return false;
   });
 
@@ -3188,15 +3222,17 @@ app.get('/api/meta/trending', cacheMiddleware(3600, true), async (req, res) => {
 });
 
 // Admin correction for TMDB
-app.post('/api/meta/correct', adminMiddleware, (req, res) => {
+app.post('/api/meta/correct', adminMiddleware, async (req, res) => {
   const { query, type, year, data } = req.body;
   if (!query || !data) return res.status(400).json({ error: 'Invalid data' });
   const cacheKey = `${type}-${query.toLowerCase().trim()}${year ? `-${year}` : ''}`;
   const baseKey = `${type}-${query.toLowerCase().trim()}`;
   data._overridden = true;
+  data._synced = true;
   tmdbCache[cacheKey] = data;
+  tmdbCache[baseKey] = data;
   bumpMetaVersion();
-  saveDb();
+  await saveDbImmediate();
   addLog('TMDB Corrected', 'Admin', `Corrected TMDB data for query: ${query} (Type: ${type})`);
   res.json({ success: true, data });
 });
@@ -3240,10 +3276,19 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
 
     const setOverriddenDataInCache = (dataToStore: any) => {
       dataToStore._overridden = true;
+      dataToStore._synced = true;
       tmdbCache[cacheKey] = dataToStore;
       tmdbCache[baseKey] = dataToStore;
       if (pathKey1) tmdbCache[pathKey1] = dataToStore;
       if (pathKey2) tmdbCache[pathKey2] = dataToStore;
+
+      if (cleanPath) {
+        const parentPath = cleanPath.split('/').slice(0, -1).join('/');
+        if (parentPath) {
+          tmdbCache[`path-${parentPath}`] = dataToStore;
+          tmdbCache[`path-/${parentPath}`] = dataToStore;
+        }
+      }
 
       // Update any other existing keys in tmdbCache that match baseKey or cleanPath
       for (const k of Object.keys(tmdbCache)) {
@@ -3275,9 +3320,9 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       }
       
       try {
-          saveDb();
+          await saveDbImmediate();
       } catch (err: any) {
-          console.error("Error in saveDb:", err.message);
+          console.error("Error in saveDbImmediate:", err.message);
       }
       
       try {
@@ -3342,9 +3387,9 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
        }
        
        try {
-           saveDb();
+           await saveDbImmediate();
        } catch (err: any) {
-           console.error("Error in saveDb:", err.message);
+           console.error("Error in saveDbImmediate:", err.message);
        }
        
        try {
@@ -3777,35 +3822,36 @@ export async function initSQLiteState() {
     const loadedConfig = await readSQLiteJSON('config');
     if (loadedConfig) appConfig = { ...appConfig, ...loadedConfig };
     tmdbCache = (await readSQLiteJSON('db')) || {};
+    if (!tmdbCache || Object.keys(tmdbCache).length === 0) {
+      try {
+        const dbJsonPath = path.join(process.cwd(), 'data', 'db.json');
+        const altJsonPath = path.join(process.cwd(), 'db.json');
+        const p = fs.existsSync(dbJsonPath) ? dbJsonPath : (fs.existsSync(altJsonPath) ? altJsonPath : null);
+        if (p) {
+          const raw = fs.readFileSync(p, 'utf8').trim();
+          if (raw) {
+            tmdbCache = JSON.parse(raw);
+            await writeSQLiteJSON('db', tmdbCache);
+          }
+        }
+      } catch (e) {
+        console.error('Error fallback loading db.json:', e);
+      }
+    }
     if (tmdbCache && typeof tmdbCache === 'object') {
-      let touched = false;
       for (const k of Object.keys(tmdbCache)) {
         const item = tmdbCache[k];
         if (item && item._overridden) {
-          // Clean up polluted base keys
-          if (!k.match(/-\d{4}$/)) {
-            const matchingYearKey = Object.keys(tmdbCache).find(yk => yk.startsWith(k + '-') && tmdbCache[yk]?._overridden && tmdbCache[yk].id === item.id);
-            if (matchingYearKey) {
-              delete tmdbCache[k];
-              touched = true;
-              continue;
-            }
-          }
-          
-          const kLower = k.toLowerCase();
-          if (item.id === 37854) {
-            const isExactShowKey = kLower === 'anime-one piece' || kLower === 'anime-one piece-1999' ||
-                                   kLower === 'tv-one piece' || kLower === 'tv-one piece-1999' ||
-                                   kLower === 'series-one piece' || kLower === 'series-one piece-1999';
-            if (!isExactShowKey) {
-              delete tmdbCache[k];
-              touched = true;
+          item._synced = true;
+          // If this key has a year suffix (e.g. MOVIE-title-2023), ensure baseKey (MOVIE-title) also exists
+          const yearMatch = k.match(/^(.*)-(\d{4})$/);
+          if (yearMatch) {
+            const baseK = yearMatch[1];
+            if (!tmdbCache[baseK]) {
+              tmdbCache[baseK] = item;
             }
           }
         }
-      }
-      if (touched) {
-        await saveDb().catch(e => console.error("Error saving DB:", e));
       }
     }
     const loadedLibrary = await readSQLiteJSON('library_index');

@@ -59,7 +59,7 @@ export async function initSQLiteDB() {
   }
 
   try {
-    // Check if data/db.json or db.json exists on disk and import any saved corrections/metadata
+    // Check if data/db.json or db.json exists on disk and import any saved corrections/metadata if SQLite is empty
     let dbJsonPath = path.join(dbDir, 'db.json');
     if (!fs.existsSync(dbJsonPath)) {
       dbJsonPath = path.join(process.cwd(), 'db.json');
@@ -69,12 +69,12 @@ export async function initSQLiteDB() {
         const raw = fs.readFileSync(dbJsonPath, 'utf8').trim();
         if (raw) {
           const diskDb = JSON.parse(raw);
-          const currentSqliteDb = await readSQLiteJSON('db') || {};
+          const currentSqliteDb = (await readSQLiteJSON('db')) || {};
+          // Start with diskDb as base, but ensure currentSqliteDb entries (which are newer) overwrite diskDb
           const merged = { ...diskDb, ...currentSqliteDb };
-          // Preserve overrides from diskDb
-          for (const k of Object.keys(diskDb)) {
-            if (diskDb[k]?._overridden) {
-              merged[k] = diskDb[k];
+          for (const k of Object.keys(currentSqliteDb)) {
+            if (currentSqliteDb[k]?._overridden) {
+              merged[k] = currentSqliteDb[k];
             }
           }
           await writeSQLiteJSON('db', merged);
@@ -226,6 +226,15 @@ export async function writeSQLiteJSON(key: string, value: any) {
       'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
       [key, valToStore]
     );
+
+    if (key === 'db' && value && typeof value === 'object') {
+      try {
+        const dbJsonPath = path.join(dbDir, 'db.json');
+        fs.writeFileSync(dbJsonPath, JSON.stringify(value, null, 2), 'utf8');
+      } catch (err) {
+        console.error('Failed to sync data/db.json backup:', err);
+      }
+    }
   } catch (e) {
     console.error(`Error writing ${key} to SQLite:`, e);
   }
