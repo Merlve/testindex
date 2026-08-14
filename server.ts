@@ -3818,7 +3818,21 @@ export async function initSQLiteState() {
       }
     }
     if (tmdbCache && typeof tmdbCache === 'object') {
+      let cleanedBadKeys = false;
       for (const k of Object.keys(tmdbCache)) {
+        // --- CLEANUP OF OLD BAD OVERRIDES ---
+        if (k.startsWith('path-')) {
+          const p = k.replace('path-', '').replace(/^\/+/, '');
+          const depth = p.split('/').length;
+          if (depth <= 2 && (p.includes('ANIME') || p.includes('MOVIES') || p.includes('SERIES') || p.includes('KDRAMA') || p.includes('ADRAMA') || p.includes('home'))) {
+            console.log('Auto-cleaning bad broad path override at startup:', k);
+            delete tmdbCache[k];
+            cleanedBadKeys = true;
+            continue;
+          }
+        }
+        // ------------------------------------
+        
         const item = tmdbCache[k];
         if (item && item._overridden) {
           item._synced = true;
@@ -3831,6 +3845,10 @@ export async function initSQLiteState() {
             }
           }
         }
+      }
+      
+      if (cleanedBadKeys) {
+        await writeSQLiteJSON('db', tmdbCache);
       }
     }
     const loadedLibrary = await readSQLiteJSON('library_index');
