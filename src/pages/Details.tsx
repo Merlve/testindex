@@ -105,8 +105,6 @@ function IntentPlayerModal({
     }
   };
 
-  const isAppleDevice = os === 'ios' || os === 'macos';
-
   return (
     <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={onClose}>
       <motion.div 
@@ -152,7 +150,7 @@ function IntentPlayerModal({
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className={`grid gap-2.5 ${os === 'macos' ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {os === 'ios' && (
                 <>
                   <a
@@ -180,29 +178,16 @@ function IntentPlayerModal({
               )}
 
               {os === 'macos' && (
-                <>
-                  <a
-                    href={`iina://weblink?url=${encodeURIComponent(url)}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs flex items-center justify-center shrink-0">IINA</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">IINA</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
-                    </div>
-                  </a>
-
-                  <a
-                    href={`vlc://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">VLC</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
-                    </div>
-                  </a>
-                </>
+                <a
+                  href={`iina://weblink?url=${encodeURIComponent(url)}`}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs flex items-center justify-center shrink-0">IINA</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold truncate">IINA Player</div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
+                  </div>
+                </a>
               )}
 
               {os === 'android' && (
@@ -218,16 +203,24 @@ function IntentPlayerModal({
                     </div>
                   </a>
 
-                  <a
-                    href={`vlc://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (url) {
+                        onPlayWeb(url);
+                        onClose();
+                      }
+                    }}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">VLC</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Android</div>
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                      <Play size={14} fill="currentColor" />
                     </div>
-                  </a>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Play Here</div>
+                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                    </div>
+                  </button>
                 </>
               )}
 
@@ -244,16 +237,24 @@ function IntentPlayerModal({
                     </div>
                   </a>
 
-                  <a
-                    href={`vlc://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (url) {
+                        onPlayWeb(url);
+                        onClose();
+                      }
+                    }}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">VLC</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Windows</div>
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                      <Play size={14} fill="currentColor" />
                     </div>
-                  </a>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Play Here</div>
+                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                    </div>
+                  </button>
                 </>
               )}
 
@@ -270,38 +271,25 @@ function IntentPlayerModal({
                     </div>
                   </a>
 
-                  <a
-                    href={`mpv://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (url) {
+                        onPlayWeb(url);
+                        onClose();
+                      }
+                    }}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">MPV</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">MPV</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">External App</div>
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                      <Play size={14} fill="currentColor" />
                     </div>
-                  </a>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Play Here</div>
+                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                    </div>
+                  </button>
                 </>
-              )}
-
-              {!isAppleDevice && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (url) {
-                      onPlayWeb(url);
-                      onClose();
-                    }
-                  }}
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
-                    <Play size={14} fill="currentColor" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold truncate">Play Here</div>
-                    <div className="text-[10px] opacity-80 truncate">In Browser</div>
-                  </div>
-                </button>
               )}
             </div>
 
@@ -312,6 +300,73 @@ function IntentPlayerModal({
               {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
               <span>{copied ? 'Direct Link Copied!' : 'Copy Direct Stream URL'}</span>
             </button>
+
+            {/* Platform Download Hints */}
+            {os === 'android' && (
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
+                download mpv-android from{' '}
+                <a 
+                  href="https://play.google.com/store/apps/details?id=is.xyz.mpv" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-purple-600 dark:hover:text-purple-400 not-italic font-medium"
+                >
+                  play store
+                </a>
+              </p>
+            )}
+
+            {os === 'windows' && (
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
+                download Potplayer from{' '}
+                <a 
+                  href="https://potplayer.tv" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-yellow-600 dark:hover:text-yellow-400 not-italic font-medium"
+                >
+                  https://potplayer.tv
+                </a>
+              </p>
+            )}
+
+            {os === 'ios' && (
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
+                install{' '}
+                <a 
+                  href="https://apps.apple.com/app/vlc-media-player/id650377962" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-orange-600 dark:hover:text-orange-400 not-italic font-medium"
+                >
+                  VLC
+                </a>{' '}
+                or{' '}
+                <a 
+                  href="https://apps.apple.com/app/infuse-video-player/id1136220934" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-blue-600 dark:hover:text-blue-400 not-italic font-medium"
+                >
+                  infuse
+                </a>{' '}
+                from the app store
+              </p>
+            )}
+
+            {os === 'macos' && (
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
+                install IINA player from{' '}
+                <a 
+                  href="https://iina.io" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-indigo-600 dark:hover:text-indigo-400 not-italic font-medium"
+                >
+                  https://iina.io
+                </a>
+              </p>
+            )}
           </div>
         )}
       </motion.div>
@@ -543,6 +598,10 @@ export default function Details() {
   const [selectedLogoPath, setSelectedLogoPath] = useState<string | null>(null);
   const [customLogoInput, setCustomLogoInput] = useState('');
   const [savingLogo, setSavingLogo] = useState(false);
+  const [logoSearchQuery, setLogoSearchQuery] = useState('');
+  const [searchingLogos, setSearchingLogos] = useState(false);
+  const [logoSearchResults, setLogoSearchResults] = useState<any[]>([]);
+  const [activeLogoTmdb, setActiveLogoTmdb] = useState<any>(null);
 
   // Watched state
   const [watchedItems, setWatchedItems] = useState<any[]>([]);
@@ -554,10 +613,16 @@ export default function Details() {
   const [batchCopyLoading, setBatchCopyLoading] = useState(false);
   const [batchCopied, setBatchCopied] = useState(false);
 
+  // Clear logo and state on route/file navigation
+  useEffect(() => {
+    setLogoUrl(null);
+    setAvailableLogos([]);
+    setActiveLogoTmdb(null);
+    setSelectedLogoPath(null);
+  }, [fullPath, name]);
+
   // Page title and metadata updates
   useEffect(() => {
-    setLogoUrl(null); // Clear logo URL when navigating to a new title
-
     let cleanName = '';
     let parsedYear = '';
     if (name) {
@@ -605,39 +670,54 @@ export default function Details() {
     return () => { isMounted = false; };
   }, [fullPath, name, category, tmdb]);
 
-  // Fetch logo if tmdb exists
+  // Fetch logo automatically whenever tmdb, name, or category changes
   useEffect(() => {
     let isMounted = true;
-    if (tmdb) {
-      if (tmdb.no_logo) {
-        setLogoUrl(null);
-        return;
-      }
-      if (tmdb.custom_logo || tmdb.logo_path) {
-        const custom = tmdb.custom_logo || tmdb.logo_path;
-        setLogoUrl(custom.startsWith('http') ? custom : `https://image.tmdb.org/t/p/original${custom}`);
-        return;
-      }
-      if (tmdb.images?.logos?.length > 0) {
-        const logo = tmdb.images.logos.find((l: any) => l.iso_639_1 === 'en') || tmdb.images.logos[0];
-        if (logo?.file_path) {
-          setLogoUrl(logo.file_path.startsWith('http') ? logo.file_path : `https://image.tmdb.org/t/p/original${logo.file_path}`);
-        }
-      } else if (tmdb.id) {
-        const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category) ? 'tv' : 'movie';
-        axios.get(`/api/meta/images?id=${tmdb.id}&type=${searchType}`)
-          .then(res => {
-            if (isMounted && res.data?.logos?.length > 0) {
-              const logo = res.data.logos.find((l: any) => l.iso_639_1 === 'en') || res.data.logos[0];
-              if (logo?.file_path) {
-                setLogoUrl(logo.file_path.startsWith('http') ? logo.file_path : `https://image.tmdb.org/t/p/original${logo.file_path}`);
-              }
-            }
-          })
-          .catch(console.error);
-      }
-    } else {
+    if (!tmdb) {
       setLogoUrl(null);
+      return;
+    }
+
+    if (tmdb.no_logo) {
+      setLogoUrl(null);
+      return;
+    }
+
+    if (tmdb.custom_logo || tmdb.logo_path) {
+      const custom = tmdb.custom_logo || tmdb.logo_path;
+      setLogoUrl(custom.startsWith('http') ? custom : `https://image.tmdb.org/t/p/original${custom}`);
+      return;
+    }
+
+    const tmdbId = tmdb.id || tmdb.tmdb_id || tmdb._jf?.tmdbId || location.state?.item?.tmdbId || location.state?.item?._jf?.tmdbId;
+    const isTv = tmdb.media_type === 'tv' || Boolean(tmdb.first_air_date) || Boolean(tmdb.seasons) || Boolean(tmdb.number_of_seasons) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+    const mediaType = isTv ? 'tv' : 'movie';
+
+    if (tmdb.images?.logos && Array.isArray(tmdb.images.logos) && tmdb.images.logos.length > 0) {
+      const bestLogo = tmdb.images.logos.find((l: any) => l.iso_639_1 === 'en') || 
+                       tmdb.images.logos.find((l: any) => !l.iso_639_1) || 
+                       tmdb.images.logos[0];
+      if (bestLogo?.file_path) {
+        setLogoUrl(bestLogo.file_path.startsWith('http') ? bestLogo.file_path : `https://image.tmdb.org/t/p/original${bestLogo.file_path}`);
+        return;
+      }
+    }
+
+    if (tmdbId) {
+      axios.get(`/api/meta/images?id=${tmdbId}&type=${mediaType}`)
+        .then(res => {
+          if (!isMounted) return;
+          const logos = res.data?.logos || [];
+          if (logos.length > 0) {
+            const bestLogo = logos.find((l: any) => l.iso_639_1 === 'en') || 
+                             logos.find((l: any) => !l.iso_639_1) || 
+                             logos[0];
+            if (bestLogo?.file_path) {
+              setLogoUrl(bestLogo.file_path.startsWith('http') ? bestLogo.file_path : `https://image.tmdb.org/t/p/original${bestLogo.file_path}`);
+            }
+          }
+        })
+        .catch(console.error);
     }
     return () => { isMounted = false; };
   }, [tmdb, category]);
@@ -954,9 +1034,9 @@ export default function Details() {
     }
   };
 
-  // Fetch available logos from TMDB
-  const fetchAvailableLogos = async (tmdbId?: number | string) => {
-    const idToUse = tmdbId || tmdb?.id;
+  // Fetch available logos from TMDB by ID and media type
+  const fetchAvailableLogos = async (targetId?: number | string, targetType?: string, targetInfo?: any) => {
+    const idToUse = targetId || activeLogoTmdb?.id || tmdb?.id || tmdb?.tmdb_id;
     if (!idToUse) {
       if (tmdb?.images?.logos && Array.isArray(tmdb.images.logos)) {
         setAvailableLogos(tmdb.images.logos);
@@ -966,12 +1046,25 @@ export default function Details() {
       return;
     }
 
+    if (targetInfo) {
+      setActiveLogoTmdb(targetInfo);
+    } else if (!activeLogoTmdb && tmdb) {
+      setActiveLogoTmdb(tmdb);
+    }
+
     setLoadingLogos(true);
     try {
-      const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category) ? 'tv' : 'movie';
+      const isTv = targetType === 'tv' || targetInfo?.media_type === 'tv' || Boolean(targetInfo?.first_air_date) || tmdb?.media_type === 'tv' || Boolean(tmdb?.first_air_date) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+      const searchType = isTv ? 'tv' : 'movie';
       const res = await axios.get(`/api/meta/images?id=${idToUse}&type=${searchType}`);
       const logos = res.data?.logos || [];
       setAvailableLogos(logos);
+      if (logos.length > 0 && (selectedLogoPath === null || selectedLogoPath === undefined)) {
+        const best = logos.find((l: any) => l.iso_639_1 === 'en') || logos.find((l: any) => !l.iso_639_1) || logos[0];
+        if (best?.file_path) {
+          setSelectedLogoPath(best.file_path);
+        }
+      }
     } catch (err) {
       console.error('Error fetching logos:', err);
       if (tmdb?.images?.logos) {
@@ -979,6 +1072,47 @@ export default function Details() {
       }
     } finally {
       setLoadingLogos(false);
+    }
+  };
+
+  // Search for logos using TMDB ID or show/movie title
+  const handleSearchLogos = async (overrideQuery?: string) => {
+    const query = (overrideQuery !== undefined ? overrideQuery : logoSearchQuery).trim();
+    if (!query) return;
+
+    setSearchingLogos(true);
+    try {
+      if (/^\d+$/.test(query)) {
+        // Pure TMDB ID search
+        const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+        const searchType = isTv ? 'tv' : 'movie';
+        const info = { id: query, title: `TMDB ID #${query}` };
+        setActiveLogoTmdb(info);
+        setLogoSearchResults([]);
+        await fetchAvailableLogos(query, searchType, info);
+      } else {
+        // Text title search
+        const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+        const searchType = isTv ? 'tv' : 'movie';
+        const res = await axios.get(`/api/meta/search_all?query=${encodeURIComponent(query)}&type=${category}`);
+        const results = res.data?.results || [];
+        setLogoSearchResults(results);
+        if (results.length > 0) {
+          const topResult = results[0];
+          setActiveLogoTmdb(topResult);
+          const topType = topResult.media_type || (topResult.first_air_date ? 'tv' : 'movie') || searchType;
+          await fetchAvailableLogos(topResult.id, topType, topResult);
+        } else {
+          setAvailableLogos([]);
+          setActiveLogoTmdb(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error searching logos:', err);
+      setToast('Failed to search TMDB for logos');
+      setTimeout(() => setToast(''), 2500);
+    } finally {
+      setSearchingLogos(false);
     }
   };
 
@@ -991,11 +1125,12 @@ export default function Details() {
     setSavingLogo(true);
     try {
       const parsed = parseMediaName(name || '');
+      const tmdbIdToSave = activeLogoTmdb?.id || tmdb?.id;
       const res = await axios.post('/api/meta/override', {
         query: parsed.cleanName,
         type: category,
         year: parsed.year,
-        tmdbId: tmdb?.id || undefined,
+        tmdbId: tmdbIdToSave || undefined,
         customLogo: targetLogo,
         path: actualOpenlistPath
       }, { headers: { Authorization: token } });
@@ -1206,6 +1341,7 @@ export default function Details() {
               src={logoUrl} 
               alt={tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
               className="h-20 sm:h-24 md:h-32 object-contain drop-shadow-xl"
+              onError={() => setLogoUrl(null)}
             />
           ) : (
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-black dark:text-white drop-shadow-xl leading-tight">
@@ -1275,8 +1411,12 @@ export default function Details() {
 
           <button
             onClick={() => {
-              setSearchTitle(tmdb?.title || tmdb?.name || parseMediaName(name).cleanName);
-              setCustomTitle(tmdb?.title || tmdb?.name || parseMediaName(name).cleanName);
+              const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
+              setSearchTitle(curTitle);
+              setCustomTitle(curTitle);
+              setLogoSearchQuery(curTitle);
+              setLogoSearchResults([]);
+              setActiveLogoTmdb(tmdb || null);
               const releaseDate = tmdb?.release_date || tmdb?.first_air_date || '';
               setCustomYear((releaseDate || '').substring(0, 4) || parseMediaName(name).year || '');
               setModalTab('info');
@@ -1648,8 +1788,14 @@ export default function Details() {
                 <button
                   type="button"
                   onClick={() => {
+                    const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
                     setModalTab('logo');
-                    fetchAvailableLogos();
+                    setLogoSearchQuery(curTitle);
+                    if (tmdb?.id) {
+                      setActiveLogoTmdb(tmdb);
+                      const isTv = tmdb.media_type === 'tv' || Boolean(tmdb.first_air_date) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+                      fetchAvailableLogos(tmdb.id, isTv ? 'tv' : 'movie', tmdb);
+                    }
                   }}
                   className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
                     modalTab === 'logo'
@@ -1782,11 +1928,92 @@ export default function Details() {
               {/* TAB 2: FIX LOGO */}
               {modalTab === 'logo' && (
                 <div className="space-y-3.5 w-full min-w-0">
+                  {/* Search Bar for Logos by TMDB ID or Title */}
+                  <div className="w-full min-w-0 space-y-1.5">
+                    <label className="block text-gray-600 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+                      Search Logo via TMDB ID or Title
+                    </label>
+                    <div className="flex items-center gap-2 w-full min-w-0">
+                      <input
+                        type="text"
+                        value={logoSearchQuery}
+                        onChange={(e) => setLogoSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearchLogos()}
+                        placeholder="Search TMDB ID (e.g. 550) or show/movie title..."
+                        className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSearchLogos()}
+                        disabled={searchingLogos || !logoSearchQuery.trim()}
+                        className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 shadow-sm"
+                      >
+                        {searchingLogos ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                        <span>Search</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Multiple Search Candidates Picker (if searching by title returned multiple matches) */}
+                  {logoSearchResults.length > 1 && (
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                        Matched Titles ({logoSearchResults.length})
+                      </span>
+                      <div className="flex gap-2 overflow-x-auto pb-1.5 custom-scrollbar">
+                        {logoSearchResults.map((resItem: any, rIdx: number) => {
+                          const isCurrentActive = String(activeLogoTmdb?.id) === String(resItem.id);
+                          return (
+                            <button
+                              key={rIdx}
+                              type="button"
+                              onClick={() => {
+                                setActiveLogoTmdb(resItem);
+                                const isTv = resItem.media_type === 'tv' || Boolean(resItem.first_air_date) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+                                fetchAvailableLogos(resItem.id, isTv ? 'tv' : 'movie', resItem);
+                              }}
+                              className={`flex items-center gap-2 p-1.5 pr-2.5 rounded-xl border text-left shrink-0 transition cursor-pointer ${
+                                isCurrentActive
+                                  ? 'bg-purple-600/15 border-purple-500 text-purple-600 dark:text-purple-400 font-bold'
+                                  : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              {resItem.poster_path ? (
+                                <img
+                                  src={`https://image.tmdb.org/t/p/w92${resItem.poster_path}`}
+                                  alt=""
+                                  className="w-6 h-8 object-cover rounded-md"
+                                />
+                              ) : (
+                                <div className="w-6 h-8 rounded-md bg-purple-600/20 flex items-center justify-center text-[9px] font-bold">
+                                  TMDB
+                                </div>
+                              )}
+                              <div className="min-w-0 max-w-[140px]">
+                                <div className="text-[11px] truncate font-medium">{resItem.title || resItem.name}</div>
+                                <div className="text-[9px] text-gray-500 flex items-center gap-1">
+                                  <span>{(resItem.release_date || resItem.first_air_date || '').substring(0, 4)}</span>
+                                  <span>•</span>
+                                  <span className="font-mono">#{resItem.id}</span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Selected Logo Preview Banner */}
                   <div className="bg-black/90 dark:bg-black border border-black/10 dark:border-white/15 rounded-xl p-3 flex flex-col items-center justify-center min-h-[84px] relative overflow-hidden">
                     <span className="absolute top-2 left-2.5 text-[9px] uppercase tracking-wider font-bold text-gray-400">
                       Selected Logo Preview
                     </span>
+                    {activeLogoTmdb?.id && (
+                      <span className="absolute top-2 right-2.5 text-[9px] font-mono text-purple-400 bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-500/30">
+                        TMDB #{activeLogoTmdb.id}
+                      </span>
+                    )}
                     {selectedLogoPath ? (
                       <img
                         src={selectedLogoPath.startsWith('http') ? selectedLogoPath : `https://image.tmdb.org/t/p/w500${selectedLogoPath}`}
@@ -1813,10 +2040,15 @@ export default function Details() {
                             {availableLogos.length}
                           </span>
                         )}
+                        {activeLogoTmdb && (
+                          <span className="text-[10px] text-gray-400 truncate max-w-[150px] font-normal">
+                            ({activeLogoTmdb.title || activeLogoTmdb.name || `ID ${activeLogoTmdb.id}`})
+                          </span>
+                        )}
                       </label>
                       <button
                         type="button"
-                        onClick={() => fetchAvailableLogos()}
+                        onClick={() => fetchAvailableLogos(activeLogoTmdb?.id || tmdb?.id)}
                         disabled={loadingLogos}
                         className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
                       >
@@ -1875,7 +2107,7 @@ export default function Details() {
                       <div className="p-4 text-center bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 space-y-1">
                         <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">No logos found on TMDB</p>
                         <p className="text-[11px] text-gray-500">
-                          Search for the title in the Metadata tab or provide a custom logo image URL below.
+                          Search by TMDB ID or title using the search bar above, or provide a custom logo image URL below.
                         </p>
                       </div>
                     )}

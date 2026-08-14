@@ -2331,19 +2331,39 @@ app.get('/api/meta/images', cacheMiddleware(3600, true), async (req, res) => {
   if (!tmdbKey) return res.json(null);
 
   try {
-    const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(String(type).toUpperCase()) ? 'tv' : 'movie';
+    const typeStr = String(type).toUpperCase();
+    const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW'].includes(typeStr) || String(type).toLowerCase() === 'tv';
+    const searchType = isTv ? 'tv' : 'movie';
     const altType = searchType === 'tv' ? 'movie' : 'tv';
     const imageLangs = typeof lang === 'string' && lang.trim() ? lang.trim() : 'en,null,ja,ko,zh,es,fr,de,it,pt';
     
-    let response;
+    let response: any = null;
     try {
       response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/images?api_key=${tmdbKey}&include_image_language=${imageLangs}`);
     } catch (e) {
-      response = await axios.get(`https://api.themoviedb.org/3/${altType}/${id}/images?api_key=${tmdbKey}&include_image_language=${imageLangs}`);
+      try {
+        response = await axios.get(`https://api.themoviedb.org/3/${altType}/${id}/images?api_key=${tmdbKey}&include_image_language=${imageLangs}`);
+      } catch (e2) {}
     }
-    res.json(response.data);
+
+    // Fallback: if no logos found with language filter, query without language filter
+    if (!response?.data?.logos || response.data.logos.length === 0) {
+      try {
+        const fallbackRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/images?api_key=${tmdbKey}`);
+        if (fallbackRes.data?.logos && fallbackRes.data.logos.length > 0) {
+          response = fallbackRes;
+        } else {
+          const fallbackAltRes = await axios.get(`https://api.themoviedb.org/3/${altType}/${id}/images?api_key=${tmdbKey}`);
+          if (fallbackAltRes.data?.logos && fallbackAltRes.data.logos.length > 0) {
+            response = fallbackAltRes;
+          }
+        }
+      } catch (e3) {}
+    }
+
+    res.json(response?.data || { id, logos: [], backdrops: [], posters: [] });
   } catch (err: any) {
-    res.json(null);
+    res.json({ id, logos: [], backdrops: [], posters: [] });
   }
 });
 
