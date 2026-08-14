@@ -122,7 +122,7 @@ function IntentPlayerModal({
           <MonitorPlay size={16} /> Choose Player
         </div>
 
-        <h3 className="text-base font-bold text-black dark:text-white pr-8 mb-2 leading-snug break-all line-clamp-2">
+        <h3 className="text-base font-bold text-black dark:text-white pr-8 mb-2 leading-snug break-words">
           {item.name}
         </h3>
 
@@ -449,16 +449,16 @@ function FileRowItem({
 
   return (
     <div 
-      className={`p-3.5 sm:p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+      className={`p-3.5 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-4 ${
         isWatched 
           ? 'bg-black/5 dark:bg-white/5 border-transparent opacity-60 hover:opacity-100' 
           : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-purple-500/40'
       } ${isSelected ? 'ring-2 ring-purple-500 bg-purple-500/5' : ''}`}
     >
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
         <button 
           onClick={toggleSelection}
-          className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center ${
+          className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center mt-0.5 sm:mt-0 ${
             isSelected ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
           }`}
           title={isSelected ? "Deselect" : "Select"}
@@ -466,10 +466,10 @@ function FileRowItem({
           {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
         </button>
         <div className="min-w-0 flex-1">
-          <h4 className={`text-sm font-semibold truncate transition ${isWatched ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-black dark:text-white'}`}>
+          <h4 className={`text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-black dark:text-white'}`}>
             {file.name}
           </h4>
-          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
             {meta.resolution && (
               <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${isWatched ? 'bg-gray-500/15 text-gray-500' : 'bg-purple-600/15 text-purple-600 dark:text-purple-300'}`}>
                 {meta.resolution}
@@ -489,7 +489,7 @@ function FileRowItem({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+      <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
         <button 
           onClick={() => toggleWatched(file.name, itemPath)}
           className={`p-2 rounded-xl transition cursor-pointer shrink-0 ${
