@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import type Player from 'video.js/dist/types/player';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface VideoPlayerProps {
   src: string;
@@ -22,18 +23,29 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
     if (typeof navigator !== 'undefined') {
       const ua = navigator.userAgent;
       if (/android/i.test(ua)) {
-        setSuggestedPlayer('mpv');
+        setSuggestedPlayer('mpv or VLC');
       } else if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
         setSuggestedPlayer('VLC or Infuse');
       } else if (/Mac/i.test(ua)) {
-        setSuggestedPlayer('IINA');
+        setSuggestedPlayer('IINA or VLC');
       } else if (/Win/i.test(ua)) {
-        setSuggestedPlayer('Potplayer');
+        setSuggestedPlayer('PotPlayer or VLC');
       } else {
         setSuggestedPlayer('VLC or mpv');
       }
     }
   }, []);
+
+  // Escape key handler to close player
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     if (!videoWrapperRef.current) return;
@@ -43,14 +55,14 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
     if (!videoType) {
       if (src.endsWith('.mp4')) videoType = 'video/mp4';
       else if (src.endsWith('.webm')) videoType = 'video/webm';
-      else if (src.endsWith('.mkv')) videoType = 'video/webm'; // Trick for MKV fallback
+      else if (src.endsWith('.mkv')) videoType = 'video/webm'; // Fallback trick for MKV containers
       else if (src.endsWith('.m3u8')) videoType = 'application/x-mpegURL';
       else videoType = 'video/mp4';
     }
 
-    // Recommended React pattern: create the video element dynamically
     const videoElement = document.createElement("video-js");
-    videoElement.classList.add('vjs-big-play-centered');
+    videoElement.classList.add('vjs-big-play-centered', 'vjs-fill');
+    videoWrapperRef.current.innerHTML = '';
     videoWrapperRef.current.appendChild(videoElement);
 
     const playerOptions: Record<string, any> = {
@@ -61,7 +73,7 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
       playsinline: true,
       preload: 'auto',
       poster: poster || undefined,
-      playbackRates: [0.5, 1, 1.25, 1.5, 2],
+      playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
       sources: [
         {
           src: src,
@@ -88,17 +100,24 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
     };
 
     const player = (playerRef.current = videojs(videoElement, playerOptions, () => {
-      // Check for audio-only fallback on loadedmetadata
-      player.on('loadedmetadata', () => {
-        const tech = player.tech({ IWillNotUseThisInPlugins: true });
-        if (tech && tech.el()) {
-          const vidEl = tech.el() as HTMLVideoElement;
-          // If video has 0x0 dimensions but has duration, it's playing audio-only (unsupported video codec like HEVC in MKV)
-          if (vidEl.videoWidth === 0 && vidEl.videoHeight === 0 && vidEl.duration > 0) {
-            setAudioOnlyWarning(true);
+      const checkCodecSupport = () => {
+        try {
+          const tech = player.tech({ IWillNotUseThisInPlugins: true });
+          if (tech && tech.el()) {
+            const vidEl = tech.el() as HTMLVideoElement;
+            if (vidEl.videoWidth > 0 && vidEl.videoHeight > 0) {
+              setAudioOnlyWarning(false);
+            } else if (vidEl.currentTime > 1 && vidEl.videoWidth === 0 && vidEl.videoHeight === 0 && !vidEl.paused) {
+              setAudioOnlyWarning(true);
+            }
           }
+        } catch {
+          // ignore
         }
-      });
+      };
+
+      player.on('playing', checkCodecSupport);
+      player.on('timeupdate', checkCodecSupport);
     }));
 
     return () => {
@@ -110,27 +129,62 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
   }, [src, poster, type]);
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10 group" style={{ transform: 'translate3d(0,0,0)', willChange: 'transform' }}>
-      {/* Title bar inside player */}
-      {title && (
-        <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none flex items-center justify-between">
-          <h3 className="text-white text-sm sm:text-base font-bold truncate pr-12 drop-shadow">
-            {title}
+    <div 
+      className="fixed inset-0 z-[130] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6"
+      onClick={onClose}
+    >
+      <motion.div 
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/15 flex flex-col justify-center items-center group"
+      >
+        {/* Top Header Overlay with Title & Close Button */}
+        <div className="absolute top-0 left-0 right-0 z-30 p-3 sm:p-4 bg-gradient-to-b from-black/90 via-black/40 to-transparent flex items-center justify-between pointer-events-auto transition-opacity duration-300">
+          <h3 className="text-white text-xs sm:text-sm md:text-base font-bold truncate pr-4 drop-shadow-md">
+            {title || 'Media Player'}
           </h3>
+          {onClose && (
+            <button
+              onClick={onClose}
+              title="Close player (Esc)"
+              className="p-1.5 sm:p-2 text-white bg-white/10 hover:bg-white/20 active:scale-95 rounded-full backdrop-blur-md border border-white/20 transition shrink-0 cursor-pointer shadow-lg"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
-      )}
 
-      {audioOnlyWarning && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/80 text-white p-6 text-center backdrop-blur-sm pointer-events-none">
-          <AlertCircle className="w-12 h-12 text-yellow-500 mb-4" />
-          <h3 className="text-lg font-bold mb-2">Video Codec Unsupported</h3>
-          <p className="text-sm text-white/70 max-w-sm">
-            Your browser does not support this video format (likely HEVC/MKV). The player is falling back to audio only. Use the external player options ({suggestedPlayer}) to watch this file.
-          </p>
-        </div>
-      )}
+        {/* Audio Only Non-intrusive Floating Notification */}
+        <AnimatePresence>
+          {audioOnlyWarning && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute bottom-16 left-3 right-3 sm:left-auto sm:right-auto sm:max-w-md z-30 mx-auto p-3 sm:p-4 bg-black/90 backdrop-blur-md border border-yellow-500/40 text-white rounded-2xl shadow-2xl flex items-start gap-3 pointer-events-auto"
+            >
+              <AlertCircle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1 text-xs">
+                <div className="font-bold text-yellow-300 mb-0.5">Audio-Only Playback</div>
+                <p className="text-gray-300 leading-relaxed text-[11px] sm:text-xs">
+                  Your browser cannot decode this video codec directly. Open in {suggestedPlayer} for full video playback.
+                </p>
+              </div>
+              <button 
+                onClick={() => setAudioOnlyWarning(false)}
+                className="p-1 text-gray-400 hover:text-white rounded-lg bg-white/10 transition shrink-0 cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      <div data-vjs-player className="absolute inset-0 w-full h-full" ref={videoWrapperRef} />
+        {/* Video.js Host Container */}
+        <div data-vjs-player className="w-full h-full relative" ref={videoWrapperRef} />
+      </motion.div>
     </div>
   );
 }

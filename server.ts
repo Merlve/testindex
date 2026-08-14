@@ -2325,14 +2325,22 @@ app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
 });
 
 app.get('/api/meta/images', cacheMiddleware(3600, true), async (req, res) => {
-  const { id, type } = req.query;
+  const { id, type, lang } = req.query;
   if (!id || !type) return res.status(400).json({ error: 'id and type required' });
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return res.json(null);
 
   try {
     const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(String(type).toUpperCase()) ? 'tv' : 'movie';
-    let response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
+    const altType = searchType === 'tv' ? 'movie' : 'tv';
+    const imageLangs = typeof lang === 'string' && lang.trim() ? lang.trim() : 'en,null,ja,ko,zh,es,fr,de,it,pt';
+    
+    let response;
+    try {
+      response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/images?api_key=${tmdbKey}&include_image_language=${imageLangs}`);
+    } catch (e) {
+      response = await axios.get(`https://api.themoviedb.org/3/${altType}/${id}/images?api_key=${tmdbKey}&include_image_language=${imageLangs}`);
+    }
     res.json(response.data);
   } catch (err: any) {
     res.json(null);
@@ -3175,8 +3183,8 @@ app.post('/api/meta/correct', adminMiddleware, (req, res) => {
 
 // Admin override for TMDB by ID
 app.post('/api/meta/override', adminMiddleware, async (req, res) => {
-  const { query, type, year, tmdbId, customTitle, customYear, path: itemPath } = req.body;
-  if (!query || (!tmdbId && !customTitle && !customYear)) return res.status(400).json({ error: 'Invalid data' });
+  const { query, type, year, tmdbId, customTitle, customYear, customLogo, path: itemPath } = req.body;
+  if (!query || (!tmdbId && !customTitle && !customYear && customLogo === undefined)) return res.status(400).json({ error: 'Invalid data' });
 
   try {
     const lowerQuery = query.toLowerCase().trim();
@@ -3189,6 +3197,26 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
 
     // Clear server response cache so all GET queries get fresh data immediately
     bumpMetaVersion();
+
+    const applyLogoToData = (dataToUpdate: any, logoVal: any) => {
+      if (typeof logoVal === 'string' && logoVal.trim()) {
+        const cleanLogo = logoVal.trim();
+        dataToUpdate.custom_logo = cleanLogo;
+        dataToUpdate.logo_path = cleanLogo;
+        dataToUpdate.no_logo = false;
+        dataToUpdate.images = dataToUpdate.images || {};
+        dataToUpdate.images.logos = dataToUpdate.images.logos || [];
+        dataToUpdate.images.logos = dataToUpdate.images.logos.filter((l: any) => l.file_path !== cleanLogo);
+        dataToUpdate.images.logos.unshift({ file_path: cleanLogo, iso_639_1: 'en' });
+      } else if (logoVal === '' || logoVal === null) {
+        dataToUpdate.custom_logo = '';
+        dataToUpdate.logo_path = '';
+        dataToUpdate.no_logo = true;
+        if (dataToUpdate.images) {
+          dataToUpdate.images.logos = [];
+        }
+      }
+    };
 
     const setOverriddenDataInCache = (dataToStore: any) => {
       dataToStore._overridden = true;
@@ -3205,8 +3233,8 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       }
     };
 
-    if ((customTitle || customYear) && !tmdbId) {
-      // Just override title/year in existing cache or create a mock
+    if ((customTitle || customYear || customLogo !== undefined) && !tmdbId) {
+      // Just override title/year/logo in existing cache or create a mock
       let data = tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || {};
       if (customTitle) {
         data.title = customTitle;
@@ -3215,6 +3243,9 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       if (customYear) {
         data.release_date = customYear + '-01-01'; // approximate for movie
         data.first_air_date = customYear + '-01-01'; // approximate for tv
+      }
+      if (customLogo !== undefined) {
+        applyLogoToData(data, customLogo);
       }
       
       try {
@@ -3230,7 +3261,7 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       }
       
       try {
-          addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'})`);
+          addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'}, Logo: ${customLogo !== undefined ? (customLogo || 'Removed') : 'N/A'})`);
       } catch (err: any) {
           console.error("Error in addLog:", err.message);
       }
@@ -3251,11 +3282,11 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     
     let data = null;
     try {
-      let response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=images&include_image_language=en,null`);
+      let response = await axios.get(`https://api.themoviedb.org/3/${primaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=images&include_image_language=en,null,ja,ko,zh,es,fr,de,it`);
       data = response.data;
     } catch (e) {
       try {
-        let response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=images&include_image_language=en,null`);
+        let response = await axios.get(`https://api.themoviedb.org/3/${secondaryType}/${tmdbId}?api_key=${tmdbKey}&append_to_response=images&include_image_language=en,null,ja,ko,zh,es,fr,de,it`);
         data = response.data;
       } catch (e2) {
         return res.status(404).json({ error: 'Not found on TMDB' });
@@ -3270,6 +3301,9 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
        if (customYear) {
          data.release_date = customYear + '-01-01';
          data.first_air_date = customYear + '-01-01';
+       }
+       if (customLogo !== undefined) {
+         applyLogoToData(data, customLogo);
        }
        
        const tmdbKey = process.env.TMDB_API_KEY;

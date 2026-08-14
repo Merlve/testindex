@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
@@ -42,11 +42,21 @@ function IntentPlayerModal({
 
   useEffect(() => {
     if (typeof navigator !== 'undefined') {
-      const ua = navigator.userAgent;
-      if (/android/i.test(ua)) setOs('android');
-      else if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) setOs('ios');
-      else if (/Mac/i.test(ua)) setOs('macos');
-      else if (/Win/i.test(ua)) setOs('windows');
+      const ua = navigator.userAgent || '';
+      const platform = (navigator as any).userAgentData?.platform || navigator.platform || '';
+      const maxTouchPoints = navigator.maxTouchPoints || 0;
+
+      if (/iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && maxTouchPoints > 1)) {
+        setOs('ios');
+      } else if (/Macintosh|MacIntel|MacPPC|Mac68K/.test(platform) || /Mac OS X|macOS/i.test(ua)) {
+        setOs('macos');
+      } else if (/android/i.test(ua)) {
+        setOs('android');
+      } else if (/Win/i.test(platform) || /Windows/i.test(ua)) {
+        setOs('windows');
+      } else {
+        setOs('unknown');
+      }
     }
   }, []);
 
@@ -95,6 +105,8 @@ function IntentPlayerModal({
     }
   };
 
+  const isAppleDevice = os === 'ios' || os === 'macos';
+
   return (
     <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={onClose}>
       <motion.div 
@@ -104,7 +116,7 @@ function IntentPlayerModal({
         exit={{ opacity: 0, scale: 0.95 }}
         className="bg-[#fbf4eb] dark:bg-[#121218] border border-black/10 dark:border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl relative"
       >
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-gray-500 hover:text-black dark:hover:text-white rounded-full bg-black/5 dark:bg-white/5 transition">
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-gray-500 hover:text-black dark:hover:text-white rounded-full bg-black/5 dark:bg-white/5 transition cursor-pointer">
           <X size={20} />
         </button>
 
@@ -139,90 +151,158 @@ function IntentPlayerModal({
             Fetching playback URL...
           </div>
         ) : (
-          <div className="space-y-2.5">
-            <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {os === 'ios' && (
                 <>
                   <a
                     href={`vlc://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
-                    <div className="p-1.5 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs shrink-0">VLC</div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold">VLC</div>
-                      <div className="text-[10px] text-gray-500 truncate">iOS</div>
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">VLC</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">iOS / iPadOS</div>
                     </div>
                   </a>
 
                   <a
                     href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-blue-500/50 text-black dark:text-white transition text-left cursor-pointer"
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-blue-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
-                    <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-500 font-bold text-xs shrink-0">INF</div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold">Infuse</div>
-                      <div className="text-[10px] text-gray-500 truncate">iOS / Apple TV</div>
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-500 font-bold text-xs flex items-center justify-center shrink-0">INF</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Infuse</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">iOS / iPadOS</div>
+                    </div>
+                  </a>
+                </>
+              )}
+
+              {os === 'macos' && (
+                <>
+                  <a
+                    href={`iina://weblink?url=${encodeURIComponent(url)}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs flex items-center justify-center shrink-0">IINA</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">IINA</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href={`vlc://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">VLC</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
                     </div>
                   </a>
                 </>
               )}
 
               {os === 'android' && (
-                <a
-                  href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 text-black dark:text-white transition text-left cursor-pointer"
-                >
-                  <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs shrink-0">MPV</div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold">MPV</div>
-                    <div className="text-[10px] text-gray-500 truncate">Android</div>
-                  </div>
-                </a>
+                <>
+                  <a
+                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">MPV</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">MPV</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Android</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href={`vlc://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">VLC</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Android</div>
+                    </div>
+                  </a>
+                </>
               )}
 
               {os === 'windows' && (
-                <a
-                  href={`potplayer://${url}`}
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-yellow-500/50 text-black dark:text-white transition text-left cursor-pointer"
-                >
-                  <div className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-500 font-bold text-xs shrink-0">POT</div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold">PotPlayer</div>
-                    <div className="text-[10px] text-gray-500 truncate">Windows</div>
-                  </div>
-                </a>
+                <>
+                  <a
+                    href={`potplayer://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-yellow-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-yellow-500/20 text-yellow-500 font-bold text-xs flex items-center justify-center shrink-0">POT</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">PotPlayer</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Windows</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href={`vlc://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">VLC</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Windows</div>
+                    </div>
+                  </a>
+                </>
               )}
 
-              {os === 'macos' && (
-                <a
-                  href={`iina://weblink?url=${encodeURIComponent(url)}`}
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 text-black dark:text-white transition text-left cursor-pointer"
-                >
-                  <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs shrink-0">IINA</div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold">IINA</div>
-                    <div className="text-[10px] text-gray-500 truncate">macOS</div>
-                  </div>
-                </a>
+              {os === 'unknown' && (
+                <>
+                  <a
+                    href={`vlc://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">VLC</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">External App</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href={`mpv://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">MPV</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">MPV</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">External App</div>
+                    </div>
+                  </a>
+                </>
               )}
 
-              <button
-                onClick={() => {
-                  if (url) {
-                    onPlayWeb(url);
-                    onClose();
-                  }
-                }}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer col-span-2"
-              >
-                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs shrink-0">
-                  <Play size={14} fill="currentColor" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold">Play Here</div>
-                  <div className="text-[10px] opacity-80 truncate">Play directly in browser</div>
-                </div>
-              </button>
+              {!isAppleDevice && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (url) {
+                      onPlayWeb(url);
+                      onClose();
+                    }
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                    <Play size={14} fill="currentColor" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold truncate">Play Here</div>
+                    <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                  </div>
+                </button>
+              )}
             </div>
 
             <button
@@ -445,8 +525,9 @@ export default function Details() {
   const [trailerUrl, setTrailerUrl] = useState<string | null>(null);
   const [loadingTrailer, setLoadingTrailer] = useState(false);
 
-  // Metadata Correction Modal
+  // Metadata Correction & Logo Fix Modal
   const [showMetadataModal, setShowMetadataModal] = useState(false);
+  const [modalTab, setModalTab] = useState<'info' | 'logo'>('info');
   const [searchTitle, setSearchTitle] = useState('');
   const [customTitle, setCustomTitle] = useState('');
   const [customYear, setCustomYear] = useState('');
@@ -455,6 +536,13 @@ export default function Details() {
   const [searching, setSearching] = useState(false);
   const [manualTmdbId, setManualTmdbId] = useState('');
   const [copiedModalPath, setCopiedModalPath] = useState(false);
+
+  // Logo Fix State
+  const [availableLogos, setAvailableLogos] = useState<any[]>([]);
+  const [loadingLogos, setLoadingLogos] = useState(false);
+  const [selectedLogoPath, setSelectedLogoPath] = useState<string | null>(null);
+  const [customLogoInput, setCustomLogoInput] = useState('');
+  const [savingLogo, setSavingLogo] = useState(false);
 
   // Watched state
   const [watchedItems, setWatchedItems] = useState<any[]>([]);
@@ -520,21 +608,36 @@ export default function Details() {
   // Fetch logo if tmdb exists
   useEffect(() => {
     let isMounted = true;
-    if (tmdb?.id) {
+    if (tmdb) {
+      if (tmdb.no_logo) {
+        setLogoUrl(null);
+        return;
+      }
+      if (tmdb.custom_logo || tmdb.logo_path) {
+        const custom = tmdb.custom_logo || tmdb.logo_path;
+        setLogoUrl(custom.startsWith('http') ? custom : `https://image.tmdb.org/t/p/original${custom}`);
+        return;
+      }
       if (tmdb.images?.logos?.length > 0) {
         const logo = tmdb.images.logos.find((l: any) => l.iso_639_1 === 'en') || tmdb.images.logos[0];
-        if (logo) setLogoUrl(`https://image.tmdb.org/t/p/original${logo.file_path}`);
-      } else {
+        if (logo?.file_path) {
+          setLogoUrl(logo.file_path.startsWith('http') ? logo.file_path : `https://image.tmdb.org/t/p/original${logo.file_path}`);
+        }
+      } else if (tmdb.id) {
         const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category) ? 'tv' : 'movie';
         axios.get(`/api/meta/images?id=${tmdb.id}&type=${searchType}`)
           .then(res => {
             if (isMounted && res.data?.logos?.length > 0) {
               const logo = res.data.logos.find((l: any) => l.iso_639_1 === 'en') || res.data.logos[0];
-              if (logo) setLogoUrl(`https://image.tmdb.org/t/p/original${logo.file_path}`);
+              if (logo?.file_path) {
+                setLogoUrl(logo.file_path.startsWith('http') ? logo.file_path : `https://image.tmdb.org/t/p/original${logo.file_path}`);
+              }
             }
           })
           .catch(console.error);
       }
+    } else {
+      setLogoUrl(null);
     }
     return () => { isMounted = false; };
   }, [tmdb, category]);
@@ -710,11 +813,31 @@ export default function Details() {
     }
   };
 
+  // Helper to open YouTube search fallback
+  const openYouTubeTrailerSearch = () => {
+    const parsed = parseMediaName(name || '');
+    const title = tmdb?.title || tmdb?.name || parsed.cleanName || name || '';
+    const releaseDate = tmdb?.release_date || tmdb?.first_air_date || '';
+    const year = (releaseDate ? releaseDate.substring(0, 4) : '') || parsed.year || '';
+    const searchQuery = [title, year, 'trailer'].filter(Boolean).join(' ');
+    const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
+    
+    const link = document.createElement('a');
+    link.href = ytUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setToast(`Opening YouTube search: "${searchQuery}"`);
+    setTimeout(() => setToast(''), 3000);
+  };
+
   // Watch Trailer Handler
   const handleWatchTrailer = async () => {
     if (!tmdb?.id) {
-      setToast('Trailer unavailable');
-      setTimeout(() => setToast(''), 2000);
+      openYouTubeTrailerSearch();
       return;
     }
     setLoadingTrailer(true);
@@ -722,18 +845,16 @@ export default function Details() {
       const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category) ? 'tv' : 'movie';
       const res = await axios.get(`/api/meta/videos?id=${tmdb.id}&type=${searchType}`);
       const videos = res.data?.results || [];
-      const trailer = videos.find((v: any) => (v.type === 'Trailer' || v.type === 'Teaser') && v.site === 'YouTube') || videos[0];
+      const trailer = videos.find((v: any) => (v.type === 'Trailer' || v.type === 'Teaser') && v.site === 'YouTube') || videos.find((v: any) => v.site === 'YouTube');
       if (trailer?.key) {
         setTrailerUrl(`https://www.youtube.com/embed/${trailer.key}?autoplay=1&rel=0`);
         setShowTrailerModal(true);
       } else {
-        setToast('No trailer found for this title');
-        setTimeout(() => setToast(''), 2500);
+        openYouTubeTrailerSearch();
       }
     } catch (e) {
-      console.error(e);
-      setToast('Failed to load trailer');
-      setTimeout(() => setToast(''), 2500);
+      console.error('Error fetching trailer, opening YouTube search:', e);
+      openYouTubeTrailerSearch();
     } finally {
       setLoadingTrailer(false);
     }
@@ -780,7 +901,7 @@ export default function Details() {
   const handleSelectTMDBResult = async (selected: any) => {
     try {
       const parsed = parseMediaName(name || '');
-      await axios.post('/api/meta/override', {
+      const res = await axios.post('/api/meta/override', {
         query: parsed.cleanName,
         type: category,
         year: parsed.year,
@@ -788,7 +909,8 @@ export default function Details() {
         path: actualOpenlistPath
       }, { headers: { Authorization: token } });
       
-      setTmdb(selected);
+      const updatedData = res.data?.data || selected;
+      setTmdb(updatedData);
       setShowMetadataModal(false);
       setToast('Metadata updated globally');
       setTimeout(() => setToast(''), 2000);
@@ -829,6 +951,83 @@ export default function Details() {
       setTimeout(() => setToast(''), 2000);
     } finally {
       setSavingCustom(false);
+    }
+  };
+
+  // Fetch available logos from TMDB
+  const fetchAvailableLogos = async (tmdbId?: number | string) => {
+    const idToUse = tmdbId || tmdb?.id;
+    if (!idToUse) {
+      if (tmdb?.images?.logos && Array.isArray(tmdb.images.logos)) {
+        setAvailableLogos(tmdb.images.logos);
+      } else {
+        setAvailableLogos([]);
+      }
+      return;
+    }
+
+    setLoadingLogos(true);
+    try {
+      const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category) ? 'tv' : 'movie';
+      const res = await axios.get(`/api/meta/images?id=${idToUse}&type=${searchType}`);
+      const logos = res.data?.logos || [];
+      setAvailableLogos(logos);
+    } catch (err) {
+      console.error('Error fetching logos:', err);
+      if (tmdb?.images?.logos) {
+        setAvailableLogos(tmdb.images.logos);
+      }
+    } finally {
+      setLoadingLogos(false);
+    }
+  };
+
+  // Save / Override Logo Persistently
+  const handleSaveLogo = async (overridePath?: string) => {
+    const targetLogo = overridePath !== undefined 
+      ? overridePath 
+      : (customLogoInput.trim() || (selectedLogoPath !== null ? selectedLogoPath : ''));
+      
+    setSavingLogo(true);
+    try {
+      const parsed = parseMediaName(name || '');
+      const res = await axios.post('/api/meta/override', {
+        query: parsed.cleanName,
+        type: category,
+        year: parsed.year,
+        tmdbId: tmdb?.id || undefined,
+        customLogo: targetLogo,
+        path: actualOpenlistPath
+      }, { headers: { Authorization: token } });
+
+      if (res.data?.data) {
+        setTmdb(res.data.data);
+      } else {
+        setTmdb((prev: any) => ({
+          ...prev,
+          custom_logo: targetLogo,
+          logo_path: targetLogo,
+          no_logo: targetLogo === ''
+        }));
+      }
+
+      if (targetLogo) {
+        setLogoUrl(targetLogo.startsWith('http') ? targetLogo : `https://image.tmdb.org/t/p/original${targetLogo}`);
+      } else {
+        setLogoUrl(null);
+      }
+
+      setShowMetadataModal(false);
+      setToast(targetLogo ? 'Title logo updated persistently' : 'Logo removed (using text title)');
+      setTimeout(() => setToast(''), 2500);
+      localStorage.setItem('meta_version', String(Date.now()));
+      clearAllLocalCaches(queryClient);
+    } catch (err: any) {
+      console.error('Error saving custom logo:', err);
+      setToast('Failed to save logo override');
+      setTimeout(() => setToast(''), 2500);
+    } finally {
+      setSavingLogo(false);
     }
   };
 
@@ -1077,9 +1276,24 @@ export default function Details() {
           <button
             onClick={() => {
               setSearchTitle(tmdb?.title || tmdb?.name || parseMediaName(name).cleanName);
+              setCustomTitle(tmdb?.title || tmdb?.name || parseMediaName(name).cleanName);
+              const releaseDate = tmdb?.release_date || tmdb?.first_air_date || '';
+              setCustomYear((releaseDate || '').substring(0, 4) || parseMediaName(name).year || '');
+              setModalTab('info');
+              if (tmdb?.no_logo) {
+                setSelectedLogoPath('');
+              } else if (tmdb?.custom_logo || tmdb?.logo_path) {
+                setSelectedLogoPath(tmdb.custom_logo || tmdb.logo_path);
+              } else if (logoUrl) {
+                const match = logoUrl.match(/https:\/\/image\.tmdb\.org\/t\/p\/(?:original|w\d+)(\/.*)/);
+                setSelectedLogoPath(match ? match[1] : logoUrl);
+              } else {
+                setSelectedLogoPath(null);
+              }
+              setCustomLogoInput('');
               setShowMetadataModal(true);
             }}
-            title="Fix Metadata"
+            title="Fix Metadata & Logo"
             className="p-3 sm:p-3.5 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white backdrop-blur-md border border-black/10 dark:border-white/15 transition flex items-center justify-center shadow-lg cursor-pointer"
           >
             <Edit2 size={20} />
@@ -1328,12 +1542,24 @@ export default function Details() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-black rounded-2xl overflow-hidden max-w-4xl w-full aspect-video relative shadow-2xl border border-white/10"
             >
-              <button 
-                onClick={() => setShowTrailerModal(false)}
-                className="absolute top-4 right-4 z-10 p-2 text-white bg-black/60 hover:bg-black rounded-full backdrop-blur-md transition cursor-pointer"
-              >
-                <X size={20} />
-              </button>
+              <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                <a 
+                  href={trailerUrl.replace('/embed/', '/watch?v=').replace('?autoplay=1&rel=0', '')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 text-white bg-black/60 hover:bg-black rounded-full backdrop-blur-md transition cursor-pointer flex items-center justify-center"
+                  title="Open on YouTube"
+                >
+                  <ExternalLink size={20} />
+                </a>
+                <button 
+                  onClick={() => setShowTrailerModal(false)}
+                  className="p-2 text-white bg-black/60 hover:bg-black rounded-full backdrop-blur-md transition cursor-pointer flex items-center justify-center"
+                  title="Close Trailer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
               <iframe 
                 src={trailerUrl} 
                 title="Trailer" 
@@ -1361,15 +1587,17 @@ export default function Details() {
       </AnimatePresence>
 
       {/* In-Browser Video Player Component */}
-      {playingUrl && (
-        <VideoPlayer 
-          src={playingUrl} 
-          title={name} 
-          onClose={() => setPlayingUrl('')} 
-        />
-      )}
+      <AnimatePresence>
+        {playingUrl && (
+          <VideoPlayer 
+            src={playingUrl} 
+            title={name} 
+            onClose={() => setPlayingUrl('')} 
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Metadata Correction Modal */}
+      {/* Metadata Correction & Logo Fix Modal */}
       <AnimatePresence>
         {showMetadataModal && (
           <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto" onClick={() => setShowMetadataModal(false)}>
@@ -1387,123 +1615,325 @@ export default function Details() {
                 <X size={18} />
               </button>
 
-              <div className="pr-8">
-                <h3 className="text-base sm:text-lg font-bold text-black dark:text-white flex items-center gap-2 truncate">
-                  <Edit2 size={18} className="text-purple-600 dark:text-purple-400 shrink-0" />
-                  <span className="truncate">Fix Metadata</span>
-                </h3>
+              <div className="flex items-center justify-between pr-8 min-w-0">
+                <div className="min-w-0 flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                    {modalTab === 'info' ? <Edit2 size={16} /> : <ImageIcon size={16} />}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-bold text-black dark:text-white truncate">
+                      {modalTab === 'info' ? 'Fix Metadata' : 'Fix Title Logo'}
+                    </h3>
+                    <p className="text-[11px] text-gray-500 truncate">
+                      {modalTab === 'info' ? 'Search TMDB or specify custom media info' : 'Select or override the title logo from TMDB'}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {/* Openlist Path Display */}
-              {actualOpenlistPath && (
-                <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-3 flex items-center justify-between gap-3 min-w-0">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <Folder size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Openlist Path</div>
-                      <div 
-                        className="text-xs font-mono text-black dark:text-white truncate select-all" 
-                        title={actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`}
-                      >
-                        {actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`}
+              {/* Tab Switcher */}
+              <div className="flex items-center gap-1.5 p-1 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setModalTab('info')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    modalTab === 'info'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  <Edit2 size={14} />
+                  <span>Metadata Info</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalTab('logo');
+                    fetchAvailableLogos();
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    modalTab === 'logo'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  <ImageIcon size={14} />
+                  <span>Fix Logo</span>
+                  {logoUrl && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                  )}
+                </button>
+              </div>
+
+              {/* TAB 1: METADATA INFO */}
+              {modalTab === 'info' && (
+                <div className="space-y-4 w-full min-w-0">
+                  {/* Openlist Path Display */}
+                  {actualOpenlistPath && (
+                    <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-3 flex items-center justify-between gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <Folder size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Openlist Path</div>
+                          <div 
+                            className="text-xs font-mono text-black dark:text-white truncate select-all" 
+                            title={actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`}
+                          >
+                            {actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`}
+                          </div>
+                        </div>
                       </div>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const p = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
+                          navigator.clipboard.writeText(p);
+                          setCopiedModalPath(true);
+                          setTimeout(() => setCopiedModalPath(false), 2000);
+                        }}
+                        title="Copy Openlist Path"
+                        className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition shrink-0 cursor-pointer"
+                      >
+                        {copiedModalPath ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="w-full min-w-0">
+                    <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-[10px] font-bold uppercase tracking-wider">Search TMDB</label>
+                    <div className="flex items-center gap-2 w-full min-w-0">
+                      <input 
+                        type="text"
+                        value={searchTitle}
+                        onChange={(e) => setSearchTitle(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearchTMDB()}
+                        placeholder="Search title..."
+                        className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                      />
+                      <button 
+                        onClick={handleSearchTMDB}
+                        disabled={searching}
+                        title="Search"
+                        className="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50"
+                      >
+                        {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                      </button>
                     </div>
                   </div>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      const p = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
-                      navigator.clipboard.writeText(p);
-                      setCopiedModalPath(true);
-                      setTimeout(() => setCopiedModalPath(false), 2000);
-                    }}
-                    title="Copy Openlist Path"
-                    className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition shrink-0 cursor-pointer"
-                  >
-                    {copiedModalPath ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                  </button>
-                </div>
-              )}
 
-              <div className="space-y-4 w-full min-w-0">
-                <div className="w-full min-w-0">
-                  <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-[10px] font-bold uppercase tracking-wider">Search TMDB</label>
-                  <div className="flex items-center gap-2 w-full min-w-0">
-                    <input 
-                      type="text"
-                      value={searchTitle}
-                      onChange={(e) => setSearchTitle(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSearchTMDB()}
-                      placeholder="Search title..."
-                      className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
-                    />
+                  {searchResults.length > 0 && (
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar w-full min-w-0">
+                      {searchResults.map((result, idx) => (
+                        <div 
+                          key={idx}
+                          onClick={() => handleSelectTMDBResult(result)}
+                          className="p-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-purple-600/10 border border-black/10 dark:border-white/10 hover:border-purple-500/40 cursor-pointer transition flex items-center gap-3 w-full min-w-0"
+                        >
+                          {result.poster_path && (
+                            <img 
+                              src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} 
+                              alt={result.title || result.name} 
+                              className="w-10 h-14 object-cover rounded-lg shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-bold text-black dark:text-white truncate">
+                              {result.title || result.name}
+                            </h4>
+                            <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                              {result.release_date || result.first_air_date || 'N/A'} • {result.media_type || category}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="pt-2 border-t border-black/10 dark:border-white/10 w-full min-w-0">
+                    <label className="block text-gray-600 dark:text-gray-400 mb-2 text-[10px] font-bold uppercase tracking-wider">Or Set Custom Metadata</label>
+                    <div className="flex flex-col sm:flex-row gap-2 mb-2 w-full min-w-0">
+                      <input 
+                        type="text"
+                        value={customTitle}
+                        onChange={(e) => setCustomTitle(e.target.value)}
+                        placeholder="Custom Title..."
+                        className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                      />
+                      <input 
+                        type="text"
+                        value={customYear}
+                        onChange={(e) => setCustomYear(e.target.value)}
+                        placeholder="Year"
+                        className="w-full sm:w-28 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                      />
+                    </div>
                     <button 
-                      onClick={handleSearchTMDB}
-                      disabled={searching}
-                      title="Search"
-                      className="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50"
+                      onClick={handleSaveCustomMetadata}
+                      disabled={savingCustom || !customTitle.trim()}
+                      className="w-full px-4 py-2.5 rounded-xl bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 text-black dark:text-white font-semibold text-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                      {savingCustom ? <Loader2 size={16} className="animate-spin" /> : <Edit2 size={16} />}
+                      Save Custom Metadata
                     </button>
                   </div>
                 </div>
+              )}
 
-                {searchResults.length > 0 && (
-                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar w-full min-w-0">
-                    {searchResults.map((result, idx) => (
-                      <div 
-                        key={idx}
-                        onClick={() => handleSelectTMDBResult(result)}
-                        className="p-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-purple-600/10 border border-black/10 dark:border-white/10 hover:border-purple-500/40 cursor-pointer transition flex items-center gap-3 w-full min-w-0"
-                      >
-                        {result.poster_path && (
-                          <img 
-                            src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} 
-                            alt={result.title || result.name} 
-                            className="w-10 h-14 object-cover rounded-lg shrink-0"
-                          />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-xs font-bold text-black dark:text-white truncate">
-                            {result.title || result.name}
-                          </h4>
-                          <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                            {result.release_date || result.first_air_date || 'N/A'} • {result.media_type || category}
-                          </p>
-                        </div>
+              {/* TAB 2: FIX LOGO */}
+              {modalTab === 'logo' && (
+                <div className="space-y-3.5 w-full min-w-0">
+                  {/* Selected Logo Preview Banner */}
+                  <div className="bg-black/90 dark:bg-black border border-black/10 dark:border-white/15 rounded-xl p-3 flex flex-col items-center justify-center min-h-[84px] relative overflow-hidden">
+                    <span className="absolute top-2 left-2.5 text-[9px] uppercase tracking-wider font-bold text-gray-400">
+                      Selected Logo Preview
+                    </span>
+                    {selectedLogoPath ? (
+                      <img
+                        src={selectedLogoPath.startsWith('http') ? selectedLogoPath : `https://image.tmdb.org/t/p/w500${selectedLogoPath}`}
+                        alt="Logo Preview"
+                        className="max-h-12 max-w-[85%] object-contain filter drop-shadow-md mt-3"
+                      />
+                    ) : selectedLogoPath === '' ? (
+                      <div className="text-xs font-medium text-gray-400 mt-4 flex items-center gap-1.5">
+                        <Type size={14} className="text-purple-400" />
+                        <span>Text Title Mode (No Logo)</span>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="text-xs text-gray-500 mt-4">No logo selected</div>
+                    )}
                   </div>
-                )}
-                
-                <div className="pt-2 border-t border-black/10 dark:border-white/10 w-full min-w-0">
-                  <label className="block text-gray-600 dark:text-gray-400 mb-2 text-[10px] font-bold uppercase tracking-wider">Or Set Custom Metadata</label>
-                  <div className="flex flex-col sm:flex-row gap-2 mb-2 w-full min-w-0">
-                    <input 
-                      type="text"
-                      value={customTitle}
-                      onChange={(e) => setCustomTitle(e.target.value)}
-                      placeholder="Custom Title..."
-                      className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
-                    />
-                    <input 
-                      type="text"
-                      value={customYear}
-                      onChange={(e) => setCustomYear(e.target.value)}
-                      placeholder="Year"
-                      className="w-full sm:w-28 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
-                    />
+
+                  {/* TMDB Available Logos (Scrollable) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-gray-600 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Available TMDB Logos</span>
+                        {availableLogos.length > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-md bg-purple-600/20 text-purple-600 dark:text-purple-400 text-[10px] font-mono">
+                            {availableLogos.length}
+                          </span>
+                        )}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => fetchAvailableLogos()}
+                        disabled={loadingLogos}
+                        className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw size={12} className={loadingLogos ? "animate-spin" : ""} />
+                        <span>Reload</span>
+                      </button>
+                    </div>
+
+                    {loadingLogos ? (
+                      <div className="p-6 flex flex-col items-center justify-center gap-2 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 text-gray-500">
+                        <Loader2 size={20} className="animate-spin text-purple-600 dark:text-purple-400" />
+                        <span className="text-xs">Fetching official logos from TMDB...</span>
+                      </div>
+                    ) : availableLogos.length > 0 ? (
+                      <div className="max-h-44 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 p-2 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 custom-scrollbar">
+                        {availableLogos.map((logo, idx) => {
+                          const isSelected = selectedLogoPath === logo.file_path;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setSelectedLogoPath(logo.file_path);
+                                setCustomLogoInput('');
+                              }}
+                              className={`relative aspect-[16/9] rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer transition border bg-black/90 hover:bg-black group ${
+                                isSelected
+                                  ? 'border-purple-500 ring-2 ring-purple-500/50 shadow-md'
+                                  : 'border-white/10 hover:border-white/30'
+                              }`}
+                            >
+                              {isSelected && (
+                                <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center shadow z-10">
+                                  <Check size={10} strokeWidth={3} />
+                                </div>
+                              )}
+                              <img
+                                src={`https://image.tmdb.org/t/p/w300${logo.file_path}`}
+                                alt="TMDB Logo"
+                                className="max-h-9 max-w-full object-contain filter drop-shadow group-hover:scale-105 transition"
+                              />
+                              <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between text-[8px] text-gray-400 px-0.5 pointer-events-none">
+                                <span className="uppercase font-mono font-bold bg-white/15 px-1 rounded text-[7px] text-gray-200">
+                                  {logo.iso_639_1 ? logo.iso_639_1 : 'ALL'}
+                                </span>
+                                {logo.width && logo.height && (
+                                  <span className="opacity-70 font-mono text-[7px]">
+                                    {logo.width}x{logo.height}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 space-y-1">
+                        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">No logos found on TMDB</p>
+                        <p className="text-[11px] text-gray-500">
+                          Search for the title in the Metadata tab or provide a custom logo image URL below.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Remove Logo / Text Mode Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLogoPath('');
+                        setCustomLogoInput('');
+                      }}
+                      className={`w-full py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                        selectedLogoPath === ''
+                          ? 'bg-purple-600/10 border-purple-500 text-purple-600 dark:text-purple-400'
+                          : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Type size={14} />
+                        <span>Use Plain Text Title (Remove Logo)</span>
+                      </div>
+                      {selectedLogoPath === '' && <Check size={14} className="text-purple-600 dark:text-purple-400" />}
+                    </button>
                   </div>
-                  <button 
-                    onClick={handleSaveCustomMetadata}
-                    disabled={savingCustom || !customTitle.trim()}
-                    className="w-full px-4 py-2.5 rounded-xl bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 text-black dark:text-white font-semibold text-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+
+                  {/* Custom Logo URL Input */}
+                  <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-1.5">
+                    <label className="block text-gray-600 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+                      Or Custom Logo URL
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customLogoInput}
+                        onChange={(e) => {
+                          setCustomLogoInput(e.target.value);
+                          if (e.target.value.trim()) {
+                            setSelectedLogoPath(e.target.value.trim());
+                          }
+                        }}
+                        placeholder="https://example.com/logo.png"
+                        className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Apply Logo Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleSaveLogo()}
+                    disabled={savingLogo}
+                    className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-semibold text-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md"
                   >
-                    {savingCustom ? <Loader2 size={16} className="animate-spin" /> : <Edit2 size={16} />}
-                    Save Custom Metadata
+                    {savingLogo ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                    <span>Apply & Save Logo Persistently</span>
                   </button>
                 </div>
-              </div>
+              )}
             </motion.div>
           </div>
         )}
