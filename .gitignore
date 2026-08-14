@@ -31,6 +31,8 @@ data/
 *.diff
 patch*.js
 query*.cjs
+test*.js
+test*.cjs
 *.db
 *.py
 *.tmp

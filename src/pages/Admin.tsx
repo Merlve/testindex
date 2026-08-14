@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
-import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud, Megaphone } from 'lucide-react';
+import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud, Megaphone, Folder, Copy, Check } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import AnnouncementPill from '../components/AnnouncementPill';
@@ -18,7 +18,7 @@ export default function Admin() {
   const [config, setConfig] = useState({ openlistUrl: '', basePath: '', inactivityTimeout: 0, announcement: '' });
   const [msg, setMsg] = useState('');
   
-  // TMDB Correction State
+  // Watched state / TMDB Correction State
   const [tmdbQuery, setTmdbQuery] = useState('');
   const [tmdbType, setTmdbType] = useState('movie');
   const [tmdbData, setTmdbData] = useState('');
@@ -28,19 +28,6 @@ export default function Admin() {
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
   const [autoFetchLoading, setAutoFetchLoading] = useState(false);
   const [autoFetchFailed, setAutoFetchFailed] = useState<{name: string, path: string}[]>([]);
-  
-  // Scans
-  const [creditsScanLoading, setCreditsScanLoading] = useState(false);
-  const [creditsScanMsg, setCreditsScanMsg] = useState('');
-  
-  const [imagesScanLoading, setImagesScanLoading] = useState(false);
-  const [imagesScanMsg, setImagesScanMsg] = useState('');
-  const [seasonPostersScanLoading, setSeasonPostersScanLoading] = useState(false);
-  const [seasonPostersScanMsg, setSeasonPostersScanMsg] = useState('');
-
-  const [filesScanLoading, setFilesScanLoading] = useState(false);
-  const [filesScanMsg, setFilesScanMsg] = useState('');
-
 
   const [missingMetadata, setMissingMetadata] = useState<any[]>([]);
   const [loadingMissing, setLoadingMissing] = useState(false);
@@ -50,7 +37,9 @@ export default function Admin() {
   const [fixModalLoading, setFixModalLoading] = useState(false);
   const [fixModalSearchResults, setFixModalSearchResults] = useState<any[]>([]);
   const [fixModalSearching, setFixModalSearching] = useState(false);
+  const [fixModalPathCopied, setFixModalPathCopied] = useState(false);
   const fixModalSearchTimeoutRef = useRef<any>(null);
+  const [clearingDebugLogs, setClearingDebugLogs] = useState(false);
 
   const fetchMissingMetadata = async () => {
     setLoadingMissing(true);
@@ -78,6 +67,21 @@ export default function Admin() {
       link.parentNode?.removeChild(link);
     } catch (err: any) {
       alert(`Failed to download logs: ${err.message}`);
+    }
+  };
+
+  const handleClearDebugLogs = async () => {
+    if (!window.confirm('Are you sure you want to permanently clear the server debug log file on the machine?')) return;
+    setClearingDebugLogs(true);
+    try {
+      await axios.post('/api/admin/logs/clear-debug', {}, { headers: { Authorization: token } });
+      alert('Debug logs cleared successfully.');
+      const res = await axios.get('/api/admin/logs', { headers: { Authorization: token } });
+      if (Array.isArray(res.data)) setLogs(res.data);
+    } catch (err: any) {
+      alert(`Failed to clear debug logs: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setClearingDebugLogs(false);
     }
   };
   
@@ -175,9 +179,6 @@ export default function Admin() {
     setRefreshingMissing(false);
   };
 
-  const [collectionScanLoading, setCollectionScanLoading] = useState(false);
-  const [collectionScanMsg, setCollectionScanMsg] = useState('');
-
   // Logs
   const [logs, setLogs] = useState<any[]>([]);
 
@@ -234,39 +235,6 @@ export default function Admin() {
           setAutoFetchFailed(res.data.failedItems);
         }
       } catch(e) {}
-      
-      try {
-        const res = await axios.get('/api/meta/scan_credits/status');
-        setCreditsScanLoading(res.data.isRunning);
-        if (res.data.message) {
-          setCreditsScanMsg(res.data.message);
-        }
-      } catch(e) {}
-      
-      try {
-        const res = await axios.get('/api/meta/scan_images/status');
-        setImagesScanLoading(res.data.isRunning);
-        if (res.data.message) {
-          setImagesScanMsg(res.data.message);
-        }
-      } catch(e) {}
-      
-      try {
-        const res = await axios.get('/api/meta/scan_files/status');
-        setFilesScanLoading(res.data.isRunning);
-        if (res.data.message) {
-          setFilesScanMsg(res.data.message);
-        }
-      } catch(e) {}
-      
-      try {
-        const res = await axios.get('/api/meta/scan_collections/status');
-        setCollectionScanLoading(res.data.isRunning);
-        if (res.data.message) {
-          setCollectionScanMsg(res.data.message);
-        }
-      } catch(e) {}
-
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -307,88 +275,6 @@ export default function Admin() {
     } catch (e: any) {
       setAutoFetchMsg(`Error during auto-fetch: ${e.message}`);
       setAutoFetchLoading(false);
-    }
-  };
-
-  const handleCreditsScan = async () => {
-    if (creditsScanLoading) {
-      await axios.post('/api/meta/scan_credits/stop', {}, { headers: { Authorization: token } });
-      setCreditsScanLoading(false);
-      return;
-    }
-    setCreditsScanLoading(true);
-    setCreditsScanMsg('Starting credits scan...');
-    try {
-      await axios.post('/api/meta/scan_credits/start', {}, { headers: { Authorization: token } });
-    } catch (e: any) {
-      setCreditsScanMsg(`Error: ${e.message}`);
-      setCreditsScanLoading(false);
-    }
-  };
-
-  
-  const handleSeasonPostersScan = async () => {
-    if (seasonPostersScanLoading) {
-      await axios.post('/api/meta/scan_season_posters/stop', {}, { headers: { Authorization: token } });
-      setSeasonPostersScanLoading(false);
-      return;
-    }
-    setSeasonPostersScanLoading(true);
-    setSeasonPostersScanMsg('Starting season posters scan...');
-    try {
-      await axios.post('/api/meta/scan_season_posters/start', {}, { headers: { Authorization: token } });
-    } catch (e: any) {
-      setSeasonPostersScanMsg(`Error: ${e.message}`);
-      setSeasonPostersScanLoading(false);
-    }
-  };
-
-
-  const handleImagesScan = async () => {
-    if (imagesScanLoading) {
-      await axios.post('/api/meta/scan_images/stop', {}, { headers: { Authorization: token } });
-      setImagesScanLoading(false);
-      return;
-    }
-    setImagesScanLoading(true);
-    setImagesScanMsg('Starting images/logos scan...');
-    try {
-      await axios.post('/api/meta/scan_images/start', {}, { headers: { Authorization: token } });
-    } catch (e: any) {
-      setImagesScanMsg(`Error: ${e.message}`);
-      setImagesScanLoading(false);
-    }
-  };
-
-  const handleFilesScan = async () => {
-    if (filesScanLoading) {
-      await axios.post('/api/meta/scan_files/stop', {}, { headers: { Authorization: token } });
-      setFilesScanLoading(false);
-      return;
-    }
-    setFilesScanLoading(true);
-    setFilesScanMsg('Starting files/folders pre-cache scan...');
-    try {
-      await axios.post('/api/meta/scan_files/start', {}, { headers: { Authorization: token } });
-    } catch (e: any) {
-      setFilesScanMsg(`Error: ${e.message}`);
-      setFilesScanLoading(false);
-    }
-  };
-
-  const handleCollectionScan = async () => {
-    if (collectionScanLoading) {
-      await axios.post('/api/meta/scan_collections/stop', {}, { headers: { Authorization: token } });
-      setCollectionScanLoading(false);
-      return;
-    }
-    setCollectionScanLoading(true);
-    setCollectionScanMsg('Starting collection scan...');
-    try {
-      await axios.post('/api/meta/scan_collections/start', {}, { headers: { Authorization: token } });
-    } catch (e: any) {
-      setCollectionScanMsg(`Error: ${e.message}`);
-      setCollectionScanLoading(false);
     }
   };
 
@@ -545,78 +431,6 @@ export default function Admin() {
           )}
         </div>
       </div>
-      
-      <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm">
-        <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 sm:mb-4 tracking-tight">Metadata Scans</h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs sm:text-sm">Scan existing items to fetch additional metadata.</p>
-        <div className="space-y-6">
-          <div>
-             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                <div className="flex-1">
-                   <h4 className="font-bold text-sm text-black dark:text-white">Credits Scan</h4>
-                   <p className="text-xs text-gray-500">Fetch cast and crew for all library items.</p>
-                </div>
-                <button onClick={handleCreditsScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${creditsScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
-                  {creditsScanLoading ? 'Stop Credits Scan' : 'Start Credits Scan'}
-                </button>
-             </div>
-             {creditsScanMsg && (
-                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{creditsScanMsg}</p>
-             )}
-          </div>
-          
-          <div className="h-px w-full bg-black/10 dark:bg-white/10"></div>
-
-          <div>
-             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                <div className="flex-1">
-                   <h4 className="font-bold text-sm text-black dark:text-white">Images & Logos Scan</h4>
-                   <p className="text-xs text-gray-500">Fetch high-quality images and transparent logos for all library items.</p>
-                </div>
-                <button onClick={handleImagesScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${imagesScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
-                  {imagesScanLoading ? 'Stop Images Scan' : 'Start Images Scan'}
-                </button>
-             </div>
-             {imagesScanMsg && (
-                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{imagesScanMsg}</p>
-             )}
-          </div>
-          
-          <div className="h-px w-full bg-black/10 dark:bg-white/10"></div>
-          
-          <div>
-             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                <div className="flex-1">
-                   <h4 className="font-bold text-sm text-black dark:text-white">Files & Folders Pre-Cache Scan</h4>
-                   <p className="text-xs text-gray-500">Recursively list all directories to warm up the cache so episodes load instantly on the details page.</p>
-                </div>
-                <button onClick={handleFilesScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${filesScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
-                  {filesScanLoading ? 'Stop Pre-Cache' : 'Start Pre-Cache'}
-                </button>
-             </div>
-             {filesScanMsg && (
-                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{filesScanMsg}</p>
-             )}
-          </div>
-          
-          <div className="h-px w-full bg-black/10 dark:bg-white/10"></div>
-          
-          <div>
-             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                <div className="flex-1">
-                   <h4 className="font-bold text-sm text-black dark:text-white">Collections Scan</h4>
-                   <p className="text-xs text-gray-500">Check movies for collections they belong to.</p>
-                </div>
-                <button onClick={handleCollectionScan} className={`w-full sm:w-auto border px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${collectionScanLoading ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30'}`}>
-                  {collectionScanLoading ? 'Stop Collections Scan' : 'Start Collections Scan'}
-                </button>
-             </div>
-             {collectionScanMsg && (
-                <p className="mt-3 text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400 bg-black/50 p-3.5 sm:p-4 rounded-xl border border-black/5 dark:border-white/5">{collectionScanMsg}</p>
-             )}
-          </div>
-        </div>
-      </div>
 
       <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm">
         <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 sm:mb-4 tracking-tight">Manual TMDB Correction</h3>
@@ -676,13 +490,20 @@ export default function Admin() {
                 <Download size={14} /> <span className="hidden sm:inline">Download</span> Debug Logs
               </button>
               <button 
+                onClick={handleClearDebugLogs}
+                disabled={clearingDebugLogs}
+                className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20 font-bold cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                <Trash2 size={14} /> <span className="hidden sm:inline">Clear</span> Debug Logs
+              </button>
+              <button 
                 onClick={() => axios.get('/api/admin/logs', { headers: { Authorization: token } }).then(res => {
                   if (Array.isArray(res.data)) setLogs(res.data);
                   else setLogs([]);
                 })}
-                className="text-xs bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded-lg border border-black/5 dark:border-white/5 font-semibold text-black dark:text-white cursor-pointer"
+                className="text-xs bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded-lg border border-black/5 dark:border-white/5 font-semibold text-black dark:text-white cursor-pointer flex items-center gap-1.5"
               >
-                Refresh
+                <RefreshCw size={14} /> Refresh
               </button>
             </div>
           </div>
@@ -916,9 +737,40 @@ export default function Admin() {
       {fixModalItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 flex flex-col">
-            <div className="p-4 sm:p-6 border-b border-black/5 dark:border-white/5">
-              <h3 className="text-lg font-bold text-black dark:text-white">Fix Metadata</h3>
-              <p className="text-xs text-gray-500 mt-1">Enter TMDB ID for <span className="font-bold text-purple-600 dark:text-purple-400">{fixModalItem.name}</span></p>
+            <div className="p-4 sm:p-6 border-b border-black/5 dark:border-white/5 space-y-2.5">
+              <div>
+                <h3 className="text-lg font-bold text-black dark:text-white">Fix Metadata</h3>
+                <p className="text-xs text-gray-500 mt-1">Enter TMDB ID for <span className="font-bold text-purple-600 dark:text-purple-400">{fixModalItem.name}</span></p>
+              </div>
+              {fixModalItem.path && (
+                <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Folder size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Openlist Path</div>
+                      <div 
+                        className="text-xs font-mono text-black dark:text-white truncate select-all" 
+                        title={fixModalItem.path.startsWith('/') ? fixModalItem.path : `/${fixModalItem.path}`}
+                      >
+                        {fixModalItem.path.startsWith('/') ? fixModalItem.path : `/${fixModalItem.path}`}
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const p = fixModalItem.path.startsWith('/') ? fixModalItem.path : `/${fixModalItem.path}`;
+                      navigator.clipboard.writeText(p);
+                      setFixModalPathCopied(true);
+                      setTimeout(() => setFixModalPathCopied(false), 2000);
+                    }}
+                    title="Copy Openlist Path"
+                    className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition shrink-0 cursor-pointer"
+                  >
+                    {fixModalPathCopied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="p-4 sm:p-6 flex-1 flex flex-col min-h-0">
               <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-xs font-bold uppercase tracking-wider">Search Title or TMDB ID</label>

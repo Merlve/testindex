@@ -176,7 +176,7 @@ const apiCache = new MemoryCache();
 let globalMetaVersion = Date.now();
 function bumpMetaVersion() {
   globalMetaVersion = Date.now();
-  bumpMetaVersion();
+  apiCache.clear();
 }
 
 function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
@@ -763,43 +763,71 @@ app.post('/api/downloads/clear', adminMiddleware, async (req, res) => {
 });
 
 app.get('/api/watchlist', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  res.json(await loadUserWatchlist(user));
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    res.json(await loadUserWatchlist(user));
+  } catch (err) {
+    res.json([]);
+  }
 });
 
 app.post('/api/watchlist/toggle', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  
-  const { item, category, parentPath } = req.body;
-  const list = await loadUserWatchlist(user);
-  
-  const existingIndex = list.findIndex(i => i.item.name === item.name && i.parentPath === parentPath);
-  
-  if (existingIndex >= 0) {
-    list.splice(existingIndex, 1);
-  } else {
-    list.push({ item, category, parentPath });
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const { item, category, parentPath } = req.body;
+    const list = await loadUserWatchlist(user);
+    
+    const existingIndex = list.findIndex(i => i.item?.name === item?.name && i.parentPath === parentPath);
+    
+    if (existingIndex >= 0) {
+      list.splice(existingIndex, 1);
+    } else {
+      list.push({ item, category, parentPath });
+    }
+    
+    await saveUserWatchlist(user, list);
+    res.json({ success: true, watchlist: list, added: existingIndex < 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update watchlist' });
   }
-  
-  await saveUserWatchlist(user, list);
-  res.json({ success: true, watchlist: list, added: existingIndex < 0 });
 });
 
 app.get('/api/watchlist/check', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  const { name, parentPath } = req.query;
-  if (!user || !name || !parentPath) return res.json({ inWatchlist: false });
-  const list = await loadUserWatchlist(user);
-  const exists = list.some(i => i.item.name === name && i.parentPath === parentPath);
-  res.json({ inWatchlist: exists });
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    const { name, parentPath, path: queryPath } = req.query as any;
+    if (!user) return res.json({ inWatchlist: false });
+    const list = await loadUserWatchlist(user);
+
+    if (queryPath) {
+      const cleanTarget = String(queryPath).replace(/^\/+/, '');
+      const exists = list.some(i => {
+        const itemFullPath = (i.parentPath ? `${i.parentPath}/${i.item?.name}` : i.item?.name || '').replace(/^\/+/, '');
+        const cleanParent = (i.parentPath || '').replace(/^\/+/, '');
+        return itemFullPath === cleanTarget || cleanParent === cleanTarget || (i.item?.name && i.item.name === cleanTarget);
+      });
+      return res.json({ inWatchlist: exists });
+    }
+
+    if (!name || !parentPath) return res.json({ inWatchlist: false });
+    const exists = list.some(i => i.item?.name === name && i.parentPath === parentPath);
+    res.json({ inWatchlist: exists });
+  } catch (err) {
+    res.json({ inWatchlist: false });
+  }
 });
 
 app.get('/api/watched', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  res.json(await loadUserWatched(user));
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    res.json(await loadUserWatched(user));
+  } catch (err) {
+    res.json([]);
+  }
 });
 
 app.post('/api/watched/toggle', async (req, res) => {
@@ -851,159 +879,164 @@ app.post('/api/watched/bulk-toggle', async (req, res) => {
 });
 
 app.get('/api/recommendations', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  
-  const refresh = req.query.refresh === 'true';
-  const existingRecs = await loadUserRecommendations(user);
-  
-  if (!refresh && existingRecs && existingRecs.length > 0) {
-      return res.json({ results: existingRecs });
-  }
-  
-  const watchlist = await loadUserWatchlist(user);
-  if (watchlist.length < 5) {
-      return res.json({ results: [], message: 'ADD_MORE', count: watchlist.length });
-  }
-  
-  const allRecs = [];
-  for (const w of watchlist) {
-      let tmdbId = w.tmdbData?.id;
-      let type = w.category === 'SERIES' || w.category === 'ANIME' || w.category === 'KDRAMA' || w.category === 'ADRAMA' ? 'tv' : 'movie';
-      if (!tmdbId) {
-          const { cleanName, year } = parseMediaName(w.item.name);
-          const cacheKey = `${w.category}-${cleanName.toLowerCase()}${year ? `-${year}` : ''}`;
-          const baseKey = `${w.category}-${cleanName.toLowerCase()}`;
-          let cached = tmdbCache[cacheKey] || tmdbCache[baseKey];
-          if (!cached) {
-               const overriddenKey = findOverriddenKeyInCache(tmdbCache, w.category, cleanName, year);
-               if (overriddenKey) cached = tmdbCache[overriddenKey];
-          }
-          if (cached && cached.id) {
-              tmdbId = cached.id;
-          }
-      }
-      if (!tmdbId) continue;
-      try {
-          const recsUrl = `https://api.themoviedb.org/3/${type}/${tmdbId}/recommendations?api_key=${process.env.TMDB_API_KEY}`;
-          const res = await axios.get(recsUrl);
-          if (res.data && res.data.results) {
-              allRecs.push(...res.data.results.slice(0, 5));
-          }
-      } catch (e) {
-          console.error("Failed to get recs for", w.tmdbData?.id, e.message);
-      }
-  }
-  
-  const uniqueRecs = Array.from(new Map(allRecs.map(r => [r.id, r])).values());
-  uniqueRecs.sort(() => Math.random() - 0.5);
-  
-  const openlistUrlTarget = getOpenlistUrl().replace(/\/$/, '');
-  const adminToken = getOpenlistApiKey();
-  const localItems = getLocalItems();
-  
-  const searchPromises = uniqueRecs.map(async (rec) => {
-      let foundPath = null;
-      let foundName = null;
-      let foundCat = null;
-      let foundIsDir = true;
-      let hasLocal = false;
-      
-      const recTitle = rec.title || rec.name || rec.original_name || '';
-      const title = (rec.title || rec.name || '').toLowerCase();
-      const origTitle = (rec.original_title || rec.original_name || '').toLowerCase();
-      const releaseDate = rec.release_date || rec.first_air_date || '';
-      const tmdbYear = releaseDate ? releaseDate.substring(0, 4) : '';
+  try {
+    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const refresh = req.query.refresh === 'true';
+    const existingRecs = await loadUserRecommendations(user);
+    
+    if (!refresh && existingRecs && existingRecs.length > 0) {
+        return res.json({ results: existingRecs });
+    }
+    
+    const watchlist = await loadUserWatchlist(user);
+    if (watchlist.length < 5) {
+        return res.json({ results: [], message: 'ADD_MORE', count: watchlist.length });
+    }
+    
+    const allRecs = [];
+    for (const w of watchlist) {
+        let tmdbId = w.tmdbData?.id;
+        let type = w.category === 'SERIES' || w.category === 'ANIME' || w.category === 'KDRAMA' || w.category === 'ADRAMA' ? 'tv' : 'movie';
+        if (!tmdbId && w.item?.name) {
+            const { cleanName, year } = parseMediaName(w.item.name);
+            const cacheKey = `${w.category}-${cleanName.toLowerCase()}${year ? `-${year}` : ''}`;
+            const baseKey = `${w.category}-${cleanName.toLowerCase()}`;
+            let cached = tmdbCache[cacheKey] || tmdbCache[baseKey];
+            if (!cached) {
+                 const overriddenKey = findOverriddenKeyInCache(tmdbCache, w.category, cleanName, year);
+                 if (overriddenKey) cached = tmdbCache[overriddenKey];
+            }
+            if (cached && cached.id) {
+                tmdbId = cached.id;
+            }
+        }
+        if (!tmdbId) continue;
+        try {
+            const recsUrl = `https://api.themoviedb.org/3/${type}/${tmdbId}/recommendations?api_key=${process.env.TMDB_API_KEY}`;
+            const res = await axios.get(recsUrl);
+            if (res.data && res.data.results) {
+                allRecs.push(...res.data.results.slice(0, 5));
+            }
+        } catch (e: any) {
+            console.error("Failed to get recs for", w.tmdbData?.id, e.message);
+        }
+    }
+    
+    const uniqueRecs = Array.from(new Map(allRecs.map(r => [r.id, r])).values());
+    uniqueRecs.sort(() => Math.random() - 0.5);
+    
+    const openlistUrlTarget = getOpenlistUrl().replace(/\/$/, '');
+    const adminToken = getOpenlistApiKey();
+    const localItems = getLocalItems();
+    
+    const searchPromises = uniqueRecs.map(async (rec) => {
+        let foundPath = null;
+        let foundName = null;
+        let foundCat = null;
+        let foundIsDir = true;
+        let hasLocal = false;
+        
+        const recTitle = rec.title || rec.name || rec.original_name || '';
+        const title = (rec.title || rec.name || '').toLowerCase();
+        const origTitle = (rec.original_title || rec.original_name || '').toLowerCase();
+        const releaseDate = rec.release_date || rec.first_air_date || '';
+        const tmdbYear = releaseDate ? releaseDate.substring(0, 4) : '';
 
-      const existingLocalItem = localItems.find(i => {
-          if (i._jf && String(i._jf.tmdbId) === String(rec.id)) return true;
-          let searchName = i._jf_name || i.name;
-          if (/^(s\d+|season\s*\d+)$/i.test(i.name)) {
-              const parentParts = (i.parent || i._parent || "").split('/').filter(Boolean);
-              if (parentParts.length > 0) searchName = parentParts[parentParts.length - 1];
-          }
-          
-          const { cleanName, year: myYear } = parseMediaName(searchName);
-          const myTitle = cleanName.toLowerCase();
-          
-          if (!title && !origTitle) return false;
-          
-          if (myTitle === title || myTitle === origTitle || myTitle.includes(title) || title.includes(myTitle)) {
-             const finalYear = (i._jf && i._jf.year) ? String(i._jf.year) : myYear;
-             if (tmdbYear && finalYear && tmdbYear !== finalYear) {
-                 return false;
-             }
-             return true;
-          }
-          return false;
-      });
-      
-      if (existingLocalItem) {
-          foundName = existingLocalItem.name;
-          foundPath = existingLocalItem.parent || existingLocalItem._parent;
-          foundCat = existingLocalItem._cat || (rec.media_type === 'tv' ? 'SERIES' : 'MOVIES');
-          foundIsDir = existingLocalItem.is_dir;
-          hasLocal = true;
-      } else {
-          try {
-              const res = await axios.post(`${openlistUrlTarget}/api/fs/search`, {
-                  parent: appConfig.basePath,
-                  keywords: recTitle,
-                  scope: 1, 
-                  page: 1,
-                  per_page: 5,
-                  password: ""
-              }, { headers: { Authorization: adminToken } });
-              
-              if (res.data?.data?.content?.length > 0) {
-                  for (const item of res.data.data.content) {
-                      const { cleanName: myTitleRaw, year: myYear } = parseMediaName(item.name);
-                      const myTitle = myTitleRaw.toLowerCase();
-                      
-                      if (myTitle === title || myTitle === origTitle || myTitle.includes(title) || title.includes(myTitle)) {
-                          if (tmdbYear && myYear && tmdbYear !== myYear) {
-                              continue;
-                          }
-                          foundName = item.name;
-                          foundPath = item.parent;
-                          foundIsDir = item.is_dir;
-                          foundCat = rec.media_type === 'tv' ? 'SERIES' : 'MOVIES';
-                          if (foundPath.toUpperCase().includes('ANIME')) foundCat = 'ANIME';
-                          else if (foundPath.toUpperCase().includes('KDRAMA')) foundCat = 'KDRAMA';
-                          else if (foundPath.toUpperCase().includes('ADRAMA')) foundCat = 'ADRAMA';
-                          
-                          hasLocal = true;
-                          break;
-                      }
-                  }
-              }
-          } catch(e) {}
-      }
-      
-      return { rec, foundName, foundPath, foundCat, foundIsDir, hasLocal };
-  });
-  
-  const searchResults = await Promise.all(searchPromises);
-  
-  const formattedRecs = searchResults.filter(result => result.hasLocal).map(result => {
-      const { rec, foundName, foundPath, foundCat, foundIsDir, hasLocal } = result;
-      
-      let name = foundName || rec.title || rec.name || rec.original_name || 'Unknown';
-      let parentPath = foundPath || `${appConfig.basePath === '/' ? '' : appConfig.basePath}/${rec.media_type === 'tv' ? 'SERIES' : 'MOVIES'}`;
-      let category = foundCat || (rec.media_type === 'tv' ? 'SERIES' : 'MOVIES');
-      let is_dir = hasLocal ? foundIsDir : true;
-      
-      return {
-          item: { name, is_dir, _rec: !hasLocal },
-          category,
-          parentPath,
-          tmdbData: rec
-      };
-  });
-  
-  await saveUserRecommendations(user, formattedRecs);
-  
-  res.json({ results: formattedRecs });
+        const existingLocalItem = localItems.find(i => {
+            if (i._jf && String(i._jf.tmdbId) === String(rec.id)) return true;
+            let searchName = i._jf_name || i.name;
+            if (/^(s\d+|season\s*\d+)$/i.test(i.name)) {
+                const parentParts = (i.parent || i._parent || "").split('/').filter(Boolean);
+                if (parentParts.length > 0) searchName = parentParts[parentParts.length - 1];
+            }
+            
+            const { cleanName, year: myYear } = parseMediaName(searchName);
+            const myTitle = cleanName.toLowerCase();
+            
+            if (!title && !origTitle) return false;
+            
+            if (myTitle === title || myTitle === origTitle || myTitle.includes(title) || title.includes(myTitle)) {
+               const finalYear = (i._jf && i._jf.year) ? String(i._jf.year) : myYear;
+               if (tmdbYear && finalYear && tmdbYear !== finalYear) {
+                   return false;
+               }
+               return true;
+            }
+            return false;
+        });
+        
+        if (existingLocalItem) {
+            foundName = existingLocalItem.name;
+            foundPath = existingLocalItem.parent || existingLocalItem._parent;
+            foundCat = existingLocalItem._cat || (rec.media_type === 'tv' ? 'SERIES' : 'MOVIES');
+            foundIsDir = existingLocalItem.is_dir;
+            hasLocal = true;
+        } else if (adminToken) {
+            try {
+                const res = await axios.post(`${openlistUrlTarget}/api/fs/search`, {
+                    parent: appConfig.basePath,
+                    keywords: recTitle,
+                    scope: 1, 
+                    page: 1,
+                    per_page: 5,
+                    password: ""
+                }, { headers: { Authorization: adminToken } });
+                
+                if (res.data?.data?.content?.length > 0) {
+                    for (const item of res.data.data.content) {
+                        const { cleanName: myTitleRaw, year: myYear } = parseMediaName(item.name);
+                        const myTitle = myTitleRaw.toLowerCase();
+                        
+                        if (myTitle === title || myTitle === origTitle || myTitle.includes(title) || title.includes(myTitle)) {
+                            if (tmdbYear && myYear && tmdbYear !== myYear) {
+                                continue;
+                            }
+                            foundName = item.name;
+                            foundPath = item.parent;
+                            foundIsDir = item.is_dir;
+                            foundCat = rec.media_type === 'tv' ? 'SERIES' : 'MOVIES';
+                            if (foundPath.toUpperCase().includes('ANIME')) foundCat = 'ANIME';
+                            else if (foundPath.toUpperCase().includes('KDRAMA')) foundCat = 'KDRAMA';
+                            else if (foundPath.toUpperCase().includes('ADRAMA')) foundCat = 'ADRAMA';
+                            
+                            hasLocal = true;
+                            break;
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+        
+        return { rec, foundName, foundPath, foundCat, foundIsDir, hasLocal };
+    });
+    
+    const searchResults = await Promise.all(searchPromises);
+    
+    const formattedRecs = searchResults.filter(result => result.hasLocal).map(result => {
+        const { rec, foundName, foundPath, foundCat, foundIsDir, hasLocal } = result;
+        
+        let name = foundName || rec.title || rec.name || rec.original_name || 'Unknown';
+        let parentPath = foundPath || `${appConfig.basePath === '/' ? '' : appConfig.basePath}/${rec.media_type === 'tv' ? 'SERIES' : 'MOVIES'}`;
+        let category = foundCat || (rec.media_type === 'tv' ? 'SERIES' : 'MOVIES');
+        let is_dir = hasLocal ? foundIsDir : true;
+        
+        return {
+            item: { name, is_dir, _rec: !hasLocal },
+            category,
+            parentPath,
+            tmdbData: rec
+        };
+    });
+    
+    await saveUserRecommendations(user, formattedRecs);
+    
+    res.json({ results: formattedRecs });
+  } catch (err: any) {
+    console.error('[API Recommendations Error]', err.message);
+    res.json({ results: [] });
+  }
 });
 
 // API: Config
@@ -1222,6 +1255,19 @@ app.get('/api/admin/logs/download', adminMiddleware, (req, res) => {
     res.download(logFile, 'app-debug.log');
   } else {
     res.status(404).json({ error: 'Log file not found' });
+  }
+});
+
+app.post('/api/admin/logs/clear-debug', adminMiddleware, async (req, res) => {
+  try {
+    if (fs.existsSync(logFile)) {
+      fs.writeFileSync(logFile, '');
+    }
+    await addLog('Clear Debug Logs', 'Admin', 'Cleared app-debug.log file on disk');
+    res.json({ success: true, message: 'Debug logs cleared successfully' });
+  } catch (e: any) {
+    console.error('Failed to clear debug logs:', e);
+    res.status(500).json({ error: e.message || 'Failed to clear debug logs' });
   }
 });
 
@@ -2971,123 +3017,127 @@ app.post('/api/user-collections/:id/upvote', async (req, res) => {
 let genreBackdropsCache: { time: number, data: any[] } | null = null;
 
 app.get('/api/meta/genres/backdrops', cacheMiddleware(3600, true), async (req, res) => {
-  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-  if (genreBackdropsCache && (Date.now() - genreBackdropsCache.time < SEVEN_DAYS)) {
-      return res.json({ success: true, genres: genreBackdropsCache.data });
-  }
-
-  const genres: Record<number, string> = {
-    28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
-    99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
-    27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
-    10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western", 10759: "Action & Adventure",
-    10762: "Kids", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy", 10766: "Soap",
-    10767: "Talk", 10768: "War & Politics"
-  };
-
-  let token = req.headers.authorization;
-  if (isValidGuest(token || '')) token = getOpenlistApiKey();
-  
-  if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const items = await getLibraryIndex(token);
-  const genreBackdrops: any[] = [];
-  
-  const tmdbKeys = Object.keys(tmdbCache);
-  const overriddenKeys = tmdbKeys.filter(k => tmdbCache[k]?._overridden);
-
-  const itemsWithCache = items.map((item: any) => {
-     const type = item.category;
-     const baseQuery = (item.cleanName || '').toLowerCase().trim();
-     const year = item.year;
-     const baseKey = `${type}-${baseQuery}`;
-     
-     let cached = null;
-     const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
-     if (overriddenKey) {
-        cached = tmdbCache[overriddenKey];
-     } else {
-        const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
-        if (tmdbCache[cacheKey]) {
-           cached = tmdbCache[cacheKey];
-        } else if (year && tmdbCache[baseKey]) {
-           cached = tmdbCache[baseKey];
-        }
-     }
-     return { ...item, _cached: cached };
-  }).filter((item: any) => item._cached && item._cached.backdrop_path);
-  
-  Object.keys(genres).forEach(idStr => {
-     const genreId = parseInt(idStr, 10);
-     const matched = itemsWithCache.filter((item: any) => {
-         const cached = item._cached;
-         return (cached.genres && cached.genres.some((g: any) => g.id === genreId)) || 
-                (cached.genre_ids && cached.genre_ids.includes(genreId));
-     });
-     
-     if (matched.length > 0) {
-        const randomItem = matched[Math.floor(Math.random() * matched.length)];
-        genreBackdrops.push({
-            id: genreId,
-            name: genres[genreId as keyof typeof genres],
-            backdrop_path: randomItem._cached.backdrop_path
-        });
-     }
-  });
-
-  genreBackdropsCache = { time: Date.now(), data: genreBackdrops };
   try {
-     // disabled genre_backdrops_cache DB save
-  } catch (e) {}
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+    if (genreBackdropsCache && (Date.now() - genreBackdropsCache.time < SEVEN_DAYS)) {
+        return res.json({ success: true, genres: genreBackdropsCache.data });
+    }
 
-  res.json({ success: true, genres: genreBackdrops });
+    const genres: Record<number, string> = {
+      28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+      99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
+      27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
+      10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western", 10759: "Action & Adventure",
+      10762: "Kids", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy", 10766: "Soap",
+      10767: "Talk", 10768: "War & Politics"
+    };
+
+    let token = req.headers.authorization;
+    if (isValidGuest(token || '')) token = getOpenlistApiKey();
+    
+    if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const items = await getLibraryIndex(token);
+    const genreBackdrops: any[] = [];
+    
+    const tmdbKeys = Object.keys(tmdbCache);
+    const overriddenKeys = tmdbKeys.filter(k => tmdbCache[k]?._overridden);
+
+    const itemsWithCache = items.map((item: any) => {
+       const type = item.category;
+       const baseQuery = (item.cleanName || '').toLowerCase().trim();
+       const year = item.year;
+       const baseKey = `${type}-${baseQuery}`;
+       
+       let cached = null;
+       const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
+       if (overriddenKey) {
+          cached = tmdbCache[overriddenKey];
+       } else {
+          const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+          if (tmdbCache[cacheKey]) {
+             cached = tmdbCache[cacheKey];
+          } else if (year && tmdbCache[baseKey]) {
+             cached = tmdbCache[baseKey];
+          }
+       }
+       return { ...item, _cached: cached };
+    }).filter((item: any) => item._cached && item._cached.backdrop_path);
+    
+    Object.keys(genres).forEach(idStr => {
+       const genreId = parseInt(idStr, 10);
+       const matched = itemsWithCache.filter((item: any) => {
+           const cached = item._cached;
+           return (cached.genres && cached.genres.some((g: any) => g.id === genreId)) || 
+                  (cached.genre_ids && cached.genre_ids.includes(genreId));
+       });
+       
+       if (matched.length > 0) {
+          const randomItem = matched[Math.floor(Math.random() * matched.length)];
+          genreBackdrops.push({
+              id: genreId,
+              name: genres[genreId as keyof typeof genres],
+              backdrop_path: randomItem._cached.backdrop_path
+          });
+       }
+    });
+
+    genreBackdropsCache = { time: Date.now(), data: genreBackdrops };
+    res.json({ success: true, genres: genreBackdrops });
+  } catch (err: any) {
+    res.json({ success: false, genres: [] });
+  }
 });
 
 app.get('/api/meta/genre/:genreId', async (req, res) => {
-  const genreId = parseInt(req.params.genreId, 10);
-  
-  let token = req.headers.authorization;
-  if (isValidGuest(token || '')) token = getOpenlistApiKey();
-  
-  if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const genreId = parseInt(req.params.genreId, 10);
+    
+    let token = req.headers.authorization;
+    if (isValidGuest(token || '')) token = getOpenlistApiKey();
+    
+    if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const items = await getLibraryIndex(token);
+
+    const matchedItems = items.filter((item: any) => {
+       if (!item.cleanName || !item.category) return false;
+       
+       const type = item.category;
+       const baseQuery = item.cleanName.toLowerCase().trim();
+       const year = item.year;
+       const baseKey = `${type}-${baseQuery}`;
+       
+       let cached = null;
+       
+       const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
+       if (overriddenKey) {
+          cached = tmdbCache[overriddenKey];
+       } else {
+          const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+          if (tmdbCache[cacheKey]) {
+             cached = tmdbCache[cacheKey];
+          } else if (year && tmdbCache[baseKey]) {
+             cached = tmdbCache[baseKey];
+          }
+       }
+       
+       if (cached) {
+          const hasGenre = (cached.genres && cached.genres.some((g: any) => g.id === genreId)) ||
+                           (cached.genre_ids && cached.genre_ids.includes(genreId));
+          return hasGenre;
+       }
+       return false;
+    });
+
+    res.json({ success: true, genreId, items: matchedItems });
+  } catch (err: any) {
+    res.json({ success: false, genreId: req.params.genreId, items: [] });
   }
-
-  const items = await getLibraryIndex(token);
-
-  const matchedItems = items.filter((item: any) => {
-     if (!item.cleanName || !item.category) return false;
-     
-     const type = item.category;
-     const baseQuery = item.cleanName.toLowerCase().trim();
-     const year = item.year;
-     const baseKey = `${type}-${baseQuery}`;
-     
-     let cached = null;
-     
-     const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
-     if (overriddenKey) {
-        cached = tmdbCache[overriddenKey];
-     } else {
-        const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
-        if (tmdbCache[cacheKey]) {
-           cached = tmdbCache[cacheKey];
-        } else if (year && tmdbCache[baseKey]) {
-           cached = tmdbCache[baseKey];
-        }
-     }
-     
-     if (cached) {
-        const hasGenre = (cached.genres && cached.genres.some((g: any) => g.id === genreId)) ||
-                         (cached.genre_ids && cached.genre_ids.includes(genreId));
-        return hasGenre;
-     }
-     return false;
-  });
-
-  res.json({ success: true, genreId, items: matchedItems });
 });
 
 app.get('/api/meta/discover', cacheMiddleware(3600, true), async (req, res) => {
@@ -3177,10 +3227,31 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
         data.release_date = customYear + '-01-01'; // approximate for movie
         data.first_air_date = customYear + '-01-01'; // approximate for tv
       }
-      setOverriddenDataInCache(data);
-      saveDb();
-      addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'})`);
-      return res.json({ success: true, data });
+      
+      try {
+          setOverriddenDataInCache(data);
+      } catch (err: any) {
+          console.error("Error in setOverriddenDataInCache:", err.message);
+      }
+      
+      try {
+          saveDb();
+      } catch (err: any) {
+          console.error("Error in saveDb:", err.message);
+      }
+      
+      try {
+          addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'})`);
+      } catch (err: any) {
+          console.error("Error in addLog:", err.message);
+      }
+      
+      try {
+          return res.json({ success: true, data });
+      } catch (err: any) {
+          console.error("Error in res.json:", err.message);
+          return res.status(500).json({ error: 'Failed to serialize JSON' });
+      }
     }
 
     const tmdbKey = process.env.TMDB_API_KEY;
@@ -3214,18 +3285,42 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
        
        const tmdbKey = process.env.TMDB_API_KEY;
        if (tmdbKey) {
-           await attachFullDataToItem(data, primaryType, tmdbKey);
+           try {
+               await attachFullDataToItem(data, primaryType, tmdbKey);
+           } catch(err: any) {
+               console.error("Error in attachFullDataToItem:", err.message);
+           }
        }
        
-       setOverriddenDataInCache(data);
-       saveDb();
-       addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
-       return res.json({ success: true, data });
+       try {
+           setOverriddenDataInCache(data);
+       } catch (err: any) {
+           console.error("Error in setOverriddenDataInCache:", err.message);
+       }
+       
+       try {
+           saveDb();
+       } catch (err: any) {
+           console.error("Error in saveDb:", err.message);
+       }
+       
+       try {
+           addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} with ID: ${tmdbId}`);
+       } catch (err: any) {
+           console.error("Error in addLog:", err.message);
+       }
+       
+       try {
+           return res.json({ success: true, data });
+       } catch (err: any) {
+           console.error("Error in res.json:", err.message);
+           return res.status(500).json({ error: 'Failed to serialize JSON' });
+       }
     }
     res.status(404).json({ error: 'Not found' });
   } catch (error: any) {
-    console.error('TMDB Override Error', error.message);
-    res.status(500).json({ error: 'TMDB fetch failed' });
+    console.error('TMDB Override Error:', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: error.message || 'TMDB fetch failed' });
   }
 });
 

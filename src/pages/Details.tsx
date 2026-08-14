@@ -454,6 +454,7 @@ export default function Details() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [manualTmdbId, setManualTmdbId] = useState('');
+  const [copiedModalPath, setCopiedModalPath] = useState(false);
 
   // Watched state
   const [watchedItems, setWatchedItems] = useState<any[]>([]);
@@ -940,6 +941,17 @@ export default function Details() {
     setBatchCopyLoading(false);
   };
 
+  const formatTitleCase = (text: string) => {
+    if (!text) return '';
+    const isAllUpper = text === text.toUpperCase() && text !== text.toLowerCase();
+    const normalized = isAllUpper ? text.toLowerCase() : text;
+    return normalized.replace(/(?:^|\s|-|\/)\S/g, (c) => c.toUpperCase());
+  };
+
+  const releaseYear = (tmdb?.release_date || tmdb?.first_air_date)
+    ? String(tmdb.release_date || tmdb.first_air_date).substring(0, 4)
+    : (tmdb?.year || parseMediaName(name).year || '');
+
   if (loading) return <DetailsSkeleton />;
 
   return (
@@ -975,18 +987,27 @@ export default function Details() {
 
       {/* Content Section positioned below the backdrop with slight overlap */}
       <div className="relative z-20 flex flex-col items-center max-w-4xl mx-auto space-y-5 px-4 sm:px-8 -mt-24 sm:-mt-32 text-center">
-        {/* Title or Logo */}
-        {logoUrl ? (
-          <img 
-            src={logoUrl} 
-            alt={tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
-            className="h-20 sm:h-24 md:h-32 object-contain drop-shadow-xl"
-          />
-        ) : (
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-black dark:text-white drop-shadow-xl leading-tight uppercase">
-            {tmdb?.title || tmdb?.name || parseMediaName(name).cleanName}
-          </h1>
-        )}
+        {/* Title or Logo and Subtitle Year */}
+        <div className="flex flex-col items-center">
+          {logoUrl ? (
+            <img 
+              src={logoUrl} 
+              alt={tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
+              className="h-20 sm:h-24 md:h-32 object-contain drop-shadow-xl"
+            />
+          ) : (
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-black dark:text-white drop-shadow-xl leading-tight">
+              {formatTitleCase(tmdb?.title || tmdb?.name || parseMediaName(name).cleanName)}
+            </h1>
+          )}
+
+          {/* Release Year */}
+          {releaseYear && (
+            <span className="mt-2 text-sm sm:text-base font-semibold text-gray-500 dark:text-gray-400 tracking-wider">
+              {releaseYear}
+            </span>
+          )}
+        </div>
 
         {/* Genres Row */}
         {genreList.length > 0 && (
@@ -1223,7 +1244,7 @@ export default function Details() {
                     ? `Digital Release: ${new Date(tmdb.release_date || tmdb.first_air_date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`
                     : 'No playable media files found in this folder.'}
                 </span>
-                {user && user !== 'guest' && (
+                {user === 'admin' && (
                   <button
                     onClick={() => {
                       const newPath = prompt('Enter the Openlist path for this title:', actualOpenlistPath);
@@ -1322,6 +1343,37 @@ export default function Details() {
                   <span className="truncate">Fix Metadata</span>
                 </h3>
               </div>
+
+              {/* Openlist Path Display */}
+              {actualOpenlistPath && (
+                <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-3 flex items-center justify-between gap-3 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <Folder size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Openlist Path</div>
+                      <div 
+                        className="text-xs font-mono text-black dark:text-white truncate select-all" 
+                        title={actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`}
+                      >
+                        {actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`}
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const p = actualOpenlistPath.startsWith('/') ? actualOpenlistPath : `/${actualOpenlistPath}`;
+                      navigator.clipboard.writeText(p);
+                      setCopiedModalPath(true);
+                      setTimeout(() => setCopiedModalPath(false), 2000);
+                    }}
+                    title="Copy Openlist Path"
+                    className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition shrink-0 cursor-pointer"
+                  >
+                    {copiedModalPath ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                  </button>
+                </div>
+              )}
 
               <div className="space-y-4 w-full min-w-0">
                 <div className="w-full min-w-0">
