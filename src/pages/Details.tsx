@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
@@ -561,6 +561,12 @@ export default function Details() {
 
   // Fetch Folder Files
   useEffect(() => {
+    if (user === 'guest') {
+      setBaseItems([]);
+      setSeasonItems([]);
+      setLoadingFiles(false);
+      return;
+    }
     let isMounted = true;
     setLoadingFiles(true);
 
@@ -631,12 +637,13 @@ export default function Details() {
       });
 
     return () => { isMounted = false; };
-  }, [actualOpenlistPath, token, baseRefresh]);
+  }, [actualOpenlistPath, token, baseRefresh, user]);
 
   // Fetch Season Episodes when active season changes
   useEffect(() => {
-    if (activeSeasonIndex === null || !seasonItems[activeSeasonIndex]) {
+    if (user === 'guest' || activeSeasonIndex === null || !seasonItems[activeSeasonIndex]) {
       setCurrentSeasonEpisodes([]);
+      setLoadingSeasonFiles(false);
       return;
     }
     let isMounted = true;
@@ -661,7 +668,7 @@ export default function Details() {
       });
 
     return () => { isMounted = false; };
-  }, [activeSeasonIndex, seasonItems, actualOpenlistPath, token, seasonRefresh]);
+  }, [activeSeasonIndex, seasonItems, actualOpenlistPath, token, seasonRefresh, user]);
 
   const handleRefresh = () => {
     setSeasonRefresh(r => r + 1);
@@ -1056,14 +1063,16 @@ export default function Details() {
             )}
           </button>
 
-          <button
-            onClick={handleRefreshRoot}
-            disabled={loadingFiles}
-            title="Refresh Root Directory"
-            className="p-3 sm:p-3.5 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white backdrop-blur-md border border-black/10 dark:border-white/15 transition flex items-center justify-center shadow-lg cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw size={20} className={loadingFiles ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
-          </button>
+          {user && user !== 'guest' && (
+            <button
+              onClick={handleRefreshRoot}
+              disabled={loadingFiles}
+              title="Refresh Root Directory"
+              className="p-3 sm:p-3.5 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white backdrop-blur-md border border-black/10 dark:border-white/15 transition flex items-center justify-center shadow-lg cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={20} className={loadingFiles ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -1097,8 +1106,32 @@ export default function Details() {
 
       {/* Main Files / Playable Media Section (NO Cast & Crew) */}
       <div className="px-4 sm:px-8 md:px-12 max-w-7xl mx-auto py-6 relative z-20 space-y-6">
-        {/* Season Selector Tabs (For TV Series) */}
-        {seasonItems.length > 0 && (
+        {user === 'guest' ? (
+          <div className="p-8 sm:p-12 rounded-3xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-center max-w-xl mx-auto shadow-xl backdrop-blur-md">
+            <div className="w-16 h-16 rounded-2xl bg-purple-600/15 text-purple-600 dark:text-purple-400 mx-auto flex items-center justify-center mb-5 border border-purple-500/20 shadow-inner">
+              <Lock size={30} />
+            </div>
+            <h3 className="text-xl font-extrabold text-black dark:text-white mb-2 tracking-tight">
+              Sign in to view media files
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed max-w-md mx-auto">
+              Guest preview mode is active. Please log in with your account to access episode listings, stream high-definition video, and download files.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                to="/login"
+                state={{ from: location.pathname }}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2.5 cursor-pointer"
+              >
+                <LogIn size={18} />
+                <span>Log In to View Files</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Season Selector Tabs (For TV Series) */}
+            {seasonItems.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
               <Tv size={20} className="text-purple-600 dark:text-purple-400" />
@@ -1280,6 +1313,8 @@ export default function Details() {
               </div>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
 

@@ -15,9 +15,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const DashboardSkeleton = () => (
   <div className="animate-pulse pb-20">
-    <div className="px-4 sm:px-8 flex justify-end mt-4 md:mt-6 mb-2">
-       <div className="w-24 h-9 bg-black/5 dark:bg-white/5 rounded-xl"></div>
-    </div>
     <section className="px-4 sm:px-8 pt-2 sm:pt-4 mb-2 mt-0 sm:mt-2">
       <div className="relative h-[260px] sm:h-[360px] bg-black/5 dark:bg-white/5 rounded-3xl overflow-hidden shadow-2xl">
          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent flex flex-col justify-center px-6 sm:px-12">
@@ -200,17 +197,8 @@ export default function Dashboard() {
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="pb-20"
     >
-      <div className="px-4 sm:px-8 mt-4 md:mt-6 mb-2 flex items-center justify-between gap-3">
-        <AnnouncementPill message={configData?.announcement} className="flex-1" />
-        <button
-          onClick={() => setDashboardRefreshCounter(c => c + 1)}
-          disabled={isFetching}
-          title="Refresh Media Libraries"
-          className="p-2.5 sm:px-3 sm:py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 active:scale-95 text-black dark:text-white border border-black/5 dark:border-white/5 transition flex items-center gap-2 shadow-sm shrink-0 cursor-pointer disabled:opacity-50 text-xs font-semibold"
-        >
-          <RefreshCw size={15} className={isFetching ? "animate-spin text-purple-500" : ""} />
-          <span className="hidden sm:inline">{isFetching ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
+      <div className="px-4 sm:px-8 mt-4 md:mt-6 mb-2">
+        <AnnouncementPill message={configData?.announcement} className="w-full" />
       </div>
 
       {featuredItems && featuredItems.length > 0 && (
