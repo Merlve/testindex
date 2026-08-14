@@ -1,23 +1,33 @@
 import { clearAllLocalCaches } from '../utils/cacheManager';
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
 import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Cloud } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
+import { isImageLoaded, markImageLoaded } from '../utils/imageCache';
 
 const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: string | null, lowResSrc?: string | null, alt: string, className?: string, fallbackText?: string }) => {
-  const [loaded, setLoaded] = useState(false);
-
   const getCacheBustUrl = (url?: string | null) => {
     if (!url) return null;
+    if (url.includes('image.tmdb.org')) return url;
     const ver = localStorage.getItem('meta_version') || '1';
     return url.includes('?') ? `${url}&v=${ver}` : `${url}?v=${ver}`;
   };
 
   const finalSrc = getCacheBustUrl(src);
   const finalLowRes = getCacheBustUrl(lowResSrc);
+
+  const isAlreadyLoaded = isImageLoaded(finalSrc);
+  const [loaded, setLoaded] = useState<boolean>(isAlreadyLoaded);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (finalSrc && isImageLoaded(finalSrc)) {
+      setLoaded(true);
+    }
+  }, [finalSrc]);
 
   return (
     <div className={`overflow-hidden bg-black/5 dark:bg-white/5 ${className || ''}`}>
@@ -27,21 +37,35 @@ const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: s
            {fallbackText && <span className="text-[10px] sm:text-xs text-center px-2 opacity-40 line-clamp-2">{fallbackText}</span>}
         </div>
       )}
-      {finalLowRes && (
+      {finalLowRes && !loaded && (
         <img
           src={finalLowRes}
           alt=""
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 blur-xl scale-110 ${loaded ? 'opacity-0' : 'opacity-100'}`}
+          className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100"
           aria-hidden="true"
         />
       )}
       {finalSrc && (
         <img
+          ref={(el) => {
+            imgRef.current = el;
+            if (el && el.complete && el.naturalWidth > 0 && !loaded) {
+              markImageLoaded(finalSrc);
+              setLoaded(true);
+            }
+          }}
           src={finalSrc}
           alt={alt}
-          loading="lazy"
-          onLoad={() => setLoaded(true)}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          loading={isAlreadyLoaded ? 'eager' : 'lazy'}
+          onLoad={() => {
+            markImageLoaded(finalSrc);
+            setLoaded(true);
+          }}
+          className={`absolute inset-0 w-full h-full object-cover ${
+            loaded 
+              ? 'opacity-100' 
+              : 'opacity-0 transition-opacity duration-300'
+          }`}
         />
       )}
     </div>
@@ -174,7 +198,9 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
       }
     },
     enabled: !tmdbData,
-    staleTime: 10 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
   });
 
   const displayTmdb = tmdbData || fetchedTmdb || tmdb;

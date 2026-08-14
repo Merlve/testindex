@@ -68,10 +68,12 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
   };
 
   const { data = { items: [], tmdbData: [] }, isLoading: loading } = useQuery({
-    queryKey: ['digitalReleasesMonth', categories],
+    queryKey: ['digitalReleasesMonth'],
     queryFn: fetchDigitalReleases,
     enabled: categories.length > 0,
-    staleTime: 60 * 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
     placeholderData: () => {
       try {
         const cached = localStorage.getItem('digital_releases_cache');

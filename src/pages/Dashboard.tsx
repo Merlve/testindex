@@ -96,8 +96,9 @@ export default function Dashboard() {
     queryFn: fetchHome,
     enabled: !!token,
     retry: 1,
-    staleTime: 60 * 1000, // 1 minute stale time
-    refetchOnMount: true, // Allow fresh check on mounting/navigation
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: () => {
       if (dashboardRefreshCounter > 0) return undefined;
@@ -115,7 +116,8 @@ export default function Dashboard() {
       const res = await axios.get('/api/config');
       return res.data;
     },
-    staleTime: 15000
+    staleTime: Infinity,
+    refetchOnMount: false,
   });
 
   const featuredItems = useMemo(() => {

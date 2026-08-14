@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useMemo } from 'react';
+import { useState, useEffect, memo, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router';
 import { Play, Star, Cloud } from 'lucide-react';
@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCoverflow } from 'swiper/modules';
 import { useQuery } from '@tanstack/react-query';
+import { isImageLoaded, markImageLoaded } from '../utils/imageCache';
 import 'swiper/css';
 import 'swiper/css/effect-coverflow';
 
@@ -75,7 +76,6 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
 const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [imgLoaded, setImgLoaded] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
   const { data: tmdb } = useQuery({
@@ -88,7 +88,9 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
       return res.data;
     },
     enabled: !!item,
-    staleTime: 10 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
   });
 
   const { data: imagesData } = useQuery({
@@ -101,7 +103,9 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
       return res.data;
     },
     enabled: !!tmdb?.id && (!tmdb?.images?.logos || tmdb.images.logos.length === 0),
-    staleTime: 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
   });
 
   const logos = tmdb?.images?.logos || imagesData?.logos;
@@ -117,7 +121,17 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
   const backdrop = tmdb?.backdrop_path 
     ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` 
     : (tmdb?.poster_path ? `https://image.tmdb.org/t/p/w780${tmdb.poster_path}` : null);
-    
+
+  const isAlreadyLoaded = isImageLoaded(backdrop);
+  const [imgLoaded, setImgLoaded] = useState<boolean>(isAlreadyLoaded);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (backdrop && isImageLoaded(backdrop)) {
+      setImgLoaded(true);
+    }
+  }, [backdrop]);
+
   const title = tmdb?.title || tmdb?.name || item.name;
   const rating = tmdb?.vote_average ? tmdb.vote_average.toFixed(1) : null;
   const year = tmdb?.release_date 
@@ -146,16 +160,32 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
     >
        {backdrop ? (
          <div className="absolute inset-0 w-full h-full overflow-hidden">
+           {!imgLoaded && (
+             <img 
+               src={`https://image.tmdb.org/t/p/w300${tmdb.backdrop_path || tmdb.poster_path}`} 
+               className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100" 
+               alt="" 
+               aria-hidden="true" 
+             />
+           )}
            <img 
-             src={`https://image.tmdb.org/t/p/w300${tmdb.backdrop_path || tmdb.poster_path}`} 
-             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 blur-xl scale-110 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} 
-             alt="" 
-             aria-hidden="true" 
-           />
-           <img 
+             ref={(el) => {
+               imgRef.current = el;
+               if (el && el.complete && el.naturalWidth > 0 && !imgLoaded) {
+                 markImageLoaded(backdrop);
+                 setImgLoaded(true);
+               }
+             }}
              src={backdrop} 
-             onLoad={() => setImgLoaded(true)}
-             className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-all duration-700 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`} 
+             onLoad={() => {
+               markImageLoaded(backdrop);
+               setImgLoaded(true);
+             }}
+             className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 ${
+               imgLoaded 
+                 ? 'opacity-100' 
+                 : 'opacity-0 transition-opacity duration-300'
+             }`} 
              alt={title} 
              loading="eager" 
            />

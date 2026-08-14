@@ -33,7 +33,9 @@ export default function GenresCarousel() {
     queryKey: ['genresCarousel', token],
     queryFn: fetchGenres,
     enabled: !!token,
-    staleTime: 10 * 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
     placeholderData: () => {
       try {
         const cached = localStorage.getItem('genres_cache');

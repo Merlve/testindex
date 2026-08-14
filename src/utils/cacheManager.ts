@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { clearImageCache } from './imageCache';
 
 export function clearAllLocalCaches(queryClient?: QueryClient) {
   try {
@@ -10,6 +11,8 @@ export function clearAllLocalCaches(queryClient?: QueryClient) {
   } catch (e) {
     console.error('Failed to clear localStorage caches', e);
   }
+
+  clearImageCache();
 
   if (queryClient) {
     try {

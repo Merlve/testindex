@@ -54,10 +54,12 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
   };
 
   const { data: trendingItems = [], isLoading: loading } = useQuery({
-    queryKey: ['trending', categories],
+    queryKey: ['trending'],
     queryFn: fetchTrending,
     enabled: categories.length > 0,
-    staleTime: 10 * 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
     placeholderData: () => {
       try {
         const cached = localStorage.getItem('trending_cache');
