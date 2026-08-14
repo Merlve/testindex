@@ -1610,7 +1610,7 @@ app.post('/api/details/preload', async (req, res) => {
 });
 
 // API: Openlist Proxy - FS List
-app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
+app.post('/api/fs/list', cacheMiddleware(30, true), async (req, res) => {
   try {
     let token = req.headers.authorization;
     const isGuest = isValidGuest(token || '');
@@ -1634,26 +1634,16 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
     if (refresh) {
         apiCache.delete(cacheKey);
     } else {
-        let cached = apiCache.get(cacheKey);
-        if (!cached) {
-            const sqliteCached = await readSQLiteJSON(cacheKey);
-            if (sqliteCached) {
-                cached = sqliteCached;
-                apiCache.set(cacheKey, sqliteCached, 86400);
-            }
-        }
+        const cached = apiCache.get(cacheKey);
         if (cached) {
             const content = cached.data?.content;
-            if (!content || content.length === 0) {
-                cached = null;
-            } else {
+            if (content && Array.isArray(content) && content.length > 0) {
                 res.json(cached);
                 
-                // Background refresh (stale-while-revalidate)
-                axios.post(url, payload, { headers: { Authorization: token } }).then(response => {
-                    if (response.data?.code === 200) {
-                        apiCache.set(cacheKey, response.data, 86400);
-                        // writeSQLiteJSON disabled
+                // Background refresh (stale-while-revalidate) with Openlist refresh
+                axios.post(url, { ...payload, refresh: true }, { headers: { Authorization: token } }).then(response => {
+                    if (response.data?.code === 200 && response.data?.data) {
+                        apiCache.set(cacheKey, response.data, 60);
                     }
                 }).catch(() => {});
                 return;
@@ -1666,8 +1656,7 @@ app.post('/api/fs/list', cacheMiddleware(300, true), async (req, res) => {
     });
 
     if (response.data?.code === 200) {
-        apiCache.set(cacheKey, response.data, 86400); // 24 hours
-        // writeSQLiteJSON disabled
+        apiCache.set(cacheKey, response.data, 60); // 60 seconds short-lived memory cache
     }
 
     res.json(response.data);

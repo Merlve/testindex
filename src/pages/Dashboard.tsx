@@ -56,10 +56,14 @@ export default function Dashboard() {
 
 
 
+  const [dashboardRefreshCounter, setDashboardRefreshCounter] = useState(0);
+
   const fetchHome = async () => {
     // We assume /home has the categories
     try {
-      const res = await axios.post('/api/fs/list', { reqPath: '/home' }, { headers: { Authorization: token } });
+      const payload: any = { reqPath: '/home' };
+      if (dashboardRefreshCounter > 0) payload.refresh = true;
+      const res = await axios.post('/api/fs/list', payload, { headers: { Authorization: token } });
       
       if (res.data.code !== 200) {
         throw new Error(`Failed to load categories: ${res.data.message || 'Unknown error'}`);
@@ -69,7 +73,9 @@ export default function Dashboard() {
       
       const catData = await Promise.all(
         dirs.map(async (dir: string) => {
-          const subRes = await axios.post('/api/fs/list', { reqPath: `/home/${dir}` }, { headers: { Authorization: token } });
+          const subPayload: any = { reqPath: `/home/${dir}` };
+          if (dashboardRefreshCounter > 0) subPayload.refresh = true;
+          const subRes = await axios.post('/api/fs/list', subPayload, { headers: { Authorization: token } });
           return {
             name: dir,
             items: subRes.data.data?.content || []
@@ -89,14 +95,15 @@ export default function Dashboard() {
 
   
   const { data: categories = [], isLoading, isError, error, isFetching, refetch } = useQuery({
-    queryKey: ['dashboard'],
+    queryKey: ['dashboard', dashboardRefreshCounter],
     queryFn: fetchHome,
     enabled: !!token,
-    retry: 1, // Reduce retries so it doesn't spin too long on timeout
-    staleTime: Infinity, // Prevent automatic refetch on background/foreground
-    refetchOnMount: false, // Prevent automatic refetch when returning to the page
-    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    retry: 1,
+    staleTime: 60 * 1000, // 1 minute stale time
+    refetchOnMount: true, // Allow fresh check on mounting/navigation
+    refetchOnWindowFocus: false,
     placeholderData: () => {
+      if (dashboardRefreshCounter > 0) return undefined;
       try {
         const cached = localStorage.getItem('dashboard_cache');
         if (cached) return JSON.parse(cached);
@@ -193,8 +200,17 @@ export default function Dashboard() {
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="pb-20"
     >
-      <div className="px-4 sm:px-8 mt-4 md:mt-6 mb-2">
-        <AnnouncementPill message={configData?.announcement} className="w-full" />
+      <div className="px-4 sm:px-8 mt-4 md:mt-6 mb-2 flex items-center justify-between gap-3">
+        <AnnouncementPill message={configData?.announcement} className="flex-1" />
+        <button
+          onClick={() => setDashboardRefreshCounter(c => c + 1)}
+          disabled={isFetching}
+          title="Refresh Media Libraries"
+          className="p-2.5 sm:px-3 sm:py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 active:scale-95 text-black dark:text-white border border-black/5 dark:border-white/5 transition flex items-center gap-2 shadow-sm shrink-0 cursor-pointer disabled:opacity-50 text-xs font-semibold"
+        >
+          <RefreshCw size={15} className={isFetching ? "animate-spin text-purple-500" : ""} />
+          <span className="hidden sm:inline">{isFetching ? 'Refreshing...' : 'Refresh'}</span>
+        </button>
       </div>
 
       {featuredItems && featuredItems.length > 0 && (

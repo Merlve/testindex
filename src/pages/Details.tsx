@@ -664,11 +664,17 @@ export default function Details() {
   }, [activeSeasonIndex, seasonItems, actualOpenlistPath, token, seasonRefresh]);
 
   const handleRefresh = () => {
-    if (seasonItems.length > 0) {
-      setSeasonRefresh(r => r + 1);
-    } else {
-      setBaseRefresh(r => r + 1);
-    }
+    setSeasonRefresh(r => r + 1);
+    setBaseRefresh(r => r + 1);
+    setToast('Refreshing folder files...');
+    setTimeout(() => setToast(''), 2000);
+  };
+
+  const handleRefreshRoot = () => {
+    setBaseRefresh(r => r + 1);
+    setSeasonRefresh(r => r + 1);
+    setToast('Refreshing root directory...');
+    setTimeout(() => setToast(''), 2000);
   };
 
   // Toggle Watchlist
@@ -1048,6 +1054,15 @@ export default function Details() {
             ) : (
               <Play size={20} fill="currentColor" className="text-white" />
             )}
+          </button>
+
+          <button
+            onClick={handleRefreshRoot}
+            disabled={loadingFiles}
+            title="Refresh Root Directory"
+            className="p-3 sm:p-3.5 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white backdrop-blur-md border border-black/10 dark:border-white/15 transition flex items-center justify-center shadow-lg cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw size={20} className={loadingFiles ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
           </button>
 
           <button

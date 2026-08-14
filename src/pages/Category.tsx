@@ -76,10 +76,14 @@ export default function Category() {
   }, [page, filterLetter, viewMode, searchType, name, query]);
 
 
+  const [forceRefreshCounter, setForceRefreshCounter] = useState(0);
+
   const fetchItems = async () => {
     try {
       if (query) {
-        const res = await axios.post('/api/fs/search', { keywords: query, parent: '/home' }, { headers: { Authorization: token } });
+        const payload: any = { keywords: query, parent: '/home' };
+        if (forceRefreshCounter > 0) payload.refresh = true;
+        const res = await axios.post('/api/fs/search', payload, { headers: { Authorization: token } });
         
         if (res.data.code !== 200) throw new Error(`Failed to search items: ${res.data.message || 'Unknown error'}`);
         
@@ -89,7 +93,9 @@ export default function Category() {
            return { ...i, _cat: cat, _parent: i.parent };
         });
       } else {
-        const res = await axios.post('/api/fs/list', { reqPath: `/home/${name}` }, { headers: { Authorization: token } });
+        const payload: any = { reqPath: `/home/${name}` };
+        if (forceRefreshCounter > 0) payload.refresh = true;
+        const res = await axios.post('/api/fs/list', payload, { headers: { Authorization: token } });
         
         if (res.data.code !== 200) throw new Error(`Failed to load items: ${res.data.message || 'Unknown error'}`);
         
@@ -105,12 +111,12 @@ export default function Category() {
   };
 
   const { data: items = [], isLoading, isError, error, isFetching, refetch } = useQuery({
-    queryKey: ['category', name, query],
+    queryKey: ['category', name, query, forceRefreshCounter],
     queryFn: fetchItems,
     enabled: !!token && (!!name || !!query),
     retry: 1,
     placeholderData: () => {
-      if (query) return undefined;
+      if (query || forceRefreshCounter > 0) return undefined;
       
       const dashboardData: any = queryClient.getQueryData(['dashboard']);
       if (dashboardData) {
@@ -211,7 +217,11 @@ export default function Category() {
             </div>
             
             {!query && (
-              <button onClick={() => refetch()} disabled={isFetching} className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-3 py-2 sm:px-4 sm:py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105 shrink-0">
+              <button 
+                onClick={() => setForceRefreshCounter(c => c + 1)} 
+                disabled={isFetching} 
+                className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-3 py-2 sm:px-4 sm:py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105 shrink-0 cursor-pointer"
+              >
                 <RefreshCw size={16} className={isFetching ? 'animate-spin text-purple-400' : ''} /> <span className="hidden sm:inline">{isFetching ? 'Refreshing...' : 'Refresh'}</span>
               </button>
             )}
