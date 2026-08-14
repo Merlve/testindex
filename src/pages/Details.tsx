@@ -1396,7 +1396,13 @@ export default function Details() {
       </AnimatePresence>
 
       {/* Hero Backdrop Banner */}
-      <div className="relative w-full h-[50vh] sm:h-[60vh] md:h-[70vh]">
+      <div 
+        className="relative w-full h-[50vh] sm:h-[60vh] md:h-[70vh] pointer-events-none"
+        style={{
+          WebkitMaskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
+          maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)'
+        }}
+      >
         {backdropUrl && (
           <img 
             src={backdropUrl} 
@@ -1405,18 +1411,30 @@ export default function Details() {
           />
         )}
 
-        {/* Dominant Color Overlay Tint */}
+        {/* Contrast Overlay - ensures text readability while preserving image brightness */}
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent from-40% to-white/40 dark:to-black/70 transition-colors duration-700" />
+
+        {/* 1. Standard Color Tint - Guarantees color is physically added to the pixels regardless of dark/light backdrop */}
         {colorPalette && (
           <div 
-            className="absolute inset-0 pointer-events-none mix-blend-overlay opacity-15 dark:opacity-25 transition-opacity duration-700"
+            className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-50 transition-opacity duration-700"
             style={{
-              backgroundColor: `rgba(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}, 0.20)`,
+              background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
+            }}
+          />
+        )}
+        
+        {/* 2. Vibrant Screen Layer (Dark Mode Only) - Prevents colors from being crushed by dark backgrounds */}
+        {colorPalette && (
+          <div 
+            className="absolute inset-0 pointer-events-none hidden dark:block mix-blend-screen opacity-40 transition-opacity duration-700"
+            style={{
+              background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
             }}
           />
         )}
         
         {/* Gradients to blend into the dynamic background seamlessly */}
-        <div className="hero-gradient absolute bottom-0 left-0 right-0 h-44 sm:h-56 pointer-events-none z-10 transition-colors duration-700" />
         <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10" />
       </div>
 

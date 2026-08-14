@@ -40,15 +40,15 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
   const hex = `#${((1 << 24) + (clampedR << 16) + (clampedG << 8) + clampedB).toString(16).slice(1)}`;
 
   // Deep darkened tone for dark mode: base around 6-12 lightness with the dominant hue tint
-  const darkR = Math.round(clampedR * 0.12 + 6);
-  const darkG = Math.round(clampedG * 0.12 + 6);
-  const darkB = Math.round(clampedB * 0.12 + 8);
+  const darkR = Math.round(clampedR * 0.144 + 6);
+  const darkG = Math.round(clampedG * 0.144 + 6);
+  const darkB = Math.round(clampedB * 0.144 + 8);
   const bgDark = `rgb(${darkR}, ${darkG}, ${darkB})`;
 
   // Soft tinted pastel tone for light mode: base around 96-98 lightness with the dominant hue tint
-  const lightR = Math.round(255 - (255 - clampedR) * 0.10);
-  const lightG = Math.round(255 - (255 - clampedG) * 0.10);
-  const lightB = Math.round(255 - (255 - clampedB) * 0.10);
+  const lightR = Math.round(255 - (255 - clampedR) * 0.12);
+  const lightG = Math.round(255 - (255 - clampedG) * 0.12);
+  const lightB = Math.round(255 - (255 - clampedB) * 0.12);
   const bgLight = `rgb(${lightR}, ${lightG}, ${lightB})`;
 
   return {
@@ -56,12 +56,12 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
     hex,
     bgDark,
     bgLight,
-    glowDark: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.22)`,
-    glowLight: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.12)`,
-    cardDark: `rgba(${Math.min(255, clampedR + 40)}, ${Math.min(255, clampedG + 40)}, ${Math.min(255, clampedB + 40)}, 0.07)`,
-    cardLight: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.04)`,
-    borderDark: `rgba(${Math.min(255, clampedR + 80)}, ${Math.min(255, clampedG + 80)}, ${Math.min(255, clampedB + 80)}, 0.15)`,
-    borderLight: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.12)`,
+    glowDark: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.264)`,
+    glowLight: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.144)`,
+    cardDark: `rgba(${Math.min(255, clampedR + 40)}, ${Math.min(255, clampedG + 40)}, ${Math.min(255, clampedB + 40)}, 0.084)`,
+    cardLight: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.048)`,
+    borderDark: `rgba(${Math.min(255, clampedR + 80)}, ${Math.min(255, clampedG + 80)}, ${Math.min(255, clampedB + 80)}, 0.18)`,
+    borderLight: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.144)`,
   };
 }
 
