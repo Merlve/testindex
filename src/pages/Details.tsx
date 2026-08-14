@@ -13,6 +13,7 @@ import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameP
 import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
 import { useQueryClient } from '@tanstack/react-query';
+import { extractDominantColor, BackdropColorPalette } from '../utils/colorExtractor';
 
 // Helper to identify video files
 const isVideoFile = (filename: string) => {
@@ -602,6 +603,9 @@ export default function Details() {
   const [searchingLogos, setSearchingLogos] = useState(false);
   const [logoSearchResults, setLogoSearchResults] = useState<any[]>([]);
   const [activeLogoTmdb, setActiveLogoTmdb] = useState<any>(null);
+
+  // Dominant color palette state
+  const [colorPalette, setColorPalette] = useState<BackdropColorPalette | null>(null);
 
   // Watched state
   const [watchedItems, setWatchedItems] = useState<any[]>([]);
@@ -1201,6 +1205,23 @@ export default function Details() {
     return 'Available';
   }, [tmdb]);
 
+  // Extract Dominant Color from Backdrop Image
+  useEffect(() => {
+    let isMounted = true;
+    if (backdropUrl) {
+      extractDominantColor(backdropUrl)
+        .then(palette => {
+          if (isMounted) setColorPalette(palette);
+        })
+        .catch(() => {
+          if (isMounted) setColorPalette(null);
+        });
+    } else {
+      setColorPalette(null);
+    }
+    return () => { isMounted = false; };
+  }, [backdropUrl]);
+
   // Batch Selection Logic
   const toggleSelectAll = () => {
     const currentList = seasonItems.length > 0 ? currentSeasonEpisodes : baseItems;
@@ -1302,7 +1323,44 @@ export default function Details() {
   if (loading) return <DetailsSkeleton />;
 
   return (
-    <div className="-mt-16 min-h-screen bg-[#fffcf9] dark:bg-[#08080a] text-black dark:text-white pb-24 relative overflow-hidden">
+    <div 
+      className="details-page-root -mt-16 min-h-screen text-black dark:text-white pb-24 relative overflow-hidden transition-colors duration-700 ease-out"
+      style={{
+        backgroundColor: 'var(--page-bg)',
+        '--page-bg': colorPalette ? colorPalette.bgLight : '#fffcf9',
+        '--page-bg-dark': colorPalette ? colorPalette.bgDark : '#08080a',
+        '--page-glow': colorPalette ? colorPalette.glowLight : 'rgba(130,80,220,0.10)',
+        '--page-glow-dark': colorPalette ? colorPalette.glowDark : 'rgba(130,80,220,0.20)',
+        '--page-card': colorPalette ? colorPalette.cardLight : 'rgba(0,0,0,0.03)',
+        '--page-card-dark': colorPalette ? colorPalette.cardDark : 'rgba(255,255,255,0.05)',
+      } as React.CSSProperties}
+    >
+      {/* Dark mode overrides using inline styles and a tiny script or CSS */}
+      <style>{`
+        .dark .details-page-root {
+          background-color: var(--page-bg-dark) !important;
+        }
+        .hero-gradient {
+          background: linear-gradient(to top, var(--page-bg) 0%, rgba(255,255,255,0) 100%);
+        }
+        .dark .hero-gradient {
+          background: linear-gradient(to top, var(--page-bg-dark) 0%, rgba(0,0,0,0) 100%);
+        }
+        .hero-glow {
+          background: radial-gradient(ellipse 85% 65% at 50% 20%, var(--page-glow) 0%, transparent 80%);
+        }
+        .dark .hero-glow {
+          background: radial-gradient(ellipse 85% 65% at 50% 20%, var(--page-glow-dark) 0%, transparent 80%);
+        }
+      `}</style>
+
+      {/* Ambient Dominant Color Glow / Tint Layer */}
+      {colorPalette && (
+        <div 
+          className="hero-glow absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[650px] pointer-events-none z-0 blur-3xl opacity-70 dark:opacity-75 transition-opacity duration-1000"
+        />
+      )}
+
       {/* Toast Notification */}
       <AnimatePresence>
         {toast && (
@@ -1326,9 +1384,19 @@ export default function Details() {
             className="w-full h-full object-cover object-center sm:object-top opacity-100 dark:opacity-85 pointer-events-none transition-opacity duration-700"
           />
         )}
+
+        {/* Dominant Color Overlay Tint */}
+        {colorPalette && (
+          <div 
+            className="absolute inset-0 pointer-events-none mix-blend-overlay opacity-15 dark:opacity-25 transition-opacity duration-700"
+            style={{
+              backgroundColor: `rgba(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}, 0.20)`,
+            }}
+          />
+        )}
         
-        {/* Gradients to blend into the background seamlessly */}
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#fffcf9] dark:from-[#08080a] to-transparent pointer-events-none z-10" />
+        {/* Gradients to blend into the dynamic background seamlessly */}
+        <div className="hero-gradient absolute bottom-0 left-0 right-0 h-44 sm:h-56 pointer-events-none z-10 transition-colors duration-700" />
         <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10" />
       </div>
 
