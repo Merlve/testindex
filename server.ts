@@ -453,6 +453,7 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
   const isTvType = ['SERIES', 'TV', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(rawType);
   const typesToCheck = isTvType ? [rawType, 'TV', 'SERIES', 'ANIME', 'KDRAMA', 'ADRAMA'] : [rawType, 'MOVIE'];
 
+  // 1. Exact base matches (type + query + year)
   for (const t of typesToCheck) {
     if (!t) continue;
     const cacheKey = baseQuery ? `${t}-${baseQuery}${year ? `-${year}` : ''}` : '';
@@ -461,53 +462,37 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
     if (baseKey && cache[baseKey]?._overridden) return baseKey;
   }
 
+  // 2. Hierarchical Path Matching (if overridden by path)
   if (itemPath) {
     const cleanP = itemPath.replace(/^\/+/, '');
-    const p1 = `path-${cleanP}`;
-    const p2 = `path-/${cleanP}`;
-    if (cache[p1]?._overridden) return p1;
-    if (cache[p2]?._overridden) return p2;
-
-    const parentP = cleanP.split('/').slice(0, -1).join('/');
-    if (parentP) {
-      const pp1 = `path-${parentP}`;
-      const pp2 = `path-/${parentP}`;
-      if (cache[pp1]?._overridden) return pp1;
-      if (cache[pp2]?._overridden) return pp2;
+    const parts = cleanP.split('/');
+    // Check from full path down to root directory
+    for (let i = parts.length; i > 0; i--) {
+      const subPath = parts.slice(0, i).join('/');
+      const p1 = `path-${subPath}`;
+      const p2 = `path-/${subPath}`;
+      if (cache[p1]?._overridden) return p1;
+      if (cache[p2]?._overridden) return p2;
     }
   }
 
-  const normalizedBase = baseQuery.replace(/[^a-z0-9]/g, '');
-  const found = Object.keys(cache).find(k => {
-    const item = cache[k];
-    if (!item?._overridden) return false;
-
-    if (itemPath) {
-      const cleanP = itemPath.replace(/^\/+/, '');
-      if (k === `path-${cleanP}` || k === `path-/${cleanP}` || k.endsWith(`/${cleanP}`)) {
-        return true;
+  // 3. Fallback: Search existing cache for baseKey prefix (only if we have a solid baseQuery)
+  if (baseQuery && baseQuery.length > 2) {
+    const found = Object.keys(cache).find(k => {
+      const item = cache[k];
+      if (!item?._overridden) return false;
+      
+      for (const t of typesToCheck) {
+        if (!t) continue;
+        const baseKey = `${t}-${baseQuery}`;
+        if (k === baseKey || k.startsWith(`${baseKey}-`)) return true;
       }
-      const lastSegment = cleanP.split('/').pop();
-      if (lastSegment && k.includes(lastSegment)) {
-        return true;
-      }
-    }
+      return false;
+    });
+    if (found) return found;
+  }
 
-    for (const t of typesToCheck) {
-      if (!t) continue;
-      const baseKey = `${t}-${baseQuery}`;
-      if (k === baseKey || k.startsWith(`${baseKey}-`)) return true;
-    }
-
-    if (normalizedBase && normalizedBase.length > 2) {
-      const normKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (normKey.includes(normalizedBase)) return true;
-    }
-
-    return false;
-  });
-
-  return found || null;
+  return null;
 }
 
 
@@ -3282,13 +3267,7 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       if (pathKey1) tmdbCache[pathKey1] = dataToStore;
       if (pathKey2) tmdbCache[pathKey2] = dataToStore;
 
-      if (cleanPath) {
-        const parentPath = cleanPath.split('/').slice(0, -1).join('/');
-        if (parentPath) {
-          tmdbCache[`path-${parentPath}`] = dataToStore;
-          tmdbCache[`path-/${parentPath}`] = dataToStore;
-        }
-      }
+
 
       // Update any other existing keys in tmdbCache that match baseKey or cleanPath
       for (const k of Object.keys(tmdbCache)) {
