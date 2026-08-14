@@ -204,6 +204,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
   });
 
   const displayTmdb = tmdbData || fetchedTmdb || tmdb;
+  const currentMetaVer = localStorage.getItem('meta_version') || '1';
 
 
   const sanitizedPath = `${parentPath}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
@@ -302,7 +303,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
               {innerContent}
           </a>
       ) : (
-          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses} state={{ item, tmdbData: displayTmdb }}>
+          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses} state={{ item, tmdbData: displayTmdb, metaVer: currentMetaVer }}>
               {innerContent}
           </Link>
       )}

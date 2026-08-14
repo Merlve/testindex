@@ -151,11 +151,12 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
 
   const parentClean = (item.parentPath || item._parent || `/home/${item.category}`).replace(/^\/+/, '');
   const targetUrl = `/${parentClean}/${item.name}`.replace(/\/+/g, '/').split('/').map(p => encodeURIComponent(p)).join('/');
+  const currentMetaVer = localStorage.getItem('meta_version') || '1';
 
   return (
     <Link 
       to={targetUrl}
-      state={{ item, tmdbData: tmdb }}
+      state={{ item, tmdbData: tmdb, metaVer: currentMetaVer }}
       className="relative block w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-lg border border-white/10 group cursor-pointer"
     >
        {backdrop ? (

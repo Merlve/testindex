@@ -546,7 +546,11 @@ export default function Details() {
   const queryClient = useQueryClient();
   const [config, setConfig] = useState<any>({});
 
-  const [tmdb, setTmdb] = useState<any>(location.state?.tmdbData || null);
+  const passedMetaVer = location.state?.metaVer;
+  const currentMetaVer = localStorage.getItem('meta_version') || '1';
+  const isStale = passedMetaVer && passedMetaVer !== currentMetaVer;
+
+  const [tmdb, setTmdb] = useState<any>(isStale ? null : (location.state?.tmdbData || null));
   const actualOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
 
   useEffect(() => {
@@ -658,10 +662,26 @@ export default function Details() {
       const cleanName = parsed.cleanName || name;
       const parsedYear = parsed.year || '';
 
-      axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}`)
+      const tmdbId = location.state?.item?._jf?.tmdbId || null;
+      let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}`;
+      if (tmdbId) {
+          url += `&tmdbId=${tmdbId}`;
+      }
+
+      axios.get(url)
         .then(res => {
-          if (isMounted && res.data?.results?.[0]) {
-            setTmdb(res.data.results[0]);
+          if (isMounted) {
+            if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name)) {
+              setTmdb(res.data);
+            } else {
+               // Fallback to search_all if initial search fails
+               axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}${tmdbId ? `&tmdbId=${tmdbId}` : ''}`)
+                 .then(fallbackRes => {
+                    if (isMounted && fallbackRes.data?.results?.[0]) {
+                      setTmdb(fallbackRes.data.results[0]);
+                    }
+                 }).catch(console.error);
+            }
           }
         })
         .catch(console.error)
@@ -672,7 +692,7 @@ export default function Details() {
       setLoading(false);
     }
     return () => { isMounted = false; };
-  }, [fullPath, name, category, tmdb]);
+  }, [fullPath, name, category, tmdb, actualOpenlistPath, location.state]);
 
   // Fetch logo automatically whenever tmdb, name, or category changes
   useEffect(() => {
