@@ -57,8 +57,8 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
         watchSlidesProgress={true}
         speed={400}
         threshold={10}
-        preventClicks={false}
-        preventClicksPropagation={false}
+        preventClicks={true}
+        preventClicksPropagation={true}
         touchStartPreventDefault={false}
         simulateTouch={true}
         coverflowEffect={COVERFLOW_EFFECT}
@@ -76,6 +76,7 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
   const navigate = useNavigate();
   const { user } = useAuth();
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   const { data: tmdb } = useQuery({
     queryKey: ['tmdb', item.name, item.category, item.parentPath],
@@ -89,6 +90,29 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
     enabled: !!item,
     staleTime: 10 * 1000,
   });
+
+  const { data: imagesData } = useQuery({
+    queryKey: ['tmdb-images', tmdb?.id, item.category],
+    queryFn: async () => {
+      if (!tmdb?.id) return null;
+      const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW'].includes(String(item.category || '').toUpperCase());
+      const searchType = isTv ? 'tv' : 'movie';
+      const res = await axios.get(`/api/meta/images?id=${tmdb.id}&type=${searchType}`);
+      return res.data;
+    },
+    enabled: !!tmdb?.id && (!tmdb?.images?.logos || tmdb.images.logos.length === 0),
+    staleTime: 60 * 1000,
+  });
+
+  const logos = tmdb?.images?.logos || imagesData?.logos;
+  const logo = logos && logos.length > 0 
+    ? (logos.find((l: any) => l.iso_639_1 === 'en') || logos[0])
+    : null;
+  const logoUrl = logo?.file_path ? `https://image.tmdb.org/t/p/w500${logo.file_path}` : null;
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [logoUrl]);
 
   const backdrop = tmdb?.backdrop_path 
     ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` 
@@ -104,18 +128,21 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
     ? tmdb.genres[0].name 
     : (item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : 'Movie');
 
+  const formatTitleCase = (text: string) => {
+    if (!text) return '';
+    const isAllUpper = text === text.toUpperCase() && text !== text.toLowerCase();
+    const normalized = isAllUpper ? text.toLowerCase() : text;
+    return normalized.replace(/(?:^|\s|-|\/)\S/g, (c) => c.toUpperCase());
+  };
+
   const parentClean = (item.parentPath || item._parent || `/home/${item.category}`).replace(/^\/+/, '');
   const targetUrl = `/${parentClean}/${item.name}`.replace(/\/+/g, '/').split('/').map(p => encodeURIComponent(p)).join('/');
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigate(targetUrl, { state: { item, tmdbData: tmdb } });
-  };
-
   return (
-    <div 
-      onClick={handleCardClick}
-      className="relative w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-lg border border-white/10 group cursor-pointer"
+    <Link 
+      to={targetUrl}
+      state={{ item, tmdbData: tmdb }}
+      className="relative block w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-lg border border-white/10 group cursor-pointer"
     >
        {backdrop ? (
          <div className="absolute inset-0 w-full h-full overflow-hidden">
@@ -169,7 +196,20 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
        
        {/* Bottom Content */}
        <div className="absolute bottom-0 left-0 right-0 z-20 p-5 sm:p-8 flex flex-col justify-end">
-          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-white line-clamp-1 group-hover:text-amber-300 transition-colors">{title}</h1>
+          {logoUrl && !logoError ? (
+            <div className="mb-2 sm:mb-3">
+              <img 
+                src={logoUrl} 
+                alt={title} 
+                onError={() => setLogoError(true)}
+                className="h-9 sm:h-14 md:h-16 max-w-[70%] sm:max-w-[60%] object-contain object-left drop-shadow-2xl filter brightness-105"
+              />
+            </div>
+          ) : (
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-white line-clamp-1 group-hover:text-amber-300 transition-colors">
+              {formatTitleCase(title)}
+            </h1>
+          )}
           
           <div className="flex items-center gap-2 mt-1 sm:mt-2 text-xs sm:text-sm text-gray-300 font-medium">
              <span>{genre}</span>
@@ -182,15 +222,13 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
           </div>
 
           <div className="flex items-center gap-4 mt-4">
-            <button 
-              type="button"
-              onClick={handleCardClick}
-              className="cursor-pointer relative z-30 px-5 py-2 sm:px-7 sm:py-3 bg-white text-black font-bold rounded-2xl flex items-center gap-2 hover:bg-gray-100 group-hover:bg-amber-400 transition-colors text-xs sm:text-sm shadow-xl active:scale-95"
+            <span 
+              className="cursor-pointer relative z-30 px-5 py-2 sm:px-7 sm:py-3 bg-white text-black font-bold rounded-2xl flex items-center gap-2 hover:bg-gray-100 group-hover:bg-amber-400 transition-colors text-xs sm:text-sm shadow-xl active:scale-95 pointer-events-none"
             >
               <Play fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5" /> Watch Now
-            </button>
+            </span>
           </div>
        </div>
-    </div>
+    </Link>
   );
 });
