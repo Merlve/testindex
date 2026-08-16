@@ -27,7 +27,8 @@ function IntentPlayerModal({
   token, 
   config, 
   onClose, 
-  onPlayWeb 
+  onPlayWeb,
+  onExternalPlay
 }: { 
   item: any; 
   itemPath: string; 
@@ -35,6 +36,7 @@ function IntentPlayerModal({
   config: any; 
   onClose: () => void; 
   onPlayWeb: (url: string) => void; 
+  onExternalPlay: () => void;
 }) {
   const [url, setUrl] = useState(item.url || '');
   const [loading, setLoading] = useState(!item.url);
@@ -154,7 +156,7 @@ function IntentPlayerModal({
             <div className={`grid gap-2.5 ${os === 'macos' ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {os === 'ios' && (
                 <>
-                  <a
+                  <a onClick={() => { onExternalPlay(); }}
                     href={`vlc://${url}`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
@@ -165,7 +167,7 @@ function IntentPlayerModal({
                     </div>
                   </a>
 
-                  <a
+                  <a onClick={() => { onExternalPlay(); }}
                     href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-blue-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
@@ -179,7 +181,7 @@ function IntentPlayerModal({
               )}
 
               {os === 'macos' && (
-                <a
+                <a onClick={() => { onExternalPlay(); }}
                   href={`iina://weblink?url=${encodeURIComponent(url)}`}
                   className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                 >
@@ -193,7 +195,7 @@ function IntentPlayerModal({
 
               {os === 'android' && (
                 <>
-                  <a
+                  <a onClick={() => { onExternalPlay(); }}
                     href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
@@ -208,7 +210,7 @@ function IntentPlayerModal({
                     type="button"
                     onClick={() => {
                       if (url) {
-                        onPlayWeb(url);
+                        onExternalPlay(); onPlayWeb(url);
                         onClose();
                       }
                     }}
@@ -227,7 +229,7 @@ function IntentPlayerModal({
 
               {os === 'windows' && (
                 <>
-                  <a
+                  <a onClick={() => { onExternalPlay(); }}
                     href={`potplayer://${url}`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-yellow-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
@@ -242,7 +244,7 @@ function IntentPlayerModal({
                     type="button"
                     onClick={() => {
                       if (url) {
-                        onPlayWeb(url);
+                        onExternalPlay(); onPlayWeb(url);
                         onClose();
                       }
                     }}
@@ -261,7 +263,7 @@ function IntentPlayerModal({
 
               {os === 'unknown' && (
                 <>
-                  <a
+                  <a onClick={() => { onExternalPlay(); }}
                     href={`vlc://${url}`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
@@ -276,7 +278,7 @@ function IntentPlayerModal({
                     type="button"
                     onClick={() => {
                       if (url) {
-                        onPlayWeb(url);
+                        onExternalPlay(); onPlayWeb(url);
                         onClose();
                       }
                     }}
@@ -467,7 +469,7 @@ function FileRowItem({
           {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
         </button>
         <div className="min-w-0 flex-1">
-          <h4 className={`text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-black dark:text-white'}`}>
+          <h4 className={`text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
             {file.name}
           </h4>
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -1853,6 +1855,12 @@ export default function Details() {
             config={config}
             onClose={() => setIntentModalData(null)}
             onPlayWeb={(url) => setPlayingUrl(url)}
+            onExternalPlay={() => {
+              const isWatched = watchedItems.some(i => i.name === intentModalData.item.name && i.parentPath === intentModalData.path);
+              if (!isWatched) {
+                toggleWatched(intentModalData.item.name, intentModalData.path);
+              }
+            }}
           />
         )}
       </AnimatePresence>
