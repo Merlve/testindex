@@ -26,7 +26,7 @@ export default function RecentlyAddedCarousel() {
     queryFn: fetchRecentlyAdded,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    
     retry: 3,
     retryDelay: 2000,
     placeholderData: () => {

@@ -200,7 +200,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     enabled: !tmdbData,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    
   });
 
   const displayTmdb = tmdbData || fetchedTmdb || tmdb;

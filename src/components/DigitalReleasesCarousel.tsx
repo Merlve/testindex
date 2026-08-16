@@ -73,7 +73,7 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     enabled: categories.length > 0,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    
     placeholderData: () => {
       try {
         const cached = localStorage.getItem('digital_releases_cache');

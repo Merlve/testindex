@@ -90,7 +90,7 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
     enabled: !!item,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    
   });
 
   const { data: imagesData } = useQuery({
@@ -105,7 +105,7 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
     enabled: !!tmdb?.id && (!tmdb?.images?.logos || tmdb.images.logos.length === 0),
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    
   });
 
   const logos = tmdb?.images?.logos || imagesData?.logos;

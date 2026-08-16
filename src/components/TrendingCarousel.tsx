@@ -59,7 +59,7 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
     enabled: categories.length > 0,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    
     placeholderData: () => {
       try {
         const cached = localStorage.getItem('trending_cache');

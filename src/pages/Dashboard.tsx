@@ -98,7 +98,7 @@ export default function Dashboard() {
     retry: 1,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    
     refetchOnWindowFocus: false,
     placeholderData: () => {
       if (dashboardRefreshCounter > 0) return undefined;
@@ -117,7 +117,7 @@ export default function Dashboard() {
       return res.data;
     },
     staleTime: Infinity,
-    refetchOnMount: false,
+    
   });
 
   const featuredItems = useMemo(() => {
