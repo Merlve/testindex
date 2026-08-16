@@ -85,7 +85,7 @@ console.warn = function(...args) {
 };
 
 const invalidatedTokens = new Set<string>();
-let activeUserSessions: Record<string, { token: string, username: string, loginTime: number, ip: string }> = {};
+let activeUserSessions: Record<string, { token: string, username: string, loginTime: number, ip: string, userAgent?: string }> = {};
 
 function invalidateTokenStr(token: string) {
     if (token && token !== process.env.OPENLIST_API_KEY) {
@@ -1293,7 +1293,8 @@ app.get('/api/admin/sessions', adminMiddleware, (req, res) => {
     username: s.username,
     token: s.token,
     loginTime: s.loginTime,
-    ip: s.ip
+    ip: s.ip,
+    userAgent: s.userAgent
   }));
   res.json(sessionsList);
 });
@@ -1492,6 +1493,7 @@ app.post('/api/auth/login', async (req, res) => {
 
       if (token) {
         const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown') as string;
+        const userAgent = req.headers['user-agent'] || 'Unknown';
         try {
           const meRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/me`, { headers: { Authorization: token } });
           const role = meRes.data?.data?.role;
@@ -1503,14 +1505,14 @@ app.post('/api/auth/login', async (req, res) => {
               addLog('Session Terminated', username, 'Previous session was terminated because a new login occurred.');
             }
           }
-          activeUserSessions[token] = { token, username, loginTime: Date.now(), ip };
+          activeUserSessions[token] = { token, username, loginTime: Date.now(), ip, userAgent };
           writeSQLiteJSON('active_user_sessions', activeUserSessions).catch(()=>{});
         } catch(e) {
           const oldSession = Object.values(activeUserSessions).find(s => s.username === username);
           if (oldSession && oldSession.token !== token) {
             invalidateTokenStr(oldSession.token);
           }
-          activeUserSessions[token] = { token, username, loginTime: Date.now(), ip };
+          activeUserSessions[token] = { token, username, loginTime: Date.now(), ip, userAgent };
           writeSQLiteJSON('active_user_sessions', activeUserSessions).catch(()=>{});
         }
       }
