@@ -218,6 +218,14 @@ export default function Admin() {
           <Server size={16} />
           Database Status
         </button>
+
+        <button 
+          onClick={() => setActiveTab('sessions')}
+          className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap min-h-[38px] ${activeTab === 'sessions' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
+        >
+          <Activity size={16} />
+          Live Sessions
+        </button>
       </div>
 
       {activeTab === 'settings' && (
@@ -638,6 +646,174 @@ export default function Admin() {
         </div>
       )}
 
+      {activeTab === 'sessions' && (
+        <SessionsWidget token={token} />
+      )}
+
+    </div>
+  );
+}
+
+function SessionsWidget({ token }: { token: string | null }) {
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const fetchSessions = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get('/api/admin/sessions', { headers: { Authorization: token } });
+      setSessions(res.data);
+      setError('');
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message || 'Failed to load sessions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+    const interval = setInterval(fetchSessions, 10000); // refresh every 10s
+    return () => clearInterval(interval);
+  }, [token]);
+
+  const handleTerminate = async (sessionToken: string) => {
+    try {
+      await axios.post('/api/admin/sessions/terminate', { token: sessionToken }, { headers: { Authorization: token } });
+      fetchSessions();
+    } catch (e: any) {
+      alert(e.response?.data?.error || e.message || 'Failed to terminate session');
+    }
+  };
+
+  const filteredSessions = sessions.filter(session => 
+    session.username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    session.ip?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-5">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-1">
+            <Activity size={16} /> Live Active Sessions
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black text-black dark:text-white flex items-center gap-2.5">
+            Real-time User Sessions
+          </h3>
+        </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative">
+            <SearchX size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search user or IP..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 w-full sm:w-64 bg-white/50 dark:bg-black/20 border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 dark:text-white"
+            />
+          </div>
+          <button 
+            onClick={fetchSessions}
+            disabled={loading}
+            className="flex items-center justify-center gap-2 bg-purple-600/10 text-purple-600 dark:text-purple-400 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm hover:bg-purple-600/20 transition-all cursor-pointer"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 text-red-500 p-4 rounded-xl text-sm font-bold border border-red-500/20">
+          {error}
+        </div>
+      )}
+
+      {loading && sessions.length === 0 ? (
+        <div className="flex items-center justify-center py-10">
+          <RefreshCw size={24} className="animate-spin text-purple-500" />
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm font-bold">
+          No active sessions found.
+        </div>
+      ) : filteredSessions.length === 0 ? (
+        <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm font-bold">
+          No sessions match your search query.
+        </div>
+      ) : (
+        <>
+          {/* Desktop/Tablet Table View */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[600px]">
+              <thead>
+                <tr className="border-b border-black/10 dark:border-white/10 text-xs sm:text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="pb-3 px-2 font-bold">User</th>
+                  <th className="pb-3 px-2 font-bold">IP Address</th>
+                  <th className="pb-3 px-2 font-bold">Login Time</th>
+                  <th className="pb-3 px-2 font-bold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                {filteredSessions.sort((a, b) => b.loginTime - a.loginTime).map((session, i) => (
+                  <tr key={i} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                    <td className="py-4 px-2">
+                      <div className="font-bold text-black dark:text-white text-sm">
+                        {session.username}
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="font-mono text-xs text-gray-600 dark:text-gray-300">
+                        {session.ip}
+                      </div>
+                    </td>
+                    <td className="py-4 px-2 text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(session.loginTime).toLocaleString()}
+                    </td>
+                    <td className="py-4 px-2 text-right">
+                      <button
+                        onClick={() => handleTerminate(session.token)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={14} /> Terminate
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="sm:hidden space-y-3">
+            {filteredSessions.sort((a, b) => b.loginTime - a.loginTime).map((session, i) => (
+              <div key={i} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-black dark:text-white text-sm flex items-center gap-2">
+                    {session.username}
+                  </div>
+                  <div className="font-mono text-xs px-2 py-1 bg-black/10 dark:bg-white/10 rounded-md text-gray-700 dark:text-gray-300">
+                    {session.ip}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {new Date(session.loginTime).toLocaleString()}
+                  </div>
+                  <button
+                    onClick={() => handleTerminate(session.token)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={14} /> Terminate
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

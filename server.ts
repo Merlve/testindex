@@ -85,14 +85,37 @@ console.warn = function(...args) {
 };
 
 const invalidatedTokens = new Set<string>();
+let activeUserSessions: Record<string, { token: string, username: string, loginTime: number, ip: string }> = {};
+
+function invalidateTokenStr(token: string) {
+    if (token && token !== process.env.OPENLIST_API_KEY) {
+        invalidatedTokens.add(token);
+        let arr = Array.from(invalidatedTokens);
+        if (arr.length > 5000) {
+            arr = arr.slice(-5000);
+            invalidatedTokens.clear();
+            arr.forEach(t => invalidatedTokens.add(t));
+        }
+        writeSQLiteJSON('invalidated_tokens', arr).catch(()=>{});
+        
+        // Remove from activeUserSessions if present
+        let changed = false;
+        for (const [key, session] of Object.entries(activeUserSessions)) {
+            if (session.token === token) {
+                delete activeUserSessions[key];
+                changed = true;
+            }
+        }
+        if (changed) {
+            writeSQLiteJSON('active_user_sessions', activeUserSessions).catch(()=>{});
+        }
+    }
+}
 
 function markTokenInvalidated(config: any) {
     if (config?.headers?.Authorization || config?.headers?.authorization) {
         const token = config.headers.Authorization || config.headers.authorization;
-        // Don't invalidate our own API key if we happen to get a 401 using it
-        if (token && token !== process.env.OPENLIST_API_KEY) {
-            invalidatedTokens.add(token);
-        }
+        invalidateTokenStr(token);
     }
 }
 
@@ -267,7 +290,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const token = req.headers.authorization;
   if (token && invalidatedTokens.has(token)) {
-      return res.status(401).json({ code: 401, message: 'Token invalidated by server restart or expiry' });
+      return res.status(401).json({ code: 401, message: 'Session logged out because a new login occurred on another device.' });
   }
   next();
 });
@@ -1265,6 +1288,31 @@ async function addLog(action: string, username: string, details: string) {
   await writeSQLiteJSON('activity_logs', activityLogs);
 }
 
+app.get('/api/admin/sessions', adminMiddleware, (req, res) => {
+  const sessionsList = Object.values(activeUserSessions).map(s => ({
+    username: s.username,
+    token: s.token,
+    loginTime: s.loginTime,
+    ip: s.ip
+  }));
+  res.json(sessionsList);
+});
+
+app.post('/api/admin/sessions/terminate', adminMiddleware, (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: 'Token is required' });
+  }
+  const session = activeUserSessions[token];
+  if (session) {
+    invalidateTokenStr(token);
+    addLog('Admin Action', session.username, `Admin manually terminated session from IP ${session.ip}`);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Session not found' });
+  }
+});
+
 app.get('/api/admin/logs', adminMiddleware, (req, res) => {
   res.json(activityLogs);
 });
@@ -1427,6 +1475,7 @@ app.post('/api/auth/login', async (req, res) => {
     let response = await axios.post(url, { username, password });
     
     if (response.data.code === 200) {
+      const token = response.data.data?.token;
       const masterApiKey = getOpenlistApiKey();
       if (masterApiKey) {
         try {
@@ -1440,6 +1489,32 @@ app.post('/api/auth/login', async (req, res) => {
           }
         } catch (e) {}
       }
+
+      if (token) {
+        const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown') as string;
+        try {
+          const meRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/me`, { headers: { Authorization: token } });
+          const role = meRes.data?.data?.role;
+          
+          if (role !== 2) {
+            const oldSession = Object.values(activeUserSessions).find(s => s.username === username);
+            if (oldSession && oldSession.token !== token) {
+              invalidateTokenStr(oldSession.token);
+              addLog('Session Terminated', username, 'Previous session was terminated because a new login occurred.');
+            }
+          }
+          activeUserSessions[token] = { token, username, loginTime: Date.now(), ip };
+          writeSQLiteJSON('active_user_sessions', activeUserSessions).catch(()=>{});
+        } catch(e) {
+          const oldSession = Object.values(activeUserSessions).find(s => s.username === username);
+          if (oldSession && oldSession.token !== token) {
+            invalidateTokenStr(oldSession.token);
+          }
+          activeUserSessions[token] = { token, username, loginTime: Date.now(), ip };
+          writeSQLiteJSON('active_user_sessions', activeUserSessions).catch(()=>{});
+        }
+      }
+
       addLog('Login Success', username, 'User logged in successfully.');
     } else {
       addLog('Login Failed', username, `Login failed: ${response.data.message || 'Invalid credentials'}`);
@@ -3794,6 +3869,9 @@ export async function initSQLiteState() {
     jfOverrides = (await readSQLiteJSON('jf_override')) || {};
     downloadTracker = (await readSQLiteJSON('download_tracker')) || {};
     tmdbSeasonCache = (await readSQLiteJSON('tmdb_season_cache')) || {};
+    activeUserSessions = (await readSQLiteJSON('active_user_sessions')) || {};
+    const savedInvalidated = (await readSQLiteJSON('invalidated_tokens')) || [];
+    savedInvalidated.forEach((t: string) => invalidatedTokens.add(t));
   } catch (err) {
     console.error("Error during initSQLiteState:", err);
   }
