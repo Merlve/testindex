@@ -2,8 +2,7 @@ import { clearAllLocalCaches } from '../utils/cacheManager';
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { parseMediaName } from '../utils/nameParser';
-import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud, Megaphone, Folder, Copy, Check } from 'lucide-react';
+import { Settings, Activity, Download, Trophy, Flame, Trash2, RefreshCw, Database, SearchX, UploadCloud, Megaphone, Folder, Copy, Check, Server } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import AnnouncementPill from '../components/AnnouncementPill';
@@ -18,39 +17,52 @@ export default function Admin() {
   const [config, setConfig] = useState({ openlistUrl: '', basePath: '', inactivityTimeout: 0, announcement: '' });
   const [msg, setMsg] = useState('');
   
-  // Watched state / TMDB Correction State
-  const [tmdbQuery, setTmdbQuery] = useState('');
-  const [tmdbType, setTmdbType] = useState('movie');
-  const [tmdbData, setTmdbData] = useState('');
-
   // Auto Fetch
   const [autoFetchPath, setAutoFetchPath] = useState('');
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
   const [autoFetchLoading, setAutoFetchLoading] = useState(false);
   const [autoFetchFailed, setAutoFetchFailed] = useState<{name: string, path: string}[]>([]);
 
-  const [missingMetadata, setMissingMetadata] = useState<any[]>([]);
-  const [loadingMissing, setLoadingMissing] = useState(false);
-  const [refreshingMissing, setRefreshingMissing] = useState(false);
-  const [fixModalItem, setFixModalItem] = useState<any>(null);
-  const [fixModalInput, setFixModalInput] = useState('');
-  const [fixModalLoading, setFixModalLoading] = useState(false);
-  const [fixModalSearchResults, setFixModalSearchResults] = useState<any[]>([]);
-  const [fixModalSearching, setFixModalSearching] = useState(false);
-  const [fixModalPathCopied, setFixModalPathCopied] = useState(false);
-  const fixModalSearchTimeoutRef = useRef<any>(null);
+  
+  // Diagnostic
+  const [dbDiagnostic, setDbDiagnostic] = useState<any>(null);
+  const [isPingingDb, setIsPingingDb] = useState(false);
+  const [dbDiagnosticError, setDbDiagnosticError] = useState<string | null>(null);
+
+  const pingDatabase = async () => {
+    setIsPingingDb(true);
+    setDbDiagnosticError(null);
+    try {
+      const res = await axios.get('/api/admin/diagnostic', { headers: { Authorization: token } });
+      setDbDiagnostic(res.data);
+    } catch (e: any) {
+      setDbDiagnosticError(e.response?.data?.error || e.message || 'Failed to ping database');
+    } finally {
+      setIsPingingDb(false);
+    }
+  };
+
+  const downloadDb = async () => {
+    try {
+      const res = await axios.get('/api/admin/db/download', {
+        headers: { Authorization: token },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `shindex_backup_${Date.now()}.db`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Failed to download database');
+    }
+  };
+
   const [clearingDebugLogs, setClearingDebugLogs] = useState(false);
 
-  const fetchMissingMetadata = async () => {
-    setLoadingMissing(true);
-    try {
-      const res = await axios.get('/api/admin/missing-metadata', { headers: { Authorization: token } });
-      setMissingMetadata(res.data.missing || []);
-    } catch(e) {
-      console.error(e);
-    }
-    setLoadingMissing(false);
-  };
 
   const downloadDebugLogs = async () => {
     try {
@@ -85,100 +97,6 @@ export default function Admin() {
     }
   };
   
-  const handleFixMissing = (item: any) => {
-    setFixModalItem(item);
-    setFixModalInput(item.name || '');
-    setFixModalSearchResults([]);
-    handleSearchTMDBModal(item.name || '', item.category);
-  };
-
-  const handleSearchTMDBModal = (query: string, category: string) => {
-    setFixModalInput(query);
-    if (!query) {
-      setFixModalSearchResults([]);
-      return;
-    }
-    if (fixModalSearchTimeoutRef.current) clearTimeout(fixModalSearchTimeoutRef.current);
-    fixModalSearchTimeoutRef.current = setTimeout(async () => {
-      setFixModalSearching(true);
-      try {
-        let isId = /^\d+$/.test(query.trim());
-        let finalQuery = query.trim();
-        if (query.toLowerCase().startsWith('id:')) {
-           isId = true;
-           finalQuery = query.substring(3).trim();
-        } else if (query.toLowerCase().startsWith('tmdb:')) {
-           isId = true;
-           finalQuery = query.substring(5).trim();
-        }
-        const url = `/api/meta/search_all?query=${encodeURIComponent(finalQuery)}&type=${category}${isId ? `&tmdbId=${finalQuery}` : ''}`;
-        const res = await axios.get(url, { headers: { Authorization: localStorage.getItem('shindex_token') || '' } });
-        setFixModalSearchResults(res.data.results || []);
-      } catch(e) {}
-      setFixModalSearching(false);
-    }, 500);
-  };
-
-  const submitFixMetadataId = async (tmdbId: string) => {
-    if (!fixModalItem) return;
-    setFixModalLoading(true);
-    try {
-      await axios.post('/api/meta/override', {
-        query: fixModalItem.cleanName || fixModalItem.name,
-        type: fixModalItem.category,
-        year: fixModalItem.year,
-        tmdbId: tmdbId,
-        path: fixModalItem.path
-      }, { headers: { Authorization: token } });
-      setFixModalItem(null);
-      fetchMissingMetadata();
-      localStorage.setItem('meta_version', String(Date.now()));
-      clearAllLocalCaches(queryClient);
-    } catch (e: any) {
-      alert(`Failed to fix metadata: ${e.message}`);
-    }
-    setFixModalLoading(false);
-  };
-
-  const submitFixMetadata = async () => {
-    if (!fixModalItem || !fixModalInput) return;
-    setFixModalLoading(true);
-    try {
-      await axios.post('/api/meta/override', {
-        query: fixModalItem.cleanName || fixModalItem.name,
-        type: fixModalItem.category,
-        year: fixModalItem.year,
-        tmdbId: fixModalInput,
-        path: fixModalItem.path
-      }, { headers: { Authorization: token } });
-      setFixModalItem(null);
-      fetchMissingMetadata();
-      localStorage.setItem('meta_version', String(Date.now()));
-      clearAllLocalCaches(queryClient);
-    } catch (e: any) {
-      alert(`Failed to fix metadata: ${e.message}`);
-    }
-    setFixModalLoading(false);
-  };
-
-  const refreshMissingMetadata = async () => {
-    if (missingMetadata.length === 0) return;
-    setRefreshingMissing(true);
-    try {
-      const res = await axios.post('/api/admin/missing-metadata/refresh', { items: missingMetadata }, { headers: { Authorization: token } });
-      setMsg(`Refreshed ${res.data.refreshedCount} items successfully!`);
-      setTimeout(() => setMsg(''), 3000);
-      fetchMissingMetadata();
-      queryClient.invalidateQueries({ queryKey: ['tmdb'] });
-      queryClient.invalidateQueries({ queryKey: ['recentlyAdded'] });
-    } catch(e) {
-       console.error(e);
-       setMsg('Failed to refresh missing metadata.');
-       setTimeout(() => setMsg(''), 3000);
-    }
-    setRefreshingMissing(false);
-  };
-
   // Logs
   const [logs, setLogs] = useState<any[]>([]);
 
@@ -210,10 +128,8 @@ export default function Admin() {
 
     } else if (activeTab === 'downloads') {
       fetchTopDownloads();
-    } else if (activeTab === 'missing-metadata') {
-      fetchMissingMetadata();
-      queryClient.invalidateQueries({ queryKey: ['tmdb'] });
-      queryClient.invalidateQueries({ queryKey: ['recentlyAdded'] });
+    } else if (activeTab === 'db-status') {
+      pingDatabase();
     }
 
   }, [activeTab, token]);
@@ -246,17 +162,6 @@ export default function Admin() {
       setTimeout(() => setMsg(''), 3000);
     } catch (e) {
       alert('Error saving config');
-    }
-  };
-
-  const handleTmdbCorrection = async () => {
-    try {
-      const parsed = JSON.parse(tmdbData);
-      const { cleanName, year } = parseMediaName(tmdbQuery);
-      await axios.post('/api/meta/correct', { query: cleanName, type: tmdbType, year, data: parsed }, { headers: { Authorization: token } });
-      alert('TMDB Metadata corrected!');
-    } catch (e) {
-      alert('Invalid JSON or server error');
     }
   };
 
@@ -307,11 +212,11 @@ export default function Admin() {
         </button>
 
         <button 
-          onClick={() => setActiveTab('missing-metadata')}
-          className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap min-h-[38px] ${activeTab === 'missing-metadata' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
+          onClick={() => setActiveTab('db-status')}
+          className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap min-h-[38px] ${activeTab === 'db-status' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
         >
-          <SearchX size={16} />
-          Missing Metadata
+          <Server size={16} />
+          Database Status
         </button>
       </div>
 
@@ -433,46 +338,34 @@ export default function Admin() {
       </div>
 
       <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm">
-        <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 sm:mb-4 tracking-tight">Manual TMDB Correction</h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs sm:text-sm">Override TMDB metadata for specific folders.</p>
+        <div className="flex items-center gap-2 mb-2 sm:mb-4">
+          <Database className="w-5 h-5 text-red-500" />
+          <h3 className="text-lg sm:text-xl font-bold text-black dark:text-white tracking-tight">System Maintenance</h3>
+        </div>
+        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs sm:text-sm">Force a complete cache reset across all connected clients to resolve metadata inconsistencies.</p>
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-            <div className="flex-1 min-w-0">
-              <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-xs font-bold uppercase tracking-wider">Folder Name (Query)</label>
-              <input 
-                className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
-                value={tmdbQuery}
-                onChange={e => setTmdbQuery(e.target.value)}
-              />
-            </div>
-            <div className="w-full sm:w-48 shrink-0">
-              <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-xs font-bold uppercase tracking-wider">Type (Category)</label>
-              <select 
-                className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
-                value={tmdbType}
-                onChange={e => setTmdbType(e.target.value)}
-              >
-                <option value="MOVIES">Movies</option>
-                <option value="SERIES">Series</option>
-                <option value="ANIME">Anime</option>
-                <option value="KDRAMA">ADrama</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-xs font-bold uppercase tracking-wider">JSON Data</label>
-            <textarea 
-              className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-black dark:text-white h-40 sm:h-48 font-mono text-xs sm:text-sm focus:outline-none focus:border-purple-600/50 transition-colors"
-              value={tmdbData}
-              onChange={e => setTmdbData(e.target.value)}
-              placeholder={`{\n  "title": "Correct Title",\n  "overview": "...",\n  "poster_path": "/some_path.jpg",\n  "backdrop_path": "/some_path.jpg"\n}`}
-            />
-          </div>
-          <button onClick={handleTmdbCorrection} className="w-full sm:w-auto bg-purple-500/20 text-purple-400 border border-purple-500/50 px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold hover:bg-purple-500/30 transition-all cursor-pointer">
-            Apply Correction
+          <button 
+            onClick={async () => {
+              if (window.confirm('Are you sure you want to force all clients to clear their cache? This will cause a temporary spike in API requests.')) {
+                try {
+                  const res = await axios.post('/api/admin/clear-cache', {}, { headers: { Authorization: token } });
+                  if (res.data.success) {
+                    clearAllLocalCaches(queryClient);
+                    localStorage.setItem('meta_version', String(res.data.version));
+                    alert('Success! All local caches cleared and global meta version bumped.');
+                  }
+                } catch (e: any) {
+                  alert('Failed to clear cache: ' + (e.response?.data?.error || e.message));
+                }
+              }
+            }} 
+            className="w-full sm:w-auto bg-red-500/20 text-red-500 border border-red-500/50 px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold hover:bg-red-500/30 transition-all cursor-pointer flex items-center gap-2 justify-center"
+          >
+            <Trash2 size={16} /> Force Global Cache Reset
           </button>
         </div>
       </div>
+
       </div>
       )}
 
@@ -654,180 +547,97 @@ export default function Admin() {
         </div>
       )}
 
-      {activeTab === 'missing-metadata' && (
+
+      {activeTab === 'db-status' && (
         <div className="bg-[#fbf4eb]/80 dark:bg-[#1a1a22]/80 p-4 sm:p-6 md:p-8 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl backdrop-blur-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-5">
             <div>
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-1">
-                <Database size={16} /> Data Integrity
+                <Server size={16} /> Database Diagnostic
               </div>
               <h3 className="text-xl sm:text-2xl font-black text-black dark:text-white flex items-center gap-2.5">
-                Missing Metadata Items
+                Real-Time SQLite Status
               </h3>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Files currently indexed from OpenList that could not be matched with TMDB data. 
-                You can try bulk refreshing to fetch data again.
+                Monitor database connectivity and file system integrity.
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
               <button 
-                onClick={fetchMissingMetadata}
-                disabled={loadingMissing}
-                className="px-3 py-2 rounded-xl text-xs font-bold bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white flex items-center gap-1.5 transition cursor-pointer"
+                onClick={downloadDb}
+                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition-all cursor-pointer"
               >
-                <RefreshCw size={14} className={loadingMissing ? 'animate-spin' : ''} />
-                <span>Reload List</span>
+                <Download size={16} />
+                Download DB
               </button>
               <button 
-                onClick={refreshMissingMetadata}
-                disabled={refreshingMissing || missingMetadata.length === 0}
-                className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                onClick={pingDatabase}
+                disabled={isPingingDb}
+                className="flex items-center justify-center gap-2 bg-purple-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition-all cursor-pointer disabled:opacity-50"
               >
-                <UploadCloud size={14} className={refreshingMissing ? 'animate-bounce' : ''} />
-                <span>Bulk Refresh Metadata</span>
+                <RefreshCw size={16} className={isPingingDb ? "animate-spin" : ""} />
+                Ping Database
               </button>
             </div>
           </div>
-          
-          {msg && (
-            <div className="bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 p-3 rounded-xl text-sm font-bold flex items-center gap-2">
-              <span>{msg}</span>
-            </div>
+
+          {dbDiagnosticError && (
+             <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-500 text-sm font-bold">
+                {dbDiagnosticError}
+             </div>
           )}
 
-          {loadingMissing ? (
-            <div className="text-center py-12 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
-              <RefreshCw size={36} className="mx-auto text-gray-400 opacity-40 animate-spin mb-3" />
-              <p className="text-sm font-bold text-black dark:text-white">Scanning Library...</p>
-            </div>
-          ) : missingMetadata.length === 0 ? (
-            <div className="text-center py-12 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5 space-y-2">
-              <SearchX size={36} className="mx-auto text-green-500 opacity-60" />
-              <h4 className="text-sm font-bold text-black dark:text-white">All Metadata Intact</h4>
-              <p className="text-xs text-gray-500">No items are missing metadata!</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {missingMetadata.map((item, idx) => (
-                <div key={idx} className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                   <div className="min-w-0">
-                      <h4 className="font-bold text-sm text-black dark:text-white truncate">{item.name}</h4>
-                      <div className="text-xs text-gray-500 font-mono mt-0.5 truncate">
-                        {item.path}
-                      </div>
-                   </div>
-                   <div className="flex items-center gap-2 shrink-0">
-                     <span className="text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 px-2 py-1 rounded border border-red-500/20 shrink-0">
-                        No Data
+          {dbDiagnostic && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               {/* File Accessibility */}
+               <div className="bg-white/50 dark:bg-black/20 p-4 sm:p-6 rounded-xl border border-black/5 dark:border-white/5">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">File Accessibility</h4>
+                  <div className="flex items-center gap-2 mb-3">
+                     <div className={`w-3 h-3 rounded-full ${dbDiagnostic.sqliteFileAccessible ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></div>
+                     <span className="font-mono text-sm font-bold dark:text-white">
+                        {dbDiagnostic.sqliteFileAccessible ? 'Accessible' : 'Inaccessible'}
                      </span>
-                     <button 
-                       onClick={() => handleFixMissing(item)}
-                       className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-[10px] font-bold transition uppercase tracking-wider cursor-pointer relative z-10"
-                     >
-                       Fix
-                     </button>
-                   </div>
-                </div>
-              ))}
+                  </div>
+                  {dbDiagnostic.sqliteFileAccessibleError && (
+                    <p className="text-xs text-red-400 mt-2 font-mono break-all">{dbDiagnostic.sqliteFileAccessibleError}</p>
+                  )}
+                  {dbDiagnostic.fileStats && (
+                    <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      <div className="flex justify-between"><span>Size:</span> <span className="font-mono text-black dark:text-white">{(dbDiagnostic.fileStats.size / 1024 / 1024).toFixed(2)} MB</span></div>
+                      <div className="flex justify-between"><span>Modified:</span> <span className="font-mono text-black dark:text-white">{new Date(dbDiagnostic.fileStats.mtime).toLocaleString()}</span></div>
+                    </div>
+                  )}
+               </div>
+
+               {/* Query Execution */}
+               <div className="bg-white/50 dark:bg-black/20 p-4 sm:p-6 rounded-xl border border-black/5 dark:border-white/5">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Query Execution</h4>
+                  <div className="flex items-center gap-2 mb-3">
+                     <div className={`w-3 h-3 rounded-full ${dbDiagnostic.sqliteDbQueryable ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></div>
+                     <span className="font-mono text-sm font-bold dark:text-white">
+                        {dbDiagnostic.sqliteDbQueryable ? 'Responsive' : 'Failing'}
+                     </span>
+                  </div>
+                  {dbDiagnostic.sqliteDbQueryableError && (
+                    <p className="text-xs text-red-400 mt-2 font-mono break-all">{dbDiagnostic.sqliteDbQueryableError}</p>
+                  )}
+                  {dbDiagnostic.sqliteDbQueryable && (
+                    <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      <div className="flex justify-between"><span>KV Store Records:</span> <span className="font-mono text-black dark:text-white">{dbDiagnostic.kvStoreCount}</span></div>
+                    </div>
+                  )}
+               </div>
+
+               {/* Database Path */}
+               <div className="sm:col-span-2 bg-white/50 dark:bg-black/20 p-4 sm:p-6 rounded-xl border border-black/5 dark:border-white/5">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Absolute Path</h4>
+                  <p className="font-mono text-xs text-black dark:text-white break-all">{dbDiagnostic.dbPath}</p>
+               </div>
             </div>
           )}
         </div>
       )}
 
-      {fixModalItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 flex flex-col">
-            <div className="p-4 sm:p-6 border-b border-black/5 dark:border-white/5 space-y-2.5">
-              <div>
-                <h3 className="text-lg font-bold text-black dark:text-white">Fix Metadata</h3>
-                <p className="text-xs text-gray-500 mt-1">Enter TMDB ID for <span className="font-bold text-purple-600 dark:text-purple-400">{fixModalItem.name}</span></p>
-              </div>
-              {fixModalItem.path && (
-                <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2 min-w-0">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <Folder size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Openlist Path</div>
-                      <div 
-                        className="text-xs font-mono text-black dark:text-white truncate select-all" 
-                        title={fixModalItem.path.startsWith('/') ? fixModalItem.path : `/${fixModalItem.path}`}
-                      >
-                        {fixModalItem.path.startsWith('/') ? fixModalItem.path : `/${fixModalItem.path}`}
-                      </div>
-                    </div>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      const p = fixModalItem.path.startsWith('/') ? fixModalItem.path : `/${fixModalItem.path}`;
-                      navigator.clipboard.writeText(p);
-                      setFixModalPathCopied(true);
-                      setTimeout(() => setFixModalPathCopied(false), 2000);
-                    }}
-                    title="Copy Openlist Path"
-                    className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition shrink-0 cursor-pointer"
-                  >
-                    {fixModalPathCopied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="p-4 sm:p-6 flex-1 flex flex-col min-h-0">
-              <label className="block text-gray-600 dark:text-gray-400 mb-1.5 text-xs font-bold uppercase tracking-wider">Search Title or TMDB ID</label>
-              <input 
-                autoFocus
-                className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors mb-4"
-                value={fixModalInput}
-                onChange={e => handleSearchTMDBModal(e.target.value, fixModalItem.category)}
-                placeholder="Type title or ID..."
-                onKeyDown={e => e.key === 'Enter' && submitFixMetadataId(fixModalInput)}
-              />
-              <div className="flex-1 overflow-y-auto max-h-52 space-y-2 pr-1 custom-scrollbar">
-                {fixModalSearching ? (
-                  <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Searching...</div>
-                ) : fixModalSearchResults.length > 0 ? (
-                  fixModalSearchResults.map((result: any) => (
-                    <div 
-                      key={result.id} 
-                      onClick={() => submitFixMetadataId(String(result.id))}
-                      className="flex items-center gap-3 p-2 hover:bg-black/5 dark:bg-white/5 rounded-xl cursor-pointer transition"
-                    >
-                      {result.poster_path ? (
-                        <img src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} alt={result.title || result.name} className="w-12 h-16 object-cover rounded shadow" />
-                      ) : (
-                        <div className="w-12 h-16 bg-black/5 dark:bg-white/5 rounded flex items-center justify-center shadow text-xs text-gray-600 dark:text-gray-400">No Img</div>
-                      )}
-                      <div>
-                        <div className="text-black dark:text-white font-semibold text-sm">{result.title || result.name}</div>
-                        <div className="text-gray-600 dark:text-gray-400 text-xs">{result.release_date || result.first_air_date}</div>
-                      </div>
-                    </div>
-                  ))
-                ) : fixModalInput ? (
-                  <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">No results found</div>
-                ) : (
-                  <div className="text-gray-600 dark:text-gray-400 text-sm text-center py-4">Type a title above to search</div>
-                )}
-              </div>
-            </div>
-            <div className="p-4 sm:p-6 bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5 flex justify-end gap-3 shrink-0">
-              <button 
-                onClick={() => setFixModalItem(null)}
-                className="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => submitFixMetadataId(fixModalInput)}
-                disabled={!fixModalInput || fixModalLoading}
-                className="px-4 py-2 rounded-xl text-sm font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/20 disabled:opacity-50 transition"
-              >
-                {fixModalLoading ? 'Saving...' : 'Save Manual ID'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

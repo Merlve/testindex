@@ -815,9 +815,21 @@ export default function Details() {
         // we should just isolate the file we care about.
         const targetFilename = cleanPath.split('/').pop();
         if (targetFilename && isVideoFile(targetFilename)) {
-            const exactFileMatch = dirFiles.find((f: any) => f.name === targetFilename);
+            const exactFileMatch = dirFiles.find((f: any) => f.name === targetFilename || decodeURIComponent(f.name) === decodeURIComponent(targetFilename));
             if (exactFileMatch) {
                 setBaseItems([exactFileMatch]);
+                setSeasonItems([]);
+                return;
+            } else {
+                // Fallback: If it's explicitly a video file path but not found in the parent dir list
+                // (possibly due to pagination limits or encoding mismatches), construct a mock item
+                // so the user can still play/download it directly.
+                setBaseItems([{
+                    name: targetFilename,
+                    is_dir: false,
+                    size: location.state?.item?.size || 0,
+                    modified: location.state?.item?.modified || new Date().toISOString()
+                }]);
                 setSeasonItems([]);
                 return;
             }
@@ -838,6 +850,17 @@ export default function Details() {
       })
       .catch(err => {
         console.error('Error fetching folder files:', err);
+        // If the API fails but we know it's a direct video file, fallback to the file
+        const targetFilename = cleanPath.split('/').pop();
+        if (targetFilename && isVideoFile(targetFilename)) {
+             setBaseItems([{
+                 name: targetFilename,
+                 is_dir: false,
+                 size: location.state?.item?.size || 0,
+                 modified: location.state?.item?.modified || new Date().toISOString()
+             }]);
+             setSeasonItems([]);
+        }
       })
       .finally(() => {
         if (isMounted) setLoadingFiles(false);
@@ -1156,7 +1179,9 @@ export default function Details() {
         year: parsed.year,
         tmdbId: tmdbIdToSave || undefined,
         customLogo: targetLogo,
-        path: actualOpenlistPath
+        path: actualOpenlistPath,
+        updateLogoOnly: true,
+        currentData: tmdb // Pass current data just in case server cache is missing
       }, { headers: { Authorization: token } });
 
       if (res.data?.data) {

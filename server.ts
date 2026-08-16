@@ -1296,6 +1296,22 @@ app.post('/api/admin/log', adminMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/admin/clear-cache', adminMiddleware, (req, res) => {
+  bumpMetaVersion();
+  addLog('Clear All Caches', 'Admin', 'Forced global cache reset for all clients');
+  res.json({ success: true, version: globalMetaVersion });
+});
+
+app.get('/api/admin/db/download', adminMiddleware, async (req, res) => {
+  const dbPath = path.join(process.cwd(), 'data', 'shindex.db');
+  if (fs.existsSync(dbPath)) {
+    addLog('Download Database', 'Admin', 'Downloaded shindex.db backup');
+    res.download(dbPath, `shindex_backup_${Date.now()}.db`);
+  } else {
+    res.status(404).send('Database file not found');
+  }
+});
+
 app.get('/api/admin/diagnostic', adminMiddleware, async (req, res) => {
   const result: any = {
     sqliteFileAccessible: false,
@@ -1327,90 +1343,6 @@ app.get('/api/admin/diagnostic', adminMiddleware, async (req, res) => {
   res.json(result);
 });
 
-
-app.get('/api/admin/missing-metadata', adminMiddleware, async (req, res) => {
-  const token = req.headers.authorization as string;
-  const index = await getLibraryIndex(token);
-  
-  const missingItems = [];
-  for (const item of index) {
-     const typeStr = (item.category || '').toUpperCase();
-     const searchType = (['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(typeStr) || typeStr.includes('TV') || typeStr.includes('SHOW') || typeStr.includes('SERIES')) ? 'tv' : 'movie';
-     
-     const { cleanName, year } = parseMediaName(item.name);
-     const baseQuery = cleanName.toLowerCase().trim();
-     const baseKey = `${searchType}-${baseQuery}`;
-     const cacheKey = `${searchType}-${baseQuery}${year ? `-${year}` : ''}`;
-     
-     const pathKey = `path-${appConfig.basePath === '/' ? '' : appConfig.basePath}/${item.category}/${item.name}`;
-     
-     const overriddenKey = findOverriddenKeyInCache(tmdbCache, searchType, baseQuery, year);
-     
-     let cached = null;
-     if (overriddenKey && tmdbCache[overriddenKey] !== undefined) {
-         cached = tmdbCache[overriddenKey];
-     } else if (tmdbCache[pathKey] !== undefined) {
-         cached = tmdbCache[pathKey];
-     } else if (tmdbCache[cacheKey] !== undefined) {
-         cached = tmdbCache[cacheKey];
-     } else if (year && tmdbCache[baseKey] !== undefined) {
-         cached = tmdbCache[baseKey];
-     }
-     
-     // If it's explicitly null, it means we tried and failed.
-     if (cached === null) {
-         missingItems.push({
-             name: item.name,
-             category: item.category,
-             cleanName,
-             year,
-             searchType,
-             path: `${appConfig.basePath === '/' ? '' : appConfig.basePath}/${item.category}/${item.name}`
-         });
-     }
-  }
-  
-  res.json({ missing: missingItems });
-});
-
-app.post('/api/admin/missing-metadata/refresh', adminMiddleware, async (req, res) => {
-  const { items } = req.body;
-  if (!items || !Array.isArray(items)) return res.status(400).json({ error: 'Items required' });
-  
-  let refreshedCount = 0;
-  for (const item of items) {
-      const cacheKey = `${item.searchType}-${item.cleanName.toLowerCase().trim()}${item.year ? `-${item.year}` : ''}`;
-      const pathKey = `path-${item.path}`;
-      
-      // Clear from cache
-      delete tmdbCache[cacheKey];
-      delete tmdbCache[pathKey];
-      
-      // We will let the background or next request fetch it, or we can fetch it right now.
-      // Fetch right now:
-      try {
-          const tmdbKey = process.env.TMDB_API_KEY;
-          if (tmdbKey) {
-             const yearParam = item.year ? `&year=${item.year}` : '';
-             const res = await axios.get(`https://api.themoviedb.org/3/search/${item.searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(item.cleanName)}${yearParam}`);
-             if (res.data.results && res.data.results.length > 0) {
-                 tmdbCache[cacheKey] = res.data.results[0];
-                 tmdbCache[pathKey] = res.data.results[0];
-                 refreshedCount++;
-             } else {
-                 tmdbCache[cacheKey] = null;
-                 tmdbCache[pathKey] = null;
-             }
-          }
-      } catch (e) {
-          tmdbCache[cacheKey] = null;
-          tmdbCache[pathKey] = null;
-      }
-  }
-  
-  saveDb();
-  res.json({ success: true, refreshedCount });
-});
 
 
 // API: Openlist Proxy - Admin
@@ -3224,7 +3156,7 @@ app.post('/api/meta/correct', adminMiddleware, async (req, res) => {
 
 // Admin override for TMDB by ID
 app.post('/api/meta/override', adminMiddleware, async (req, res) => {
-  const { query, type, year, tmdbId, customTitle, customYear, customLogo, path: itemPath } = req.body;
+  const { query, type, year, tmdbId, customTitle, customYear, customLogo, path: itemPath, updateLogoOnly, currentData } = req.body;
   if (!query || (!tmdbId && !customTitle && !customYear && customLogo === undefined)) return res.status(400).json({ error: 'Invalid data' });
 
   try {
@@ -3277,9 +3209,9 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       }
     };
 
-    if ((customTitle || customYear || customLogo !== undefined) && !tmdbId) {
+    if (updateLogoOnly || ((customTitle || customYear || customLogo !== undefined) && !tmdbId)) {
       // Just override title/year/logo in existing cache or create a mock
-      let data = tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || {};
+      let data = tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || currentData || {};
       if (customTitle) {
         data.title = customTitle;
         data.name = customTitle; // tv uses name
