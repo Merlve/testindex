@@ -1366,6 +1366,22 @@ export default function Details() {
   const releaseYear = (tmdb?.release_date || tmdb?.first_air_date)
     ? String(tmdb.release_date || tmdb.first_air_date).substring(0, 4)
     : (tmdb?.year || parseMediaName(name).year || '');
+    
+  const tmdbRating = tmdb?.vote_average ? Number(tmdb.vote_average).toFixed(1) : null;
+  let tmdbCountry = tmdb?.production_countries?.[0]?.name || '';
+  if (!tmdbCountry && tmdb?.origin_country?.[0]) {
+    try {
+      tmdbCountry = new Intl.DisplayNames(['en'], { type: 'region' }).of(tmdb.origin_country[0]) || tmdb.origin_country[0];
+    } catch (e) {
+      tmdbCountry = tmdb.origin_country[0];
+    }
+  }
+      
+  const metaInfoStr = [
+    tmdbRating ? `⭐${tmdbRating}` : null,
+    releaseYear,
+    tmdbCountry
+  ].filter(Boolean).join(' | ');
 
   if (loading) return <DetailsSkeleton />;
 
@@ -1482,10 +1498,10 @@ export default function Details() {
             </h1>
           )}
 
-          {/* Release Year */}
-          {releaseYear && (
-            <span className="mt-2 text-sm sm:text-base font-semibold text-gray-500 dark:text-gray-400 tracking-wider">
-              {releaseYear}
+          {/* Release Year & Meta Info */}
+          {metaInfoStr && (
+            <span className="mt-2 text-[8.5px] sm:text-[9.5px] font-semibold text-gray-500 dark:text-gray-400 tracking-wider">
+              {metaInfoStr}
             </span>
           )}
         </div>
