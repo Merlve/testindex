@@ -226,7 +226,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
             {Number(displayTmdb.vote_average).toFixed(1)}
           </div>
         )}
-        {displayTmdb?._synced && (
+        {user === 'admin' && displayTmdb?._synced && (
           <div 
             className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} ${viewMode === 'grid' ? (displayTmdb?.vote_average ? 'sm:top-2 sm:right-11' : 'sm:top-2 sm:right-2') : ''} p-1 rounded-md bg-black/85  text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
             title="Metadata synced in database (Cached)"

@@ -508,7 +508,10 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
       for (const t of typesToCheck) {
         if (!t) continue;
         const baseKey = `${t}-${baseQuery}`;
-        if (k === baseKey || k.startsWith(`${baseKey}-`)) return true;
+        if (k === baseKey) return true;
+        
+        // If year is not provided, allow falling back to a year-specific override
+        if (!year && k.startsWith(`${baseKey}-`)) return true;
       }
       return false;
     });
@@ -2225,7 +2228,12 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
       cacheKeyToUpdate = baseKey;
     } else {
       const prefix = `${type}-${baseQuery}`;
-      const foundKey = Object.keys(tmdbCache).find(k => k === baseKey || k.startsWith(`${prefix}-`) || k.startsWith(`${prefix}_`));
+      const foundKey = Object.keys(tmdbCache).find(k => {
+        if (k === baseKey) return true;
+        // Only allow fallback to year-specific cache if we didn't specify a year
+        if (!year && (k.startsWith(`${prefix}-`) || k.startsWith(`${prefix}_`))) return true;
+        return false;
+      });
       if (foundKey && tmdbCache[foundKey]) {
         cachedItem = tmdbCache[foundKey];
         cacheKeyToUpdate = foundKey;
@@ -3224,7 +3232,9 @@ app.post('/api/meta/correct', adminMiddleware, async (req, res) => {
   data._overridden = true;
   data._synced = true;
   tmdbCache[cacheKey] = data;
-  tmdbCache[baseKey] = data;
+  if (!year) {
+    tmdbCache[baseKey] = data;
+  }
   bumpMetaVersion();
   await saveDbImmediate();
   addLog('TMDB Corrected', 'Admin', `Corrected TMDB data for query: ${query} (Type: ${type})`);
@@ -3272,15 +3282,20 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       dataToStore._overridden = true;
       dataToStore._synced = true;
       tmdbCache[cacheKey] = dataToStore;
-      tmdbCache[baseKey] = dataToStore;
+      
+      if (!year) {
+        tmdbCache[baseKey] = dataToStore;
+      }
+      
       if (pathKey1) tmdbCache[pathKey1] = dataToStore;
       if (pathKey2) tmdbCache[pathKey2] = dataToStore;
 
-
-
-      // Update any other existing keys in tmdbCache that match baseKey or cleanPath
+      // Update any other existing keys in tmdbCache that match cleanPath
       for (const k of Object.keys(tmdbCache)) {
-        if (k === baseKey || k.startsWith(`${baseKey}-`) || (cleanPath && (k === `path-${cleanPath}` || k === `path-/${cleanPath}` || k.endsWith(`/${cleanPath}`)))) {
+        if (!year && k === baseKey) {
+          tmdbCache[k] = dataToStore;
+        }
+        if (cleanPath && (k === `path-${cleanPath}` || k === `path-/${cleanPath}` || k.endsWith(`/${cleanPath}`))) {
           tmdbCache[k] = dataToStore;
         }
       }
