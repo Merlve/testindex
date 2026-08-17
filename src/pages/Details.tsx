@@ -387,7 +387,8 @@ function FileRowItem({
   token, 
   config,
   isSelected,
-  toggleSelection
+  toggleSelection,
+  tmdbEpisode
 }: {
   file: any;
   itemPath: string;
@@ -399,6 +400,7 @@ function FileRowItem({
   config: any;
   isSelected: boolean;
   toggleSelection: () => void;
+  tmdbEpisode?: any;
 }) {
   const [copied, setCopied] = useState(false);
   const [actionLoading, setActionLoading] = useState<'copy' | 'download' | null>(null);
@@ -468,10 +470,22 @@ function FileRowItem({
         >
           {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
         </button>
+        {tmdbEpisode && tmdbEpisode.still_path && (
+          <img 
+            src={`https://image.tmdb.org/t/p/w185${tmdbEpisode.still_path}`} 
+            alt={tmdbEpisode.name} 
+            className={`hidden sm:block w-32 h-18 object-cover rounded-lg shrink-0 transition ${isWatched ? 'opacity-50 grayscale hover:grayscale-0 hover:opacity-100' : ''}`}
+          />
+        )}
         <div className="min-w-0 flex-1">
           <h4 className={`text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
-            {file.name}
+            {tmdbEpisode ? `${tmdbEpisode.episode_number}. ${tmdbEpisode.name}` : file.name}
           </h4>
+          {tmdbEpisode && tmdbEpisode.overview && (
+            <p className={`hidden sm:block text-[11px] mt-1 line-clamp-2 transition ${isWatched ? 'text-gray-500/70 dark:text-gray-500/70' : 'text-gray-600 dark:text-gray-400'}`}>
+              {tmdbEpisode.overview}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
             {meta.resolution && (
               <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${isWatched ? 'bg-gray-500/15 text-gray-500' : 'bg-purple-600/15 text-purple-600 dark:text-purple-300'}`}>
@@ -574,6 +588,7 @@ export default function Details() {
   
   const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(null);
   const [currentSeasonEpisodes, setCurrentSeasonEpisodes] = useState<any[]>([]);
+  const [tmdbSeasonData, setTmdbSeasonData] = useState<any>(null);
   const [loadingSeasonFiles, setLoadingSeasonFiles] = useState(false);
   const [baseRefresh, setBaseRefresh] = useState(0);
   const [seasonRefresh, setSeasonRefresh] = useState(0);
@@ -871,6 +886,33 @@ export default function Details() {
     return () => { isMounted = false; };
   }, [actualOpenlistPath, token, baseRefresh, user]);
 
+  // Fetch TMDB Season Data
+  useEffect(() => {
+    let isMounted = true;
+    if (!tmdb || !tmdb.id || activeSeasonIndex === null || !seasonItems[activeSeasonIndex]) {
+       setTmdbSeasonData(null);
+       return;
+    }
+    const selectedSeasonFolder = seasonItems[activeSeasonIndex];
+    let seasonNum = 1;
+    const match = selectedSeasonFolder.name.match(/season\s*(\d+)/i);
+    if (match) {
+      seasonNum = parseInt(match[1], 10);
+    } else if (/specials/i.test(selectedSeasonFolder.name)) {
+      seasonNum = 0; // standard for specials
+    }
+
+    axios.get(`/api/meta/tv_season?tvId=${tmdb.id}&season=${seasonNum}`)
+      .then(res => {
+         if (isMounted && res.data) setTmdbSeasonData(res.data);
+      })
+      .catch(() => {
+         if (isMounted) setTmdbSeasonData(null);
+      });
+      
+    return () => { isMounted = false; };
+  }, [tmdb, activeSeasonIndex, seasonItems]);
+
   // Fetch Season Episodes when active season changes
   useEffect(() => {
     if (user === 'guest' || activeSeasonIndex === null || !seasonItems[activeSeasonIndex]) {
@@ -891,7 +933,14 @@ export default function Details() {
         if (!isMounted) return;
         const content = res.data?.data?.content || [];
         const episodes = content.filter((item: any) => !item.is_dir && isVideoFile(item.name));
-        episodes.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        episodes.sort((a: any, b: any) => {
+          const metaA = extractFileMetadata(a.name, a.size);
+          const metaB = extractFileMetadata(b.name, b.size);
+          if (metaA.episodeNum !== null && metaB.episodeNum !== null) {
+            return metaA.episodeNum - metaB.episodeNum;
+          }
+          return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        });
         setCurrentSeasonEpisodes(episodes);
       })
       .catch(console.error)
@@ -1736,6 +1785,7 @@ export default function Details() {
                     const meta = extractFileMetadata(file.name, file.size);
                     const isWatched = watchedItems.some(i => i.name === file.name && i.parentPath === itemPath);
                     const isSelected = selectedFiles.some(i => i.file.name === file.name && i.path === itemPath);
+                    const tmdbEpisode = tmdbSeasonData?.episodes?.find((ep: any) => ep.episode_number === meta.episodeNum);
 
                     return (
                       <FileRowItem 
@@ -1750,6 +1800,7 @@ export default function Details() {
                         config={config}
                         isSelected={isSelected}
                         toggleSelection={() => toggleSelection(file, itemPath)}
+                        tmdbEpisode={tmdbEpisode}
                       />
                     );
                   })}
