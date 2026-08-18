@@ -56,16 +56,16 @@ export function extractFileMetadata(filename: string, fileSize?: number) {
 
   // Resolution
   let resolution = '';
-  if (/\b(2160p|4k|8k)\b/i.test(name)) resolution = '4K';
-  else if (/\b(1080p|1080i)\b/i.test(name)) resolution = '1080p';
-  else if (/\b720p\b/i.test(name)) resolution = '720p';
-  else if (/\b(480p|576p|360p)\b/i.test(name)) resolution = '480p';
+  if (/(2160p|4k|8k)/i.test(name)) resolution = '4K';
+  else if (/(1080p|1080i)/i.test(name)) resolution = '1080p';
+  else if (/(720p)/i.test(name)) resolution = '720p';
+  else if (/(480p|576p|360p)/i.test(name)) resolution = '480p';
 
   // Codec
   let codec = '';
-  if (/\b(hevc|h\.?265|x265|10bit)\b/i.test(name)) codec = 'HEVC';
-  else if (/\b(h\.?264|x264|avc)\b/i.test(name)) codec = 'H264';
-  else if (/\bav1\b/i.test(name)) codec = 'AV1';
+  if (/(hevc|h\.?265|x265|10bit)/i.test(name)) codec = 'HEVC';
+  else if (/(h\.?264|x264|avc)/i.test(name)) codec = 'H264';
+  else if (/(av1)/i.test(name)) codec = 'AV1';
 
   // Season & Episode numbers
   let seasonNum: number | null = null;

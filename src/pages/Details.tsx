@@ -452,6 +452,18 @@ function FileRowItem({
     setActionLoading(null);
   };
 
+  let fallbackTitle = file.name;
+  if (!tmdbEpisode) {
+      if (meta.seasonNum !== null && meta.episodeNum !== null) {
+          fallbackTitle = `S${meta.seasonNum.toString().padStart(2, '0')}E${meta.episodeNum.toString().padStart(2, '0')} - Episode ${meta.episodeNum}`;
+      } else if (meta.episodeNum !== null) {
+          fallbackTitle = `Ep ${meta.episodeNum.toString().padStart(2, '0')} - Episode ${meta.episodeNum}`;
+      } else {
+          const { cleanName } = parseMediaName(file.name);
+          fallbackTitle = cleanName !== 'Unknown' ? cleanName : file.name;
+      }
+  }
+
   return (
     <div 
       className={`p-3.5 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-4 ${
@@ -481,7 +493,7 @@ function FileRowItem({
           <h4 className={`text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
             {tmdbEpisode 
               ? `${meta.seasonNum !== null ? `S${meta.seasonNum.toString().padStart(2, '0')}E${tmdbEpisode.episode_number.toString().padStart(2, '0')}` : tmdbEpisode.episode_number}. ${tmdbEpisode.name}` 
-              : file.name}
+              : fallbackTitle}
           </h4>
           {tmdbEpisode && tmdbEpisode.overview && (
             <p className={`hidden sm:block text-[11px] mt-1 line-clamp-2 transition ${isWatched ? 'text-gray-500/70 dark:text-gray-500/70' : 'text-gray-600 dark:text-gray-400'}`}>
