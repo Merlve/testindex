@@ -479,7 +479,9 @@ function FileRowItem({
         )}
         <div className="min-w-0 flex-1">
           <h4 className={`text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
-            {tmdbEpisode ? `${tmdbEpisode.episode_number}. ${tmdbEpisode.name}` : file.name}
+            {tmdbEpisode 
+              ? `${meta.seasonNum !== null ? `S${meta.seasonNum.toString().padStart(2, '0')}E${tmdbEpisode.episode_number.toString().padStart(2, '0')}` : tmdbEpisode.episode_number}. ${tmdbEpisode.name}` 
+              : file.name}
           </h4>
           {tmdbEpisode && tmdbEpisode.overview && (
             <p className={`hidden sm:block text-[11px] mt-1 line-clamp-2 transition ${isWatched ? 'text-gray-500/70 dark:text-gray-500/70' : 'text-gray-600 dark:text-gray-400'}`}>
@@ -547,6 +549,13 @@ function FileRowItem({
   );
 }
 
+const getFolderSeasonNum = (pathStr: string): number | null => {
+  const match = pathStr.match(/(?:^|[^a-z])(?:season|s)[\s_.-]*(\d+)/i);
+  if (match) return parseInt(match[1], 10);
+  if (/(?:^|[^a-z])(specials|extras)/i.test(pathStr)) return 0;
+  return null;
+};
+
 export default function Details() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -588,7 +597,7 @@ export default function Details() {
   
   const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(null);
   const [currentSeasonEpisodes, setCurrentSeasonEpisodes] = useState<any[]>([]);
-  const [tmdbSeasonData, setTmdbSeasonData] = useState<any>(null);
+  const [tmdbSeasonsData, setTmdbSeasonsData] = useState<Record<number, any>>({});
   const [loadingSeasonFiles, setLoadingSeasonFiles] = useState(false);
   const [baseRefresh, setBaseRefresh] = useState(0);
   const [seasonRefresh, setSeasonRefresh] = useState(0);
@@ -888,30 +897,71 @@ export default function Details() {
 
   // Fetch TMDB Season Data
   useEffect(() => {
+    if (!tmdb || !tmdb.id) return;
     let isMounted = true;
-    if (!tmdb || !tmdb.id || activeSeasonIndex === null || !seasonItems[activeSeasonIndex]) {
-       setTmdbSeasonData(null);
-       return;
-    }
-    const selectedSeasonFolder = seasonItems[activeSeasonIndex];
-    let seasonNum = 1;
-    const match = selectedSeasonFolder.name.match(/season\s*(\d+)/i);
-    if (match) {
-      seasonNum = parseInt(match[1], 10);
-    } else if (/specials/i.test(selectedSeasonFolder.name)) {
-      seasonNum = 0; // standard for specials
+
+    const seasonsToFetch = new Set<number>();
+
+    // 1. From active season folder
+    if (seasonItems.length > 0 && activeSeasonIndex !== null && seasonItems[activeSeasonIndex]) {
+       let seasonNum = 1;
+       const match = seasonItems[activeSeasonIndex].name.match(/(?:^|[^a-z])(?:season|s)[\s_.-]*(\d+)/i);
+       if (match) {
+         seasonNum = parseInt(match[1], 10);
+       } else if (/specials|extras/i.test(seasonItems[activeSeasonIndex].name)) {
+         seasonNum = 0;
+       }
+       seasonsToFetch.add(seasonNum);
     }
 
-    axios.get(`/api/meta/tv_season?tvId=${tmdb.id}&season=${seasonNum}`)
-      .then(res => {
-         if (isMounted && res.data) setTmdbSeasonData(res.data);
-      })
-      .catch(() => {
-         if (isMounted) setTmdbSeasonData(null);
+    // 2. From baseItems (for shows without folders or inside a specific season folder)
+    if (seasonItems.length === 0 && baseItems.length > 0) {
+       const folderSeason = getFolderSeasonNum(actualOpenlistPath.split('/').pop() || '');
+       if (folderSeason !== null) {
+           seasonsToFetch.add(folderSeason);
+       }
+       baseItems.forEach(item => {
+         const meta = extractFileMetadata(item.name, item.size);
+         if (meta.seasonNum !== null) {
+           seasonsToFetch.add(meta.seasonNum);
+         }
+       });
+    }
+
+    // 3. From currentSeasonEpisodes (as fallback/additional source)
+    if (currentSeasonEpisodes.length > 0) {
+       currentSeasonEpisodes.forEach(item => {
+         const meta = extractFileMetadata(item.name, item.size);
+         if (meta.seasonNum !== null) {
+           seasonsToFetch.add(meta.seasonNum);
+         } else if (seasonItems[activeSeasonIndex || 0]) {
+           const folderSeason = getFolderSeasonNum(seasonItems[activeSeasonIndex || 0].name);
+           if (folderSeason !== null) {
+             seasonsToFetch.add(folderSeason);
+           }
+         }
+       });
+    }
+
+    seasonsToFetch.forEach(seasonNum => {
+      setTmdbSeasonsData(prev => {
+         if (prev[seasonNum] !== undefined) return prev; // Already fetched or loading
+         
+         // Fetch new season data
+         axios.get(`/api/meta/tv_season?tvId=${tmdb.id}&season=${seasonNum}`)
+           .then(res => {
+              if (isMounted && res.data) {
+                 setTmdbSeasonsData(p => ({ ...p, [seasonNum]: res.data }));
+              }
+           })
+           .catch(() => {});
+           
+         return { ...prev, [seasonNum]: null };
       });
-      
+    });
+
     return () => { isMounted = false; };
-  }, [tmdb, activeSeasonIndex, seasonItems]);
+  }, [tmdb, activeSeasonIndex, seasonItems, baseItems, currentSeasonEpisodes]);
 
   // Fetch Season Episodes when active season changes
   useEffect(() => {
@@ -1783,9 +1833,15 @@ export default function Details() {
                     const selectedSeasonFolder = seasonItems[activeSeasonIndex || 0];
                     const itemPath = `${actualOpenlistPath.replace(/^\/+/, '')}/${selectedSeasonFolder.name}`;
                     const meta = extractFileMetadata(file.name, file.size);
+                    if (meta.seasonNum === null) {
+                        const folderSeason = getFolderSeasonNum(selectedSeasonFolder.name);
+                        if (folderSeason !== null) {
+                            meta.seasonNum = folderSeason;
+                        }
+                    }
                     const isWatched = watchedItems.some(i => i.name === file.name && i.parentPath === itemPath);
                     const isSelected = selectedFiles.some(i => i.file.name === file.name && i.path === itemPath);
-                    const tmdbEpisode = tmdbSeasonData?.episodes?.find((ep: any) => ep.episode_number === meta.episodeNum);
+                    const tmdbEpisode = (meta.seasonNum !== null ? tmdbSeasonsData[meta.seasonNum] : null)?.episodes?.find((ep: any) => ep.episode_number === meta.episodeNum);
 
                     return (
                       <FileRowItem 
@@ -1819,8 +1875,15 @@ export default function Details() {
                       itemPath = itemPath.substring(0, itemPath.lastIndexOf('/')) || '';
                   }
                   const meta = extractFileMetadata(file.name, file.size);
+                  if (meta.seasonNum === null) {
+                      const folderSeason = getFolderSeasonNum(actualOpenlistPath.split('/').pop() || '');
+                      if (folderSeason !== null) {
+                          meta.seasonNum = folderSeason;
+                      }
+                  }
                   const isWatched = watchedItems.some(i => i.name === file.name && i.parentPath === itemPath);
                   const isSelected = selectedFiles.some(i => i.file.name === file.name && i.path === itemPath);
+                  const tmdbEpisode = (meta.seasonNum !== null ? tmdbSeasonsData[meta.seasonNum] : null)?.episodes?.find((ep: any) => ep.episode_number === meta.episodeNum);
 
                   return (
                     <FileRowItem 
@@ -1835,6 +1898,7 @@ export default function Details() {
                       config={config}
                       isSelected={isSelected}
                       toggleSelection={() => toggleSelection(file, itemPath)}
+                      tmdbEpisode={tmdbEpisode}
                     />
                   );
                 })}

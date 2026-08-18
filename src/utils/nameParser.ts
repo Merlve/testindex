@@ -1,7 +1,18 @@
 export function parseMediaName(rawName: string) {
   const baseName = rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
   let cleanName = baseName;
+
+  // Strip common season/episode patterns so they don't break TMDB search
+  // e.g. S01E01, S01, E01, Season 1
+  const seMatch = cleanName.match(/(?:^|[._\-\s])([sS]\d{1,2}[eE]\d{1,3}|[sS]\d{1,2}[\s\-]*(?:[eE][pP]?)?\s*\d{1,3}|[eE]\d{1,3}(?:-[eE]?\d{1,3})?|[eE][pP]?(?:isode)?\s*\d{1,3}|[sS]eason\s*\d{1,2})(?:[._\-\s]|$)/i);
   
+  if (seMatch && seMatch.index !== undefined && seMatch.index > 0) {
+      cleanName = cleanName.substring(0, seMatch.index);
+  } else {
+      // If it starts with it, just replace it
+      cleanName = cleanName.replace(/(?:^|[._\-\s])([sS]\d{1,2}[eE]\d{1,3}|[sS]\d{1,2}[\s\-]*(?:[eE][pP]?)?\s*\d{1,3}|[eE]\d{1,3}(?:-[eE]?\d{1,3})?|[eE][pP]?(?:isode)?\s*\d{1,3}|[sS]eason\s*\d{1,2})(?:[._\-\s]|$)/gi, " ");
+  }
+
   // Extract year FIRST
   const yearRegex = /(?:^|[._\-\s\(])(19\d{2}|20\d{2})(?:[._\-\s\)]|$)/g;
   let match;
