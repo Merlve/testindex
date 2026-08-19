@@ -16,193 +16,643 @@ security:
 paths:
   /api/downloads/track:
     post:
-      summary: Track a download
+      summary: POST /api/downloads/track
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                itemTitle:
-                  type: string
-                downloadType:
-                  type: string
-                size:
-                  type: string
       responses:
         '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
+  /api/image-proxy:
+    get:
+      summary: GET /api/image-proxy
+      responses:
+        '200':
+          description: Success
   /api/downloads/top:
     get:
-      summary: Get top downloads
+      summary: GET /api/downloads/top
       responses:
         '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
   /api/downloads/clear:
     post:
-      summary: Clear download history
+      summary: POST /api/downloads/clear
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         '200':
           description: Success
   /api/watchlist:
     get:
-      summary: Get user watchlist
+      summary: GET /api/watchlist
       responses:
         '200':
           description: Success
   /api/watchlist/toggle:
     post:
-      summary: Toggle watchlist item
+      summary: POST /api/watchlist/toggle
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                item:
-                  type: object
+      responses:
+        '200':
+          description: Success
+  /api/watchlist/check:
+    get:
+      summary: GET /api/watchlist/check
       responses:
         '200':
           description: Success
   /api/watched:
     get:
-      summary: Get user watched list
+      summary: GET /api/watched
       responses:
         '200':
           description: Success
   /api/watched/toggle:
     post:
-      summary: Toggle watched item
+      summary: POST /api/watched/toggle
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                item:
-                  type: object
       responses:
         '200':
           description: Success
   /api/watched/bulk-toggle:
     post:
-      summary: Bulk toggle watched items
+      summary: POST /api/watched/bulk-toggle
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                items:
-                  type: array
-                  items:
-                    type: object
       responses:
         '200':
           description: Success
   /api/recommendations:
     get:
-      summary: Get personalized recommendations
+      summary: GET /api/recommendations
       responses:
         '200':
           description: Success
   /api/config:
     get:
-      summary: Get app config
+      summary: GET /api/config
       responses:
         '200':
           description: Success
     post:
-      summary: Save app config
+      summary: POST /api/config
       requestBody:
         content:
           application/json:
             schema:
               type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/unrelease:
+    post:
+      summary: POST /api/meta/unrelease
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/digital-path:
+    post:
+      summary: POST /api/meta/digital-path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/users/expirations:
+    get:
+      summary: GET /api/users/expirations
+      responses:
+        '200':
+          description: Success
+    post:
+      summary: POST /api/users/expirations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/admin/sessions:
+    get:
+      summary: GET /api/admin/sessions
+      responses:
+        '200':
+          description: Success
+  /api/admin/sessions/terminate:
+    post:
+      summary: POST /api/admin/sessions/terminate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/admin/logs:
+    get:
+      summary: GET /api/admin/logs
+      responses:
+        '200':
+          description: Success
+  /api/admin/logs/download:
+    get:
+      summary: GET /api/admin/logs/download
+      responses:
+        '200':
+          description: Success
+  /api/admin/logs/clear-debug:
+    post:
+      summary: POST /api/admin/logs/clear-debug
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/admin/log:
+    post:
+      summary: POST /api/admin/log
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/admin/clear-cache:
+    post:
+      summary: POST /api/admin/clear-cache
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/admin/db/download:
+    get:
+      summary: GET /api/admin/db/download
+      responses:
+        '200':
+          description: Success
+  /api/admin/diagnostic:
+    get:
+      summary: GET /api/admin/diagnostic
       responses:
         '200':
           description: Success
   /api/auth/login:
     post:
-      summary: Authenticate user
-      security: []
+      summary: POST /api/auth/login
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                password:
-                  type: string
       responses:
         '200':
           description: Success
   /api/auth/guest_login:
     post:
-      summary: Guest login
-      security: []
+      summary: POST /api/auth/guest_login
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                username:
-                  type: string
       responses:
         '200':
           description: Success
   /api/auth/me:
     get:
-      summary: Get current user
+      summary: GET /api/auth/me
       responses:
         '200':
           description: Success
-  /api/meta/search:
-    get:
-      summary: Search metadata
-      parameters:
-        - name: query
-          in: query
-          schema:
-            type: string
-        - name: type
-          in: query
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Success
-  /api/jellyfin/recently-added:
-    get:
-      summary: Get Jellyfin recently added
-      responses:
-        '200':
-          description: Success
-  /api/chat:
+  /api/details/save:
     post:
-      summary: Chat with AI assistant
+      summary: POST /api/details/save
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                prompt:
-                  type: string
+      responses:
+        '200':
+          description: Success
+  /api/details/preload:
+    post:
+      summary: POST /api/details/preload
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/fs/list:
+    post:
+      summary: POST /api/fs/list
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/fs/get:
+    post:
+      summary: POST /api/fs/get
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/fs/remove:
+    post:
+      summary: POST /api/fs/remove
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/fs/search:
+    post:
+      summary: POST /api/fs/search
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/search_all:
+    get:
+      summary: GET /api/meta/search_all
+      responses:
+        '200':
+          description: Success
+  /api/meta/batch:
+    post:
+      summary: POST /api/meta/batch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/version:
+    get:
+      summary: GET /api/meta/version
+      responses:
+        '200':
+          description: Success
+  /api/meta/search:
+    get:
+      summary: GET /api/meta/search
+      responses:
+        '200':
+          description: Success
+  /api/meta/videos:
+    get:
+      summary: GET /api/meta/videos
+      responses:
+        '200':
+          description: Success
+  /api/meta/images:
+    get:
+      summary: GET /api/meta/images
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_files/status:
+    get:
+      summary: GET /api/meta/scan_files/status
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_files/start:
+    post:
+      summary: POST /api/meta/scan_files/start
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_files/stop:
+    post:
+      summary: POST /api/meta/scan_files/stop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_images/status:
+    get:
+      summary: GET /api/meta/scan_images/status
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_images/start:
+    post:
+      summary: POST /api/meta/scan_images/start
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_images/stop:
+    post:
+      summary: POST /api/meta/scan_images/stop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/tv_details:
+    get:
+      summary: GET /api/meta/tv_details
+      responses:
+        '200':
+          description: Success
+  /api/meta/tv_season:
+    get:
+      summary: GET /api/meta/tv_season
+      responses:
+        '200':
+          description: Success
+  /api/meta/collections:
+    get:
+      summary: GET /api/meta/collections
+      responses:
+        '200':
+          description: Success
+  /api/user-collections:
+    get:
+      summary: GET /api/user-collections
+      responses:
+        '200':
+          description: Success
+    post:
+      summary: POST /api/user-collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/user-collections/{id}:
+    get:
+      summary: GET /api/user-collections/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    put:
+      summary: PUT /api/user-collections/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: DELETE /api/user-collections/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /api/user-collections/{id}/upvote:
+    post:
+      summary: POST /api/user-collections/{id}/upvote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/genres/backdrops:
+    get:
+      summary: GET /api/meta/genres/backdrops
+      responses:
+        '200':
+          description: Success
+  /api/meta/genre/{genreId}:
+    get:
+      summary: GET /api/meta/genre/{genreId}
+      parameters:
+        - name: genreId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /api/meta/discover:
+    get:
+      summary: GET /api/meta/discover
+      responses:
+        '200':
+          description: Success
+  /api/meta/trending:
+    get:
+      summary: GET /api/meta/trending
+      responses:
+        '200':
+          description: Success
+  /api/meta/correct:
+    post:
+      summary: POST /api/meta/correct
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/override:
+    post:
+      summary: POST /api/meta/override
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_collections/status:
+    get:
+      summary: GET /api/meta/scan_collections/status
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_collections/start:
+    post:
+      summary: POST /api/meta/scan_collections/start
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/scan_collections/stop:
+    post:
+      summary: POST /api/meta/scan_collections/stop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/autofetch/status:
+    get:
+      summary: GET /api/meta/autofetch/status
+      responses:
+        '200':
+          description: Success
+  /api/meta/autofetch/start:
+    post:
+      summary: POST /api/meta/autofetch/start
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/meta/autofetch/stop:
+    post:
+      summary: POST /api/meta/autofetch/stop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/jellyfin/recently-added:
+    get:
+      summary: GET /api/jellyfin/recently-added
+      responses:
+        '200':
+          description: Success
+  /api/chat:
+    post:
+      summary: POST /api/chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/jellyfin/override:
+    post:
+      summary: POST /api/jellyfin/override
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/jellyfin/overrides:
+    get:
+      summary: GET /api/jellyfin/overrides
       responses:
         '200':
           description: Success
