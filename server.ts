@@ -1845,11 +1845,13 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
         if (response2.data && response2.data.code === 200 && response2.data.data && response2.data.data.content) {
           const content2 = response2.data.data.content;
           // Merge results uniquely
-          const seen = new Set(content.map((item: any) => item.path || item.name));
+          const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+          const seen = new Set(content.map(getUniqId));
           for (const item of content2) {
-             if (!seen.has(item.path || item.name)) {
+             const uid = getUniqId(item);
+             if (!seen.has(uid)) {
                  content.push(item);
-                 seen.add(item.path || item.name);
+                 seen.add(uid);
              }
           }
         }
@@ -1864,11 +1866,13 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
         const response3 = await axios.post(url, reqBody3, { headers: { Authorization: token } });
         if (response3.data && response3.data.code === 200 && response3.data.data && response3.data.data.content) {
           const content3 = response3.data.data.content;
-          const seen = new Set(content.map((item: any) => item.path || item.name));
+          const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+          const seen = new Set(content.map(getUniqId));
           for (const item of content3) {
-             if (!seen.has(item.path || item.name)) {
+             const uid = getUniqId(item);
+             if (!seen.has(uid)) {
                  content.push(item);
-                 seen.add(item.path || item.name);
+                 seen.add(uid);
              }
           }
         }
@@ -1898,48 +1902,92 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
         });
 
         if (matchingKeys.length > 0) {
-          const keysByCategory: Record<string, Set<string>> = {};
+          const extractedCleanNames = new Set<string>();
           for (const key of matchingKeys) {
+            if (key.startsWith('path-')) {
+               const p = key.substring(5);
+               const parts = p.split('/');
+               const name = parts.pop();
+               const parent = parts.join('/') || '/';
+               if (name) {
+                  const exists = content.some((c: any) => c.name === name && c.parent === parent);
+                  if (!exists) {
+                     content.push({ name, parent, is_dir: true, size: 0 });
+                  }
+               }
+               continue;
+            }
+            
             const catMatch = key.match(/^([^-]+)-/);
             if (catMatch) {
-               const cat = catMatch[1];
-               if (!keysByCategory[cat]) keysByCategory[cat] = new Set();
-               keysByCategory[cat].add(key);
+               let cleanName = key.substring(catMatch[1].length + 1);
+               if (/\-\d{4}$/.test(cleanName)) {
+                 cleanName = cleanName.substring(0, cleanName.length - 5);
+               }
+               if (cleanName.length >= 2) {
+                 extractedCleanNames.add(cleanName);
+               }
             }
           }
 
-          const listUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/list`;
-          for (const cat of Object.keys(keysByCategory)) {
+          if (keywords && typeof keywords === 'string' && keywords.length >= 3 && !/^\d+$/.test(keywords.trim()) && process.env.TMDB_API_KEY) {
              try {
-                const listRes = await axios.post(listUrl, { path: `/home/${cat}`, password: "" }, { headers: { Authorization: token }});
-                if (listRes.data && listRes.data.code === 200 && listRes.data.data && listRes.data.data.content) {
-                   const items = listRes.data.data.content;
-                   for (const item of items) {
-                      const parsed = parseMediaName(item.name);
-                      const itemCacheKey = `${cat}-${parsed.cleanName.toLowerCase()}${parsed.year ? `-${parsed.year}` : ''}`;
-                      if (keysByCategory[cat].has(itemCacheKey)) {
-                         const fullPath = `/home/${cat}`;
-                         const exists = content.some((c: any) => c.name === item.name && c.parent === fullPath);
-                         if (!exists) {
-                            content.push({
-                               name: item.name,
-                               parent: fullPath,
-                               is_dir: item.is_dir,
-                               size: item.size
-                            });
-                         }
+                const multiRes = await axios.get(`https://api.themoviedb.org/3/search/multi?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(keywords.trim())}`);
+                if (multiRes.data && multiRes.data.results) {
+                   const topResults = multiRes.data.results.slice(0, 2);
+                   for (const r of topResults) {
+                       if (r.title && r.title.length >= 2) extractedCleanNames.add(r.title.toLowerCase());
+                       if (r.name && r.name.length >= 2) extractedCleanNames.add(r.name.toLowerCase());
+                       if (r.original_title && r.original_title.length >= 2) extractedCleanNames.add(r.original_title.toLowerCase());
+                       if (r.original_name && r.original_name.length >= 2) extractedCleanNames.add(r.original_name.toLowerCase());
+                   }
+                }
+             } catch(e) {}
+          }
+
+          for (const cleanName of extractedCleanNames) {
+             const reqBodyClean = { ...reqBody1, keywords: cleanName };
+             try {
+                const responseClean = await axios.post(url, reqBodyClean, { headers: { Authorization: token } });
+                if (responseClean.data && responseClean.data.code === 200 && responseClean.data.data && responseClean.data.data.content) {
+                   const contentClean = responseClean.data.data.content;
+                   const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+                   const seen = new Set(content.map(getUniqId));
+                   for (const item of contentClean) {
+                      const uid = getUniqId(item);
+                      if (!seen.has(uid)) {
+                          content.push(item);
+                          seen.add(uid);
                       }
                    }
                 }
-             } catch (e) {
-                // silently ignore list errors
-             }
+             } catch (err) {}
           }
         }
       }
     } catch (e) {
        console.error("TMDB Cache search error", e);
     }
+
+    // Clean parent paths to ensure strict standardization across sources
+    content.forEach((item: any) => {
+       if (item.parent) {
+          // Normalize leading slashes
+          item.parent = '/' + item.parent.replace(/^\/+/, '');
+       }
+    });
+
+    // Final dedup to be absolutely sure no duplicates sneak in due to casing or slash differences
+    const finalSeen = new Set();
+    const dedupedContent = [];
+    for (const item of content) {
+       const uid = (item.parent + '/' + item.name).toLowerCase();
+       if (!finalSeen.has(uid)) {
+          finalSeen.add(uid);
+          dedupedContent.push(item);
+       }
+    }
+    content = dedupedContent;
 
     // Filter results to avoid nuisance
     const isVideo = (name: any) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(String(name));

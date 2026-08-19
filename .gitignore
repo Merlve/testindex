@@ -37,3 +37,4 @@ test*.cjs
 *.py
 *.tmp
 
+watched/

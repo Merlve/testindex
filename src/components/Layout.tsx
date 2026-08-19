@@ -526,6 +526,9 @@ export default function Layout() {
                      transition={{ duration: 0.3 }}
                      className="flex items-center gap-1 overflow-hidden"
                    >
+                     <button onClick={() => navigate('/watchlist')} className="flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 shrink-0" title="Watchlist">
+                       <Bookmark size={20} />
+                     </button>
                      <button onClick={() => navigate('/collections')} className="flex items-center justify-center h-10 px-3.5 md:h-12 md:px-4 rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 shrink-0 gap-2 font-semibold text-sm" title="Collections">
                        <Library size={20} />
                        <span>Collections</span>

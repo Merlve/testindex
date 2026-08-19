@@ -1116,7 +1116,11 @@ export default function Details() {
     }
     
     try {
-      await axios.post('/api/watched/toggle', { name: itemName, parentPath: itemPath }, { headers: { 'x-user': user } });
+      const res = await axios.post('/api/watched/toggle', { name: itemName, parentPath: itemPath }, { headers: { 'x-user': user } });
+      if (res.data?.success) {
+        queryClient.setQueryData(['watched-list', user], res.data.watched || []);
+        queryClient.invalidateQueries({ queryKey: ['watched-list', user] });
+      }
     } catch (e) {
       console.error(e);
     }

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
   User, 
@@ -47,20 +47,34 @@ interface RecentlyBrowsedItem {
   timestamp?: number;
 }
 
+import { useLocation } from 'react-router';
 export default function Profile() {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
-  const [watchedList, setWatchedList] = useState<any[]>([]);
+  // Use React Query for watched list to sync across components instantly
+  const { data: watchedList = [] } = useQuery<any[]>({
+    queryKey: ['watched-list', user],
+    queryFn: async () => {
+      if (!user || user === 'guest') return [];
+      const res = await axios.get('/api/watched', { headers: { Authorization: token || '', 'x-user': user || '' } });
+      return Array.isArray(res.data) ? res.data : (res.data?.watched || []);
+    },
+    enabled: !!user && user !== 'guest',
+    staleTime: 1000 * 60 * 5,
+  });
   const [recentlyBrowsed, setRecentlyBrowsed] = useState<RecentlyBrowsedItem[]>([]);
   const [expirationDate, setExpirationDate] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'top_downloads' | 'watchlist' | 'watched' | 'history' | 'account'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'top_downloads' | 'watchlist' | 'watched' | 'history' | 'account'>(
+    (location.state as any)?.tab || 'overview'
+  );
   const [watchedFilter, setWatchedFilter] = useState<'all' | 'movie' | 'show' | 'episode'>('all');
   const [watchedSearchQuery, setWatchedSearchQuery] = useState('');
   const [inactivityTimeout, setInactivityTimeout] = useState<number>(0);
@@ -78,17 +92,13 @@ export default function Profile() {
         axios.get('/api/config').catch(() => ({ data: {} })),
         axios.get(`/api/users/expirations?t=${Date.now()}`, { headers: { Authorization: token || '' } }).catch(() => ({ data: {} })),
         axios.get('/api/auth/me', { headers: { Authorization: token || '' } }).catch(() => ({ data: null })),
-        axios.get('/api/downloads/top').catch(() => ({ data: { topDownloads: [], totalTracked: 0 } })),
-        axios.get('/api/watched', { headers: { 'x-user': user || '', Authorization: token || '' } }).catch(() => ({ data: [] }))
+        axios.get('/api/downloads/top').catch(() => ({ data: { topDownloads: [], totalTracked: 0 } }))
       ]);
 
       setWatchlist(watchlistRes.data || []);
       setRecommendations(recsRes.data?.results || []);
       setTopDownloads(topDownloadsRes.data?.topDownloads || []);
       setTotalTracked(topDownloadsRes.data?.totalTracked || 0);
-
-      const rawWatched = Array.isArray(watchedRes.data) ? watchedRes.data : (watchedRes.data?.watched || []);
-      setWatchedList(rawWatched);
 
       if (configRes.data && configRes.data.inactivityTimeout) {
         setInactivityTimeout(configRes.data.inactivityTimeout);
@@ -272,7 +282,6 @@ export default function Profile() {
         headers: { Authorization: token || '', 'x-user': user || '' }
       });
       const updated = Array.isArray(res.data) ? res.data : (res.data?.watched || []);
-      setWatchedList(updated);
       queryClient.setQueryData(['watched-list', user], updated);
       queryClient.invalidateQueries({ queryKey: ['watched-list', user] });
     } catch (err) {
