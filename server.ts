@@ -1904,20 +1904,6 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
         if (matchingKeys.length > 0) {
           const extractedCleanNames = new Set<string>();
           for (const key of matchingKeys) {
-            if (key.startsWith('path-')) {
-               const p = key.substring(5);
-               const parts = p.split('/');
-               const name = parts.pop();
-               const parent = parts.join('/') || '/';
-               if (name) {
-                  const exists = content.some((c: any) => c.name === name && c.parent === parent);
-                  if (!exists) {
-                     content.push({ name, parent, is_dir: true, size: 0 });
-                  }
-               }
-               continue;
-            }
-            
             const catMatch = key.match(/^([^-]+)-/);
             if (catMatch) {
                let cleanName = key.substring(catMatch[1].length + 1);
