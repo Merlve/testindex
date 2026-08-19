@@ -220,7 +220,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
           className="absolute inset-0 w-full h-full z-0" 
           fallbackText={item.name}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
+        
         {displayTmdb?.vote_average && (
           <div className={`absolute top-1 right-1 ${viewMode === 'grid' ? 'sm:top-2 sm:right-2' : ''} px-1 sm:px-1.5 py-0.5 bg-black/85  rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20`}>
             {Number(displayTmdb.vote_average).toFixed(1)}
