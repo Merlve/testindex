@@ -472,7 +472,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main ref={mainRef} className="flex-1 overflow-y-auto relative bg-[#fffcf9] dark:bg-[#08080a] pt-16">
+      <main ref={mainRef} className={`flex-1 overflow-y-auto relative bg-[#fffcf9] dark:bg-[#08080a] ${location.pathname.startsWith('/home/') ? 'pt-0' : 'pt-16'}`}>
         <ScrollRestorer 
           scrollKey={location.key} 
           locationPathAndSearch={location.pathname + location.search} 

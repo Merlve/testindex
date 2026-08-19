@@ -8,7 +8,7 @@ import {
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
   X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
 import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
@@ -571,6 +571,8 @@ const getFolderSeasonNum = (pathStr: string): number | null => {
 export default function Details() {
   const navigate = useNavigate();
   const location = useLocation();
+  
+
   const { '*' : paramPath } = useParams();
   const fullPath = paramPath ? `home/${paramPath}` : 'home';
   const pathParts = fullPath ? fullPath.split('/') : [];
@@ -642,6 +644,8 @@ export default function Details() {
   const [customLogoInput, setCustomLogoInput] = useState('');
   const [savingLogo, setSavingLogo] = useState(false);
   const [logoSearchQuery, setLogoSearchQuery] = useState('');
+
+
   const [searchingLogos, setSearchingLogos] = useState(false);
   const [logoSearchResults, setLogoSearchResults] = useState<any[]>([]);
   const [activeLogoTmdb, setActiveLogoTmdb] = useState<any>(null);
@@ -653,6 +657,42 @@ export default function Details() {
   const [watchedItems, setWatchedItems] = useState<any[]>([]);
   const [isPlotExpanded, setIsPlotExpanded] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  // Parallax backdrop (pins backdrop until logo reaches the top bar)
+  const logoContainerRef = useRef<HTMLDivElement>(null);
+  const [parallaxThreshold, setParallaxThreshold] = useState(350);
+
+  useEffect(() => {
+    // Find the scrolling container element (<main> in Layout, or window as fallback)
+    const mainEl = logoContainerRef.current?.closest('main') || document.querySelector('main');
+    if (!mainEl) return;
+
+    const calculateThreshold = () => {
+      if (!logoContainerRef.current || !mainEl) return;
+      const mainRect = mainEl.getBoundingClientRect();
+      const logoRect = logoContainerRef.current.getBoundingClientRect();
+      // Calculate true distance from top of scroll viewport to the logo
+      const logoOffsetInMain = (logoRect.top - mainRect.top) + mainEl.scrollTop;
+      // Stop fixing the backdrop when logo is docked ~75px from top (below top nav)
+      const calculatedThreshold = Math.max(0, logoOffsetInMain - 75);
+      setParallaxThreshold(calculatedThreshold > 50 ? calculatedThreshold : 350);
+    };
+
+    calculateThreshold();
+
+    window.addEventListener('resize', calculateThreshold, { passive: true });
+
+    // Recalculate after image/logo render passes
+    const timer1 = setTimeout(calculateThreshold, 150);
+    const timer2 = setTimeout(calculateThreshold, 600);
+
+    return () => {
+      window.removeEventListener('resize', calculateThreshold);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [tmdb, logoUrl, name]);
+
   
   // Batch selection state
   const [selectedFiles, setSelectedFiles] = useState<{file: any, path: string}[]>([]);
@@ -1502,7 +1542,7 @@ export default function Details() {
 
   return (
     <div 
-      className="details-page-root -mt-16 min-h-screen text-black dark:text-white pb-24 relative overflow-hidden transition-colors duration-700 ease-out"
+      className="details-page-root min-h-screen text-black dark:text-white pb-24 relative transition-colors duration-700 ease-out"
       style={{
         backgroundColor: 'var(--page-bg)',
         '--page-bg': colorPalette ? colorPalette.bgLight : '#fffcf9',
@@ -1532,13 +1572,6 @@ export default function Details() {
         }
       `}</style>
 
-      {/* Ambient Dominant Color Glow / Tint Layer */}
-      {colorPalette && (
-        <div 
-          className="hero-glow absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[650px] pointer-events-none z-0 blur-3xl opacity-70 dark:opacity-75 transition-opacity duration-1000"
-        />
-      )}
-
       {/* Toast Notification */}
       <AnimatePresence>
         {toast && (
@@ -1553,53 +1586,77 @@ export default function Details() {
         )}
       </AnimatePresence>
 
-      {/* Hero Backdrop Banner */}
+      {/* Responsive variables for sticky parallax container */}
+      <style>{`
+        .details-page-root { --backdrop-h: 50vh; }
+        @media (min-width: 640px) { .details-page-root { --backdrop-h: 60vh; } }
+        @media (min-width: 768px) { .details-page-root { --backdrop-h: 70vh; } }
+      `}</style>
+
+      {/* Placeholder to push content down into normal flow */}
+      <div className="w-full h-[var(--backdrop-h)] pointer-events-none" />
+
+      {/* Sticky Parallax Container */}
       <div 
-        className="relative w-full h-[50vh] sm:h-[60vh] md:h-[70vh] pointer-events-none"
-        style={{
-          WebkitMaskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
-          maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)'
-        }}
+        className="absolute top-0 left-0 w-full z-0 pointer-events-none"
+        style={{ height: `calc(var(--backdrop-h) + ${parallaxThreshold}px)` }}
       >
-        {backdropUrl && (
-          <img 
-            src={backdropUrl} 
-            alt={tmdb?.title || tmdb?.name || name} 
-            className="w-full h-full object-cover object-center sm:object-top opacity-100 dark:opacity-85 pointer-events-none transition-opacity duration-700"
-          />
-        )}
-
-        {/* Contrast Overlay - ensures text readability while preserving image brightness */}
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent from-40% to-white/40 dark:to-black/70 transition-colors duration-700" />
-
-        {/* 1. Standard Color Tint - Guarantees color is physically added to the pixels regardless of dark/light backdrop */}
-        {colorPalette && (
+        <div className="sticky top-0 w-full h-[var(--backdrop-h)]">
+          {/* Ambient Dominant Color Glow / Tint Layer */}
+          {colorPalette && (
+            <div 
+              className="hero-glow absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[650px] pointer-events-none z-0 blur-3xl opacity-70 dark:opacity-75 transition-opacity duration-1000"
+            />
+          )}
+          
           <div 
-            className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-50 transition-opacity duration-700"
+            className="absolute inset-0 w-full h-full overflow-hidden"
             style={{
-              background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
+              WebkitMaskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
+              maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)'
             }}
-          />
-        )}
-        
-        {/* 2. Vibrant Screen Layer (Dark Mode Only) - Prevents colors from being crushed by dark backgrounds */}
-        {colorPalette && (
-          <div 
-            className="absolute inset-0 pointer-events-none hidden dark:block mix-blend-screen opacity-40 transition-opacity duration-700"
-            style={{
-              background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
-            }}
-          />
-        )}
-        
-        {/* Gradients to blend into the dynamic background seamlessly */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10" />
+          >
+            {backdropUrl && (
+              <img 
+                src={backdropUrl} 
+                alt={tmdb?.title || tmdb?.name || name} 
+                className="w-full h-full object-cover object-center sm:object-top opacity-100 dark:opacity-85 pointer-events-none transition-opacity duration-700"
+              />
+            )}
+
+            {/* Contrast Overlay - ensures text readability while preserving image brightness */}
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent from-40% to-white/40 dark:to-black/70 transition-colors duration-700" />
+
+            {/* 1. Standard Color Tint - Guarantees color is physically added to the pixels regardless of dark/light backdrop */}
+            {colorPalette && (
+              <div 
+                className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-50 transition-opacity duration-700"
+                style={{
+                  background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
+                }}
+              />
+            )}
+            
+            {/* 2. Vibrant Screen Layer (Dark Mode Only) - Prevents colors from being crushed by dark backgrounds */}
+            {colorPalette && (
+              <div 
+                className="absolute inset-0 pointer-events-none hidden dark:block mix-blend-screen opacity-40 transition-opacity duration-700"
+                style={{
+                  background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
+                }}
+              />
+            )}
+            
+            {/* Gradients to blend into the dynamic background seamlessly */}
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10" />
+          </div>
+        </div>
       </div>
 
       {/* Content Section positioned below the backdrop with slight overlap */}
       <div className="relative z-20 flex flex-col items-center max-w-4xl mx-auto space-y-5 px-4 sm:px-8 -mt-24 sm:-mt-32 text-center">
         {/* Title or Logo and Subtitle Year */}
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center" ref={logoContainerRef}>
           {logoUrl ? (
             <img 
               src={logoUrl} 
@@ -1636,72 +1693,74 @@ export default function Details() {
         )}
 
         {/* Action Buttons Row */}
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-          <button
-            onClick={handleToggleWatchlist}
-            title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
-            className="p-3 sm:p-3.5 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white backdrop-blur-md border border-black/10 dark:border-white/15 transition flex items-center justify-center shadow-lg cursor-pointer"
-          >
-            {inWatchlist ? (
-              <BookmarkCheck size={20} className="text-purple-600 dark:text-purple-400" />
-            ) : (
-              <Bookmark size={20} />
-            )}
-          </button>
-
-          <button
-            onClick={handleWatchTrailer}
-            disabled={loadingTrailer}
-            title="Watch Trailer on YouTube"
-            className="p-3 sm:p-3.5 rounded-xl bg-red-600/15 dark:bg-red-500/20 hover:bg-red-600/25 dark:hover:bg-red-500/30 active:scale-95 text-red-600 dark:text-red-400 backdrop-blur-md border border-red-500/30 dark:border-red-500/30 transition flex items-center justify-center shadow-lg cursor-pointer disabled:opacity-50"
-          >
-            {loadingTrailer ? (
-              <Loader2 size={20} className="animate-spin text-red-600 dark:text-red-400" />
-            ) : (
-              <Youtube size={20} className="text-red-600 dark:text-red-400" />
-            )}
-          </button>
-
-          {user && user !== 'guest' && (
+        <div className="flex flex-wrap items-center justify-center pt-1 mb-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 sm:py-2.5 rounded-full bg-black/5 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
             <button
-              onClick={handleRefreshRoot}
-              disabled={loadingFiles}
-              title="Refresh Root Directory"
-              className="p-3 sm:p-3.5 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white backdrop-blur-md border border-black/10 dark:border-white/15 transition flex items-center justify-center shadow-lg cursor-pointer disabled:opacity-50"
+              onClick={handleToggleWatchlist}
+              title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+              className="p-2.5 sm:p-3 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white transition flex items-center justify-center cursor-pointer"
             >
-              <RefreshCw size={20} className={loadingFiles ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+              {inWatchlist ? (
+                <BookmarkCheck size={20} className="text-purple-600 dark:text-purple-400" />
+              ) : (
+                <Bookmark size={20} />
+              )}
             </button>
-          )}
 
-          <button
-            onClick={() => {
-              const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
-              setSearchTitle(curTitle);
-              setCustomTitle(curTitle);
-              setLogoSearchQuery(curTitle);
-              setLogoSearchResults([]);
-              setActiveLogoTmdb(tmdb || null);
-              const releaseDate = tmdb?.release_date || tmdb?.first_air_date || '';
-              setCustomYear((releaseDate || '').substring(0, 4) || parseMediaName(name).year || '');
-              setModalTab('info');
-              if (tmdb?.no_logo) {
-                setSelectedLogoPath('');
-              } else if (tmdb?.custom_logo || tmdb?.logo_path) {
-                setSelectedLogoPath(tmdb.custom_logo || tmdb.logo_path);
-              } else if (logoUrl) {
-                const match = logoUrl.match(/https:\/\/image\.tmdb\.org\/t\/p\/(?:original|w\d+)(\/.*)/);
-                setSelectedLogoPath(match ? match[1] : logoUrl);
-              } else {
-                setSelectedLogoPath(null);
-              }
-              setCustomLogoInput('');
-              setShowMetadataModal(true);
-            }}
-            title="Fix Metadata & Logo"
-            className="p-3 sm:p-3.5 rounded-xl bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white backdrop-blur-md border border-black/10 dark:border-white/15 transition flex items-center justify-center shadow-lg cursor-pointer"
-          >
-            <Edit2 size={20} />
-          </button>
+            <button
+              onClick={handleWatchTrailer}
+              disabled={loadingTrailer}
+              title="Watch Trailer on YouTube"
+              className="p-2.5 sm:p-3 rounded-full bg-red-600/10 dark:bg-red-500/15 hover:bg-red-600/20 dark:hover:bg-red-500/25 active:scale-95 text-red-600 dark:text-red-400 transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+            >
+              {loadingTrailer ? (
+                <Loader2 size={20} className="animate-spin text-red-600 dark:text-red-400" />
+              ) : (
+                <Youtube size={20} className="text-red-600 dark:text-red-400" />
+              )}
+            </button>
+
+            {user && user !== 'guest' && (
+              <button
+                onClick={handleRefreshRoot}
+                disabled={loadingFiles}
+                title="Refresh Root Directory"
+                className="p-2.5 sm:p-3 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={20} className={loadingFiles ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
+                setSearchTitle(curTitle);
+                setCustomTitle(curTitle);
+                setLogoSearchQuery(curTitle);
+                setLogoSearchResults([]);
+                setActiveLogoTmdb(tmdb || null);
+                const releaseDate = tmdb?.release_date || tmdb?.first_air_date || '';
+                setCustomYear((releaseDate || '').substring(0, 4) || parseMediaName(name).year || '');
+                setModalTab('info');
+                if (tmdb?.no_logo) {
+                  setSelectedLogoPath('');
+                } else if (tmdb?.custom_logo || tmdb?.logo_path) {
+                  setSelectedLogoPath(tmdb.custom_logo || tmdb.logo_path);
+                } else if (logoUrl) {
+                  const match = logoUrl.match(/https:\/\/image\.tmdb\.org\/t\/p\/(?:original|w\d+)(\/.*)/);
+                  setSelectedLogoPath(match ? match[1] : logoUrl);
+                } else {
+                  setSelectedLogoPath(null);
+                }
+                setCustomLogoInput('');
+                setShowMetadataModal(true);
+              }}
+              title="Fix Metadata & Logo"
+              className="p-2.5 sm:p-3 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white transition flex items-center justify-center cursor-pointer"
+            >
+              <Edit2 size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Plot / Overview Text */}

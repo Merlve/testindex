@@ -86,7 +86,7 @@ export default function Profile() {
     setRefreshing(true);
     try {
       // Parallel requests for all user metrics
-      const [watchlistRes, recsRes, configRes, expirationsRes, meRes, topDownloadsRes, watchedRes] = await Promise.all([
+      const [watchlistRes, recsRes, configRes, expirationsRes, meRes, topDownloadsRes] = await Promise.all([
         axios.get('/api/watchlist', { headers: { 'x-user': user || '', Authorization: token || '' } }).catch(() => ({ data: [] })),
         axios.get('/api/recommendations', { headers: { Authorization: token || '', 'x-user': user || '' } }).catch(() => ({ data: [] })),
         axios.get('/api/config').catch(() => ({ data: {} })),
