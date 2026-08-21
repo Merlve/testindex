@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
 import { isImageLoaded, markImageLoaded } from '../utils/imageCache';
 
-const LastWatchedCard = memo(function LastWatchedCard({ item }: { item: any }) {
+const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { item: any, onDismiss?: (key: string) => void }) {
   const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const [logoError, setLogoError] = useState(false);
@@ -16,6 +16,12 @@ const LastWatchedCard = memo(function LastWatchedCard({ item }: { item: any }) {
     e.preventDefault();
     e.stopPropagation();
     if (!user) return;
+    
+    // Call onDismiss to immediately hide the entire series locally
+    if (onDismiss && item._dedupeKey) {
+        onDismiss(item._dedupeKey);
+    }
+
     try {
       const res = await axios.post('/api/watched/toggle', {
         name: item.name,
@@ -197,6 +203,22 @@ const LastWatchedCard = memo(function LastWatchedCard({ item }: { item: any }) {
 export default function LastWatchedCarousel() {
   const { user, token } = useAuth();
   
+  const [dismissedSeries, setDismissedSeries] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('dismissed_series') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const handleDismissSeries = (dedupeKey: string) => {
+    setDismissedSeries(prev => {
+      const next = { ...prev, [dedupeKey]: Date.now() };
+      localStorage.setItem('dismissed_series', JSON.stringify(next));
+      return next;
+    });
+  };
+  
   const { data: watchedList = [] } = useQuery<any[]>({
     queryKey: ['watched-list', user],
     queryFn: async () => {
@@ -230,9 +252,14 @@ export default function LastWatchedCarousel() {
       
       dedupeKey = dedupeKey.replace(/\/+/g, '/').replace(/\/$/, '').toLowerCase();
 
+      // Skip if this series was dismissed and no newer episodes have been watched since
+      if (dismissedSeries[dedupeKey] && (!item.timestamp || item.timestamp <= dismissedSeries[dedupeKey])) {
+          continue;
+      }
+
       if (!seen.has(dedupeKey)) {
         seen.add(dedupeKey);
-        uniqueList.push(item);
+        uniqueList.push({ ...item, _dedupeKey: dedupeKey });
       }
       
       if (uniqueList.length >= 10) break;
@@ -258,7 +285,7 @@ export default function LastWatchedCarousel() {
       </div>
       <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
         {recentWatched.map((item, i) => (
-          <LastWatchedCard key={item.name || i} item={item} />
+          <LastWatchedCard key={item.name || i} item={item} onDismiss={handleDismissSeries} />
         ))}
       </div>
     </div>
