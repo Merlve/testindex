@@ -208,8 +208,37 @@ export default function LastWatchedCarousel() {
   });
 
   const recentWatched = useMemo(() => {
-    // Reverse the list so the most recently watched comes first
-    return [...watchedList].reverse().slice(0, 10);
+    const reversed = [...watchedList].reverse();
+    const seen = new Set<string>();
+    const uniqueList = [];
+
+    for (const item of reversed) {
+      const parentClean = (item.parentPath || '').replace(/^\/+/, '');
+      const isVideo = /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(item.name || '');
+      
+      let dedupeKey = parentClean ? `${parentClean}/${item.name}` : item.name;
+      
+      if (isVideo) {
+          if (/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i.test(parentClean)) {
+              dedupeKey = parentClean.replace(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i, '');
+          } else if (parentClean.toLowerCase() === 'home/movies' || parentClean.toLowerCase() === 'home/shows' || parentClean === '') {
+              dedupeKey = parentClean ? `${parentClean}/${item.name}` : item.name;
+          } else {
+              dedupeKey = parentClean;
+          }
+      }
+      
+      dedupeKey = dedupeKey.replace(/\/+/g, '/').replace(/\/$/, '').toLowerCase();
+
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        uniqueList.push(item);
+      }
+      
+      if (uniqueList.length >= 10) break;
+    }
+
+    return uniqueList;
   }, [watchedList]);
 
   if (!recentWatched || recentWatched.length === 0) return null;
