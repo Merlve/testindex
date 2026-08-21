@@ -54,7 +54,12 @@ export async function getRecentlyAdded(getOpenlistUrl: () => string, getOpenlist
     await fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath, jfOverrides);
   } else if ((now - lastFetchTime > 3 * 60 * 1000) && !isFetching) {
     fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath, jfOverrides).catch(e => {
-       console.error('[Jellyfin] Auto-fetch error:', e.response?.status || e.message);
+       const msg = e.response?.status || e.message;
+       if (String(msg).includes('timeout')) {
+           console.warn('[Jellyfin] Auto-fetch skipped due to timeout (server took too long to respond).');
+       } else {
+           console.error('[Jellyfin] Auto-fetch error:', msg);
+       }
        lastFetchTime = Date.now();
     });
   }
@@ -73,7 +78,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
     }
     
     try {
-        const usersRes = await axios.get(`${url.replace(/\/$/, '')}/Users`, { headers: { 'X-Emby-Token': apiKey } });
+        const usersRes = await axios.get(`${url.replace(/\/$/, '')}/Users`, { headers: { 'X-Emby-Token': apiKey }, timeout: 60000 });
         const users = usersRes.data;
         const userExists = users.some((u: any) => u.Id === userId);
         
@@ -104,7 +109,8 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
         },
         headers: {
           'X-Emby-Token': apiKey
-        }
+        },
+        timeout: 60000
       });
     } catch (e: any) {
       throw new Error(`Jellyfin API error: ${e.response?.data?.message || e.response?.data || e.message || 'Failed to connect to Jellyfin'}`);
@@ -134,7 +140,8 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
             try {
               const seriesRes = await axios.get(`${url.replace(/\/$/, '')}/Users/${userId}/Items/${item.SeriesId}`, {
                 params: { Fields: "ProductionYear,PremiereDate" },
-                headers: { 'X-Emby-Token': apiKey }
+                headers: { 'X-Emby-Token': apiKey },
+                timeout: 60000
               });
               const sYear = seriesRes.data?.ProductionYear || (seriesRes.data?.PremiereDate ? new Date(seriesRes.data.PremiereDate).getFullYear() : null);
               if (sYear) {

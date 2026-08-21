@@ -592,7 +592,8 @@ export default function Details() {
   const [tmdb, setTmdb] = useState<any>(isStale ? null : (location.state?.tmdbData || null));
   let actualOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
   const targetFilename = actualOpenlistPath.split('/').pop();
-  if (targetFilename && /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(targetFilename)) {
+  const isVideoTarget = targetFilename && /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(targetFilename);
+  if (isVideoTarget) {
       actualOpenlistPath = actualOpenlistPath.substring(0, actualOpenlistPath.lastIndexOf('/')) || '';
   }
 
@@ -886,7 +887,15 @@ export default function Details() {
         }
 
         const dirFolders = content.filter((item: any) => item.is_dir);
-        const dirFiles = content.filter((item: any) => !item.is_dir && isVideoFile(item.name));
+        let dirFiles = content.filter((item: any) => !item.is_dir && isVideoFile(item.name));
+
+        if (isVideoTarget && targetFilename) {
+            const parentLower = actualOpenlistPath.toLowerCase().replace(/^\/+/, '');
+            if (parentLower === 'home/movies' || parentLower === 'home/shows' || parentLower === 'home/anime' || parentLower === 'home' || parentLower === '') {
+                dirFiles = dirFiles.filter((f: any) => f.name === targetFilename);
+                dirFolders.length = 0; // Clear folders so they don't show up on a specific movie's details page
+            }
+        }
 
         // If we are looking at a path that is actually a file, and Openlist returned its parent dir contents,
         // we just display the parent dir contents so the user can see all files.
