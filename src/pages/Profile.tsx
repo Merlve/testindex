@@ -395,7 +395,25 @@ export default function Profile() {
         };
       }
 
-      const sanitizedPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+      const isVideo = /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(rawName);
+      let linkPath = parentPath ? `${parentPath}/${rawName}` : rawName;
+      let preselectSeason: string | undefined = undefined;
+      
+      linkPath = linkPath.replace(/^\/+/, '');
+      
+      if (isVideo) {
+          const seasonMatch = parentPath.match(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i);
+          if (seasonMatch) {
+              linkPath = parentPath.replace(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i, '').replace(/^\/+/, '');
+              preselectSeason = seasonMatch[1];
+          } else if (parentPath.toLowerCase() === 'home/movies' || parentPath.toLowerCase() === 'home/shows' || parentPath === '') {
+              linkPath = `${parentPath}/${rawName}`.replace(/^\/+/, '');
+          } else {
+              linkPath = parentPath.replace(/^\/+/, '');
+          }
+      }
+      
+      const sanitizedPath = linkPath.replace(/\/\//g, '/').replace(/^\//, '');
       const linkUrl = `/${sanitizedPath.split('/').map(p => encodeURIComponent(p)).join('/')}`;
 
       return {
@@ -407,7 +425,8 @@ export default function Profile() {
         type,
         episodeInfo,
         timestamp: entry.timestamp,
-        linkUrl
+        linkUrl,
+        preselectSeason
       };
     });
   }, [watchedList]);
@@ -548,7 +567,25 @@ export default function Profile() {
           const title = tmdb?.title || tmdb?.name || cleanName || rawName;
           const year = tmdb?.release_date?.substring(0, 4) || tmdb?.first_air_date?.substring(0, 4) || jfYear || parsedYear || '';
 
-          const sanitizedPath = `${parentPath}/${rawName}`.replace(/\/\//g, '/').replace(/^\//, '');
+          const isVideo = /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(rawName);
+          let linkPath = parentPath ? `${parentPath}/${rawName}` : rawName;
+          let preselectSeason: string | undefined = undefined;
+          
+          linkPath = linkPath.replace(/^\/+/, '');
+          
+          if (isVideo) {
+              const seasonMatch = parentPath.match(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i);
+              if (seasonMatch) {
+                  linkPath = parentPath.replace(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i, '').replace(/^\/+/, '');
+                  preselectSeason = seasonMatch[1];
+              } else if (parentPath.toLowerCase() === 'home/movies' || parentPath.toLowerCase() === 'home/shows' || parentPath === '') {
+                  linkPath = `${parentPath}/${rawName}`.replace(/^\/+/, '');
+              } else {
+                  linkPath = parentPath.replace(/^\/+/, '');
+              }
+          }
+
+          const sanitizedPath = linkPath.replace(/\/\//g, '/').replace(/^\//, '');
           const fullPath = `/${sanitizedPath}`;
           const linkUrl = fullPath.split('/').map(p => encodeURIComponent(p)).join('/');
 
@@ -559,6 +596,7 @@ export default function Profile() {
             <Link 
               key={idx}
               to={linkUrl}
+              state={{ item: entry.item || entry, preselectSeason }}
               className="flex items-center justify-between gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-purple-500/10 dark:hover:bg-purple-500/20 border border-black/5 dark:border-white/5 hover:border-purple-500/30 transition-all group cursor-pointer shadow-sm"
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -881,7 +919,7 @@ export default function Profile() {
                   const item = getWatchedDisplayItem(rawItem);
                   return (
                     <div key={idx} className="flex items-center justify-between gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 hover:border-purple-500/30 transition">
-                      <Link to={item.linkUrl} className="flex items-center gap-2.5 min-w-0 flex-1 group">
+                      <Link to={item.linkUrl} state={{ preselectSeason: item.preselectSeason }} className="flex items-center gap-2.5 min-w-0 flex-1 group">
                         {item.stillUrl ? (
                           <img src={item.stillUrl} alt={item.displayTitle} className="w-12 h-8 rounded-lg object-cover shrink-0 border border-black/10 dark:border-white/10" />
                         ) : item.type === 'movie' ? (
@@ -1236,7 +1274,7 @@ export default function Profile() {
                     key={idx}
                     className="flex items-start justify-between gap-3 p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 hover:border-purple-500/30 hover:bg-purple-500/5 transition-all group shadow-sm"
                   >
-                    <Link to={item.linkUrl} className="flex items-start gap-3 min-w-0 flex-1">
+                    <Link to={item.linkUrl} state={{ preselectSeason: item.preselectSeason }} className="flex items-start gap-3 min-w-0 flex-1">
                       {item.stillUrl ? (
                         <div className="relative shrink-0 w-20 h-14 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/20">
                           <img src={item.stillUrl} alt={item.displayTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />

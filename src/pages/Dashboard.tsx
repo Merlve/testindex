@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { Play, RefreshCw } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import FeaturedSlider from '../components/FeaturedSlider';
+import LastWatchedCarousel from '../components/LastWatchedCarousel';
 import RecentlyAddedCarousel from '../components/RecentlyAddedCarousel';
 import TrendingCarousel from '../components/TrendingCarousel';
 import DigitalReleasesCarousel from '../components/DigitalReleasesCarousel';
@@ -208,9 +209,10 @@ export default function Dashboard() {
       )}
 
       <div className="px-4 sm:px-8 flex-1 flex flex-col gap-6 sm:gap-8 pb-12 mt-4">
+        <LastWatchedCarousel />
+        <RecentlyAddedCarousel />
         <TrendingCarousel categories={categories} />
         <DigitalReleasesCarousel categories={categories} />
-        <RecentlyAddedCarousel />
         {renderedCategories}
         <GenresCarousel />
       </div>

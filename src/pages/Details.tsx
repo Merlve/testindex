@@ -590,7 +590,11 @@ export default function Details() {
   const isStale = passedMetaVer && passedMetaVer !== currentMetaVer;
 
   const [tmdb, setTmdb] = useState<any>(isStale ? null : (location.state?.tmdbData || null));
-  const actualOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
+  let actualOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
+  const targetFilename = actualOpenlistPath.split('/').pop();
+  if (targetFilename && /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(targetFilename)) {
+      actualOpenlistPath = actualOpenlistPath.substring(0, actualOpenlistPath.lastIndexOf('/')) || '';
+  }
 
   useEffect(() => {
     axios.get('/api/config').then(res => {
@@ -856,12 +860,8 @@ export default function Details() {
     setLoadingFiles(true);
 
     const cleanPath = actualOpenlistPath.replace(/^\/+/, '');
-    // If it's a direct file path, we query its parent directory to get the file object
-    const targetFilename = cleanPath.split('/').pop();
-    const isDirectFile = targetFilename && isVideoFile(targetFilename);
-    const reqPath = isDirectFile ? cleanPath.substring(0, cleanPath.lastIndexOf('/')) || '' : cleanPath;
     
-    const payload: any = { reqPath: reqPath };
+    const payload: any = { reqPath: cleanPath };
     if (baseRefresh > 0) payload.refresh = true;
 
     axios.post('/api/fs/list', payload, { headers: token ? { Authorization: token } : {} })
@@ -873,6 +873,7 @@ export default function Details() {
             // In case the API returns a single file object instead of an array when querying a file path directly
             const singleFile = res.data?.data;
             if (singleFile && !singleFile.is_dir && isVideoFile(singleFile.name)) {
+                // Keep this as fallback, but ideally it should have hit the reqPath logic above
                 setBaseItems([singleFile]);
                 setSeasonItems([]);
                 return;
@@ -881,38 +882,14 @@ export default function Details() {
         
         // If content is somehow empty but we have an item passed in state that is a file
         if (content.length === 0 && location.state?.item && !location.state?.item?.is_dir && isVideoFile(location.state?.item?.name)) {
-             setBaseItems([location.state.item]);
-             setSeasonItems([]);
-             return;
+             // Again, do not isolate here, let it remain empty.
         }
 
         const dirFolders = content.filter((item: any) => item.is_dir);
         const dirFiles = content.filter((item: any) => !item.is_dir && isVideoFile(item.name));
 
         // If we are looking at a path that is actually a file, and Openlist returned its parent dir contents,
-        // we should just isolate the file we care about.
-        const targetFilename = cleanPath.split('/').pop();
-        if (targetFilename && isVideoFile(targetFilename)) {
-            const exactFileMatch = dirFiles.find((f: any) => f.name === targetFilename || decodeURIComponent(f.name) === decodeURIComponent(targetFilename));
-            if (exactFileMatch) {
-                setBaseItems([exactFileMatch]);
-                setSeasonItems([]);
-                return;
-            } else {
-                // Fallback: If it's explicitly a video file path but not found in the parent dir list
-                // (possibly due to pagination limits or encoding mismatches), construct a mock item
-                // so the user can still play/download it directly.
-                setBaseItems([{
-                    name: targetFilename,
-                    is_dir: false,
-                    size: location.state?.item?.size || 0,
-                    modified: location.state?.item?.modified || new Date().toISOString()
-                }]);
-                setSeasonItems([]);
-                return;
-            }
-        }
-
+        // we just display the parent dir contents so the user can see all files.
         dirFiles.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
         setBaseItems(dirFiles);
 
@@ -920,7 +897,15 @@ export default function Details() {
           dirFolders.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
           setSeasonItems(dirFolders);
           if (activeSeasonIndex === null) {
-            setActiveSeasonIndex(0);
+            let targetIdx = 0;
+            if (location.state?.preselectSeason) {
+                const preSeasonStr = String(location.state.preselectSeason).toLowerCase();
+                const matchedIdx = dirFolders.findIndex((f: any) => f.name.toLowerCase() === preSeasonStr);
+                if (matchedIdx !== -1) {
+                    targetIdx = matchedIdx;
+                }
+            }
+            setActiveSeasonIndex(targetIdx);
           }
         } else {
           setSeasonItems([]);
@@ -928,17 +913,6 @@ export default function Details() {
       })
       .catch(err => {
         console.error('Error fetching folder files:', err);
-        // If the API fails but we know it's a direct video file, fallback to the file
-        const targetFilename = cleanPath.split('/').pop();
-        if (targetFilename && isVideoFile(targetFilename)) {
-             setBaseItems([{
-                 name: targetFilename,
-                 is_dir: false,
-                 size: location.state?.item?.size || 0,
-                 modified: location.state?.item?.modified || new Date().toISOString()
-             }]);
-             setSeasonItems([]);
-        }
       })
       .finally(() => {
         if (isMounted) setLoadingFiles(false);
@@ -1431,12 +1405,8 @@ export default function Details() {
       ? `${actualOpenlistPath.replace(/^\/+/, '')}/${seasonItems[activeSeasonIndex].name}`
       : actualOpenlistPath.replace(/^\/+/, '');
       
-    // Fix currentPath if actualOpenlistPath is a direct file
     if (seasonItems.length === 0) {
-        const targetFilename = currentPath.split('/').pop();
-        if (targetFilename && isVideoFile(targetFilename)) {
-            currentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '';
-        }
+        // actualOpenlistPath already has the filename stripped if it was a file, so currentPath is safe to use directly
     }
 
     const allSelected = currentList.length > 0 && currentList.every(file => 
@@ -1945,10 +1915,6 @@ export default function Details() {
               <div className="grid grid-cols-1 gap-3">
                 {baseItems.map((file, idx) => {
                   let itemPath = actualOpenlistPath.replace(/^\/+/, '');
-                  const targetFilename = itemPath.split('/').pop();
-                  if (targetFilename && isVideoFile(targetFilename)) {
-                      itemPath = itemPath.substring(0, itemPath.lastIndexOf('/')) || '';
-                  }
                   const meta = extractFileMetadata(file.name, file.size);
                   if (meta.seasonNum === null) {
                       const folderSeason = getFolderSeasonNum(actualOpenlistPath.split('/').pop() || '');
