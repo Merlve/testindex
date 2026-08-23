@@ -388,7 +388,8 @@ function FileRowItem({
   config,
   isSelected,
   toggleSelection,
-  tmdbEpisode
+  tmdbEpisode,
+  showToast
 }: {
   file: any;
   itemPath: string;
@@ -401,6 +402,7 @@ function FileRowItem({
   isSelected: boolean;
   toggleSelection: () => void;
   tmdbEpisode?: any;
+  showToast?: (msg: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [actionLoading, setActionLoading] = useState<'copy' | 'download' | null>(null);
@@ -426,6 +428,7 @@ function FileRowItem({
     try {
       await navigator.clipboard.writeText(targetUrl);
       setCopied(true);
+      if (showToast) showToast('Link copied');
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
       const textArea = document.createElement("textarea");
@@ -435,6 +438,7 @@ function FileRowItem({
       document.execCommand('copy');
       document.body.removeChild(textArea);
       setCopied(true);
+      if (showToast) showToast('Link copied');
       setTimeout(() => setCopied(false), 2000);
     }
     setActionLoading(null);
@@ -1480,9 +1484,11 @@ export default function Details() {
         document.body.removeChild(textArea);
       }
       setBatchCopied(true);
+      setToast('Link copied');
       setTimeout(() => {
         setBatchCopied(false);
         setSelectedFiles([]); // clear selection after copy
+        setToast('');
       }, 2000);
     } catch (e) {
       console.error(e);
@@ -1651,7 +1657,7 @@ export default function Details() {
 
           {/* Release Year & Meta Info */}
           {metaInfoStr && (
-            <span className="mt-2 text-[8.5px] sm:text-[9.5px] font-semibold text-gray-500 dark:text-gray-400 tracking-wider">
+            <span className="mt-3 px-4 py-1.5 rounded-full bg-black/5 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10 text-[10px] sm:text-[11px] font-bold text-gray-800 dark:text-gray-200 tracking-wider shadow-sm">
               {metaInfoStr}
             </span>
           )}
@@ -1659,11 +1665,11 @@ export default function Details() {
 
         {/* Genres Row */}
         {genreList.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
             {genreList.map((genre, idx) => (
               <span 
                 key={idx} 
-                className="px-3.5 py-1 rounded-full bg-transparent text-gray-700 dark:text-gray-300 border border-black/20 dark:border-white/20 text-xs font-semibold tracking-wide"
+                className="px-4 py-1.5 rounded-full bg-black/5 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10 text-xs font-semibold tracking-wide text-gray-800 dark:text-gray-200 shadow-sm"
               >
                 {genre}
               </span>
@@ -1710,6 +1716,7 @@ export default function Details() {
               </button>
             )}
 
+            {user !== 'guest' && (
             <button
               onClick={() => {
                 const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
@@ -1739,6 +1746,7 @@ export default function Details() {
             >
               <Edit2 size={20} />
             </button>
+            )}
           </div>
         </div>
 
@@ -1911,6 +1919,7 @@ export default function Details() {
                         isSelected={isSelected}
                         toggleSelection={() => toggleSelection(file, itemPath)}
                         tmdbEpisode={tmdbEpisode}
+                        showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
                       />
                     );
                   })}
@@ -1949,6 +1958,7 @@ export default function Details() {
                       isSelected={isSelected}
                       toggleSelection={() => toggleSelection(file, itemPath)}
                       tmdbEpisode={tmdbEpisode}
+                      showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
                     />
                   );
                 })}
