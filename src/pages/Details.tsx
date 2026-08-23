@@ -594,6 +594,7 @@ export default function Details() {
   const isStale = passedMetaVer && passedMetaVer !== currentMetaVer;
 
   const [tmdb, setTmdb] = useState<any>(isStale ? null : (location.state?.tmdbData || null));
+  const hasAttemptedRef = useRef<string | null>(null);
   let actualOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
   const targetFilename = actualOpenlistPath.split('/').pop();
   const isVideoTarget = targetFilename && /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(targetFilename);
@@ -740,7 +741,17 @@ export default function Details() {
     };
   }, [tmdb, name]);
 
-  // Fetch TMDB data if missing
+  // Determine if media is a TV show, Anime, KDrama, Series, etc.
+  const isTvMedia = !isMovieCategory || 
+    tmdb?.media_type === 'tv' || 
+    Boolean(tmdb?.first_air_date) || 
+    Boolean(tmdb?.seasons) || 
+    Boolean(tmdb?.number_of_seasons) || 
+    Boolean(tmdb?.name && !tmdb?.title) ||
+    ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'ANIMES', 'SHOWS', 'DRAMA', 'CARTOON', 'ANIMATION', 'ASIAN_DRAMA', 'KOREAN_DRAMA', 'DOCUSERIES'].includes(category) ||
+    /(series|show|tv|kdrama|adrama|anime|drama|animation|cartoon|serial|docuseries)/i.test(category);
+
+  // Fetch TMDB data if completely missing
   useEffect(() => {
     let isMounted = true;
     if (!tmdb) {
@@ -750,7 +761,7 @@ export default function Details() {
       const parsedYear = parsed.year || '';
 
       const tmdbId = location.state?.item?._jf?.tmdbId || null;
-      let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}`;
+      let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}&full=true`;
       if (tmdbId) {
           url += `&tmdbId=${tmdbId}`;
       }
@@ -765,7 +776,15 @@ export default function Details() {
                axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}${tmdbId ? `&tmdbId=${tmdbId}` : ''}`)
                  .then(fallbackRes => {
                     if (isMounted && fallbackRes.data?.results?.[0]) {
-                      setTmdb(fallbackRes.data.results[0]);
+                      const itemFound = fallbackRes.data.results[0];
+                      setTmdb(itemFound);
+                      if (itemFound.id && (itemFound.media_type === 'tv' || isTvMedia)) {
+                        axios.get(`/api/meta/tv_details?tvId=${itemFound.id}`).then(tvRes => {
+                          if (isMounted && tvRes.data) {
+                            setTmdb((prev: any) => ({ ...prev, ...tvRes.data, status: tvRes.data.status || prev?.status }));
+                          }
+                        }).catch(() => {});
+                      }
                     }
                  }).catch(console.error);
             }
@@ -779,7 +798,51 @@ export default function Details() {
       setLoading(false);
     }
     return () => { isMounted = false; };
-  }, [fullPath, name, category, tmdb, actualOpenlistPath, location.state]);
+  }, [fullPath, name, category, tmdb === null, actualOpenlistPath, location.state]);
+
+  // If TMDB data exists but status is missing for a TV show/anime/kdrama, fetch full TV details
+  useEffect(() => {
+    let isMounted = true;
+    const targetTvId = tmdb?.id || tmdb?.tmdb_id || location.state?.item?._jf?.tmdbId || location.state?.item?.tmdbId;
+
+    if (isTvMedia && (!tmdb?.status || !tmdb?.seasons)) {
+      if (targetTvId) {
+        axios.get(`/api/meta/tv_details?tvId=${targetTvId}`)
+          .then(res => {
+            if (isMounted && res.data) {
+              setTmdb((prev: any) => {
+                if (!prev) return res.data;
+                return {
+                  ...prev,
+                  status: res.data.status || prev.status,
+                  in_production: res.data.in_production !== undefined ? res.data.in_production : prev.in_production,
+                  seasons: res.data.seasons || prev.seasons,
+                  number_of_seasons: res.data.number_of_seasons || prev.number_of_seasons,
+                  number_of_episodes: res.data.number_of_episodes || prev.number_of_episodes,
+                  tagline: res.data.tagline || prev.tagline,
+                  genres: (prev.genres && prev.genres.length > 0) ? prev.genres : res.data.genres,
+                  _synced: true,
+                };
+              });
+            }
+          })
+          .catch(console.error);
+      } else if (name && hasAttemptedRef.current !== name) {
+        hasAttemptedRef.current = name;
+        const parsed = parseMediaName(name);
+        const cleanName = parsed.cleanName || name;
+        const parsedYear = parsed.year || '';
+        axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}&full=true`)
+          .then(res => {
+            if (isMounted && res.data) {
+              setTmdb(res.data);
+            }
+          })
+          .catch(console.error);
+      }
+    }
+    return () => { isMounted = false; };
+  }, [tmdb?.id, tmdb?.status, isTvMedia, name]);
 
   // Fetch logo automatically whenever tmdb, name, or category changes
   useEffect(() => {
@@ -1665,7 +1728,7 @@ export default function Details() {
 
         {/* Genres Row */}
         {genreList.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
             {genreList.map((genre, idx) => (
               <span 
                 key={idx} 
@@ -1676,6 +1739,35 @@ export default function Details() {
             ))}
           </div>
         )}
+
+        {/* TV Show Status */}
+        {(() => {
+          if (!tmdb?.status) return null;
+          const s = String(tmdb.status).trim().toLowerCase();
+          let label = tmdb.status;
+          let badgeClass = 'bg-gray-500/10 dark:bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/30';
+
+          if (s === 'returning series' || s === 'in production' || s === 'planned' || s === 'pilot' || s === 'ongoing') {
+            label = (s === 'returning series' || s === 'in production' || s === 'pilot' || s === 'planned') ? 'Ongoing' : (tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1));
+            badgeClass = 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
+          } else if (s === 'ended' || s === 'complete' || s === 'completed') {
+            label = 'Ended';
+            badgeClass = 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30';
+          } else if (s === 'canceled' || s === 'cancelled') {
+            label = 'Canceled';
+            badgeClass = 'bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30';
+          } else {
+            label = tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1);
+          }
+
+          return (
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+              <span className={`px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold uppercase tracking-wider shadow-sm ${badgeClass}`}>
+                {label}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Action Buttons Row */}
         <div className="flex flex-wrap items-center justify-center pt-1 mb-2">

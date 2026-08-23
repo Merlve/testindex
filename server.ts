@@ -2017,7 +2017,12 @@ app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) =>
 
   try {
     const typeStr = (type as string || '').toUpperCase();
-    const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t) || t.includes('TV') || t.includes('SHOW') || t.includes('SERIES');
+    const isTvType = (t: string) => {
+      if (!t) return false;
+      const upper = t.toUpperCase();
+      return ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE', 'DRAMA', 'ANIMES', 'SHOWS', 'CARTOON', 'ANIMATION', 'ASIAN_DRAMA', 'KOREAN_DRAMA', 'DOCUSERIES'].includes(upper) ||
+        upper.includes('TV') || upper.includes('SHOW') || upper.includes('SERIES') || upper.includes('DRAMA') || upper.includes('ANIME') || upper.includes('CARTOON') || upper.includes('ANIMATION');
+    };
     let searchType = isTvType(typeStr) ? 'tv' : 'movie';
     if (forceType && (forceType === 'movie' || forceType === 'tv')) {
        searchType = forceType;
@@ -2177,7 +2182,8 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
 async function attachFullDataToItem(item: any, searchType: string, tmdbKey: string) {
    if (!item || !item.id || !tmdbKey) return false;
    let modified = false;
-   if (searchType === 'tv' && (!item.status || !item.seasons)) {
+   const isTv = searchType === 'tv' || Boolean(item.first_air_date) || Boolean(item.name && !item.title) || Array.isArray(item.seasons) || item.media_type === 'tv' || item.number_of_seasons !== undefined;
+   if (isTv && (!item.status || !item.seasons)) {
        try {
            const idRes = await axios.get(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${tmdbKey}`);
            if (idRes.data) {
@@ -2188,6 +2194,12 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
                if (idRes.data.seasons) {
                    item.seasons = idRes.data.seasons;
                }
+               if (idRes.data.number_of_seasons) {
+                   item.number_of_seasons = idRes.data.number_of_seasons;
+               }
+               if (idRes.data.number_of_episodes) {
+                   item.number_of_episodes = idRes.data.number_of_episodes;
+               }
                modified = true;
            }
        } catch(e) {}
@@ -2195,7 +2207,8 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
    
    if (!item.images || !item.images.logos || item.images.logos.length === 0) {
        try {
-           const imagesRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${item.id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
+           const finalSearchType = isTv ? 'tv' : searchType;
+           const imagesRes = await axios.get(`https://api.themoviedb.org/3/${finalSearchType}/${item.id}/images?api_key=${tmdbKey}&include_image_language=en,null`);
            if (imagesRes.data) {
                item.images = imagesRes.data;
                modified = true;
@@ -2225,7 +2238,12 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   }
 
   const typeStr = (type as string || '').toUpperCase();
-  const isTvType = (t: string) => ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(t) || t.includes('TV') || t.includes('SHOW') || t.includes('SERIES');
+  const isTvType = (t: string) => {
+    if (!t) return false;
+    const upper = t.toUpperCase();
+    return ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE', 'DRAMA', 'ANIMES', 'SHOWS', 'CARTOON', 'ANIMATION', 'ASIAN_DRAMA', 'KOREAN_DRAMA', 'DOCUSERIES'].includes(upper) ||
+      upper.includes('TV') || upper.includes('SHOW') || upper.includes('SERIES') || upper.includes('DRAMA') || upper.includes('ANIME') || upper.includes('CARTOON') || upper.includes('ANIMATION');
+  };
   const searchType = isTvType(typeStr) ? 'tv' : 'movie';
 
   const pathKey = itemPath ? `path-${itemPath}` : null;
