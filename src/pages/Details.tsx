@@ -1747,8 +1747,8 @@ export default function Details() {
           let label = tmdb.status;
           let badgeClass = 'bg-gray-500/10 dark:bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/30';
 
-          if (s === 'returning series' || s === 'in production' || s === 'planned' || s === 'pilot' || s === 'ongoing') {
-            label = (s === 'returning series' || s === 'in production' || s === 'pilot' || s === 'planned') ? 'Ongoing' : (tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1));
+          if (s === 'returning series' || s === 'in production' || s === 'planned' || s === 'pilot' || s === 'ongoing' || s === 'continuing') {
+            label = (s === 'returning series' || s === 'in production' || s === 'pilot' || s === 'planned' || s === 'ongoing' || s === 'continuing') ? 'Continuing' : (tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1));
             badgeClass = 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
           } else if (s === 'ended' || s === 'complete' || s === 'completed') {
             label = 'Ended';
