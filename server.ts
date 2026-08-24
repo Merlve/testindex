@@ -469,6 +469,41 @@ async function preCacheActorFilmographyMetadata(matchedList: any[], tmdbKey: str
 // Re-sync saved actor filmographies when new library items are added to the app
 async function syncAllActorsWithNewLibraryItems() { return; }
 
+function isGenericCategoryRoot(p: string): boolean {
+  if (!p) return true;
+  const clean = p.replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
+  const genericRoots = new Set([
+    'home',
+    'home/movies',
+    'home/series',
+    'home/anime',
+    'home/kdrama',
+    'home/adrama',
+    'home/tv',
+    'home/shows',
+    'home/show',
+    'home/korean_drama',
+    'home/asian_drama',
+    'home/cartoon',
+    'home/animation',
+    'movies',
+    'series',
+    'anime',
+    'kdrama',
+    'adrama',
+    'tv',
+    'shows',
+    'show'
+  ]);
+  if (genericRoots.has(clean)) return true;
+  const parts = clean.split('/').filter(Boolean);
+  if (parts.length <= 1) return true;
+  if (parts.length === 2 && parts[0] === 'home' && ['movies', 'series', 'anime', 'kdrama', 'adrama', 'tv', 'shows', 'show', 'cartoon', 'animation', 'korean_drama', 'asian_drama'].includes(parts[1])) {
+    return true;
+  }
+  return false;
+}
+
 function findOverriddenKeyInCache(cache: Record<string, any>, type: string, cleanQuery: string, year?: string | number, itemPath?: string): string | null {
   if (!cleanQuery && !itemPath && !year) return null;
   const baseQuery = (cleanQuery || '').toLowerCase().trim();
@@ -486,12 +521,13 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
   }
 
   // 2. Hierarchical Path Matching (if overridden by path)
-  if (itemPath) {
+  if (itemPath && !isGenericCategoryRoot(itemPath)) {
     const cleanP = itemPath.replace(/^\/+/, '');
     const parts = cleanP.split('/');
-    // Check from full path down to root directory
+    // Check from full path down to item directory (never generic category roots)
     for (let i = parts.length; i > 0; i--) {
       const subPath = parts.slice(0, i).join('/');
+      if (isGenericCategoryRoot(subPath)) continue;
       const p1 = `path-${subPath}`;
       const p2 = `path-/${subPath}`;
       if (cache[p1]?._overridden) return p1;
@@ -2246,15 +2282,16 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   };
   const searchType = isTvType(typeStr) ? 'tv' : 'movie';
 
-  const pathKey = itemPath ? `path-${itemPath}` : null;
+  const rawPath = itemPath ? (itemPath as string).trim() : null;
+  const isGeneric = rawPath ? isGenericCategoryRoot(rawPath) : true;
+  const cleanPath = (rawPath && !isGeneric) ? rawPath.replace(/^\/+/, '') : null;
+  const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
+  const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
+  const pathKey = cleanPath ? `path-/${cleanPath}` : null;
 
   const attachFullData = async (item: any) => {
      return await attachFullDataToItem(item, searchType, tmdbKey);
   };
-
-  const cleanPath = itemPath ? (itemPath as string).replace(/^\/+/, '') : null;
-  const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
-  const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
 
   // ALWAYS prioritize manually overridden items
   const overriddenKey = findOverriddenKeyInCache(tmdbCache, type as string, baseQuery, year as string, cleanPath || undefined);
@@ -3303,7 +3340,9 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
     const typeStr = (type as string || '').toUpperCase();
     const cacheKey = `${typeStr}-${lowerQuery}${year ? `-${year}` : ''}`;
     const baseKey = `${typeStr}-${lowerQuery}`;
-    const cleanPath = itemPath ? itemPath.replace(/^\/+/, '') : null;
+    const rawPath = itemPath ? (itemPath as string).trim() : null;
+    const isGeneric = rawPath ? isGenericCategoryRoot(rawPath) : true;
+    const cleanPath = (rawPath && !isGeneric) ? rawPath.replace(/^\/+/, '') : null;
     const pathKey1 = cleanPath ? `path-${cleanPath}` : null;
     const pathKey2 = cleanPath ? `path-/${cleanPath}` : null;
 
@@ -3343,12 +3382,14 @@ app.post('/api/meta/override', adminMiddleware, async (req, res) => {
       if (pathKey2) tmdbCache[pathKey2] = dataToStore;
 
       // Update any other existing keys in tmdbCache that match cleanPath
-      for (const k of Object.keys(tmdbCache)) {
-        if (!year && k === baseKey) {
-          tmdbCache[k] = dataToStore;
-        }
-        if (cleanPath && (k === `path-${cleanPath}` || k === `path-/${cleanPath}` || k.endsWith(`/${cleanPath}`))) {
-          tmdbCache[k] = dataToStore;
+      if (cleanPath) {
+        for (const k of Object.keys(tmdbCache)) {
+          if (!year && k === baseKey) {
+            tmdbCache[k] = dataToStore;
+          }
+          if (k === `path-${cleanPath}` || k === `path-/${cleanPath}`) {
+            tmdbCache[k] = dataToStore;
+          }
         }
       }
     };
@@ -3898,9 +3939,8 @@ export async function initSQLiteState() {
       for (const k of Object.keys(tmdbCache)) {
         // --- CLEANUP OF OLD BAD OVERRIDES ---
         if (k.startsWith('path-')) {
-          const p = k.replace('path-', '').replace(/^\/+/, '');
-          const depth = p.split('/').length;
-          if (depth <= 2 && (p.includes('ANIME') || p.includes('MOVIES') || p.includes('SERIES') || p.includes('KDRAMA') || p.includes('ADRAMA') || p.includes('home'))) {
+          const p = k.replace('path-', '');
+          if (isGenericCategoryRoot(p)) {
             console.log('Auto-cleaning bad broad path override at startup:', k);
             delete tmdbCache[k];
             cleanedBadKeys = true;

@@ -595,12 +595,14 @@ export default function Details() {
 
   const [tmdb, setTmdb] = useState<any>(isStale ? null : (location.state?.tmdbData || null));
   const hasAttemptedRef = useRef<string | null>(null);
-  let actualOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
-  const targetFilename = actualOpenlistPath.split('/').pop();
+  const rawOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
+  const actualItemOpenlistPath = rawOpenlistPath.startsWith('/') ? rawOpenlistPath : `/${rawOpenlistPath}`;
+  const targetFilename = actualItemOpenlistPath.split('/').pop() || '';
   const isVideoTarget = targetFilename && /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(targetFilename);
-  if (isVideoTarget) {
-      actualOpenlistPath = actualOpenlistPath.substring(0, actualOpenlistPath.lastIndexOf('/')) || '';
-  }
+  const actualFolderOpenlistPath = isVideoTarget 
+    ? (actualItemOpenlistPath.substring(0, actualItemOpenlistPath.lastIndexOf('/')) || '/home')
+    : actualItemOpenlistPath;
+  const actualOpenlistPath = actualItemOpenlistPath;
 
   useEffect(() => {
     axios.get('/api/config').then(res => {
@@ -927,7 +929,7 @@ export default function Details() {
     let isMounted = true;
     setLoadingFiles(true);
 
-    const cleanPath = actualOpenlistPath.replace(/^\/+/, '');
+    const cleanPath = actualFolderOpenlistPath.replace(/^\/+/, '');
     
     const payload: any = { reqPath: cleanPath };
     if (baseRefresh > 0) payload.refresh = true;
@@ -957,7 +959,7 @@ export default function Details() {
         let dirFiles = content.filter((item: any) => !item.is_dir && isVideoFile(item.name));
 
         if (isVideoTarget && targetFilename) {
-            const parentLower = actualOpenlistPath.toLowerCase().replace(/^\/+/, '');
+            const parentLower = actualFolderOpenlistPath.toLowerCase().replace(/^\/+/, '');
             if (parentLower === 'home/movies' || parentLower === 'home/shows' || parentLower === 'home/anime' || parentLower === 'home' || parentLower === '') {
                 dirFiles = dirFiles.filter((f: any) => f.name === targetFilename);
                 dirFolders.length = 0; // Clear folders so they don't show up on a specific movie's details page
@@ -995,7 +997,7 @@ export default function Details() {
       });
 
     return () => { isMounted = false; };
-  }, [actualOpenlistPath, token, baseRefresh, user]);
+  }, [actualFolderOpenlistPath, token, baseRefresh, user]);
 
   // Fetch TMDB Season Data
   useEffect(() => {
@@ -1018,7 +1020,7 @@ export default function Details() {
 
     // 2. From baseItems (for shows without folders or inside a specific season folder)
     if (seasonItems.length === 0 && baseItems.length > 0) {
-       const folderSeason = getFolderSeasonNum(actualOpenlistPath.split('/').pop() || '');
+       const folderSeason = getFolderSeasonNum(actualFolderOpenlistPath.split('/').pop() || '');
        if (folderSeason !== null) {
            seasonsToFetch.add(folderSeason);
        }
@@ -1063,7 +1065,7 @@ export default function Details() {
     });
 
     return () => { isMounted = false; };
-  }, [tmdb, activeSeasonIndex, seasonItems, baseItems, currentSeasonEpisodes]);
+  }, [tmdb, activeSeasonIndex, seasonItems, baseItems, currentSeasonEpisodes, actualFolderOpenlistPath]);
 
   // Fetch Season Episodes when active season changes
   useEffect(() => {
@@ -1075,7 +1077,7 @@ export default function Details() {
     let isMounted = true;
     setLoadingSeasonFiles(true);
     const selectedSeasonFolder = seasonItems[activeSeasonIndex];
-    const seasonPath = `${actualOpenlistPath.replace(/^\/+/, '')}/${selectedSeasonFolder.name}`;
+    const seasonPath = `${actualFolderOpenlistPath.replace(/^\/+/, '')}/${selectedSeasonFolder.name}`;
 
     const payload: any = { reqPath: seasonPath };
     if (seasonRefresh > 0) payload.refresh = true;
@@ -1478,11 +1480,11 @@ export default function Details() {
   const toggleSelectAll = () => {
     const currentList = seasonItems.length > 0 ? currentSeasonEpisodes : baseItems;
     let currentPath = seasonItems.length > 0 && activeSeasonIndex !== null
-      ? `${actualOpenlistPath.replace(/^\/+/, '')}/${seasonItems[activeSeasonIndex].name}`
-      : actualOpenlistPath.replace(/^\/+/, '');
+      ? `${actualFolderOpenlistPath.replace(/^\/+/, '')}/${seasonItems[activeSeasonIndex].name}`
+      : actualFolderOpenlistPath.replace(/^\/+/, '');
       
     if (seasonItems.length === 0) {
-        // actualOpenlistPath already has the filename stripped if it was a file, so currentPath is safe to use directly
+        // actualFolderOpenlistPath has the directory path, so currentPath is safe to use directly
     }
 
     const allSelected = currentList.length > 0 && currentList.every(file => 
@@ -1985,7 +1987,7 @@ export default function Details() {
                 <div className="grid grid-cols-1 gap-3">
                   {currentSeasonEpisodes.map((file, idx) => {
                     const selectedSeasonFolder = seasonItems[activeSeasonIndex || 0];
-                    const itemPath = `${actualOpenlistPath.replace(/^\/+/, '')}/${selectedSeasonFolder.name}`;
+                    const itemPath = `${actualFolderOpenlistPath.replace(/^\/+/, '')}/${selectedSeasonFolder.name}`;
                     const meta = extractFileMetadata(file.name, file.size);
                     if (meta.seasonNum === null) {
                         const folderSeason = getFolderSeasonNum(selectedSeasonFolder.name);
@@ -2024,10 +2026,10 @@ export default function Details() {
             ) : baseItems.length > 0 ? (
               <div className="grid grid-cols-1 gap-3">
                 {baseItems.map((file, idx) => {
-                  let itemPath = actualOpenlistPath.replace(/^\/+/, '');
+                  let itemPath = actualFolderOpenlistPath.replace(/^\/+/, '');
                   const meta = extractFileMetadata(file.name, file.size);
                   if (meta.seasonNum === null) {
-                      const folderSeason = getFolderSeasonNum(actualOpenlistPath.split('/').pop() || '');
+                      const folderSeason = getFolderSeasonNum(actualFolderOpenlistPath.split('/').pop() || '');
                       if (folderSeason !== null) {
                           meta.seasonNum = folderSeason;
                       }
@@ -2065,7 +2067,7 @@ export default function Details() {
                 {user === 'admin' && (
                   <button
                     onClick={() => {
-                      const newPath = prompt('Enter the Openlist path for this title:', actualOpenlistPath);
+                      const newPath = prompt('Enter the Openlist path for this title:', actualItemOpenlistPath);
                       if (newPath !== null && tmdb?.id) {
                         axios.post('/api/meta/digital-path', { tmdbId: tmdb.id, path: newPath }, { headers: { Authorization: token } })
                           .then(() => {
