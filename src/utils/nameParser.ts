@@ -72,9 +72,24 @@ export function extractFileMetadata(filename: string, fileSize?: number) {
   let episodeNum: number | null = null;
   let episodeNumEnd: number | null = null;
 
-  let sEPattern = /[sS](\d{1,2})[eE](\d{1,3})(?:-[eE]?(\d{1,3}))?/i.exec(name);
+  // 1. Standard S01E05 / S1E5 / S01 - E05 / S01E05-E06 / S01.E05
+  let sEPattern = /(?:^|[._\-\s\[\(])[sS](\d{1,2})[\s._-]*[eE](\d{1,3})(?:-[eE]?(\d{1,3}))?(?:[._\-\s\]\)]|$)/i.exec(name);
   if (!sEPattern) {
     sEPattern = /[sS](\d{1,2})[\s\-]+(?:[eE][pP]?)?\s*(\d{1,3})(?!\d)/i.exec(name);
+  }
+  // 2. 1x05 or 01x05 pattern (e.g. Dexter.1x05.mkv, 01x02.mp4)
+  if (!sEPattern) {
+    const xPattern = /(?:^|[._\-\s\[\(])(\d{1,2})[xX](\d{1,3})(?:-[xX]?(\d{1,3}))?(?:[._\-\s\]\)]|$)/i.exec(name);
+    if (xPattern) {
+      sEPattern = xPattern;
+    }
+  }
+  // 3. Season 1 Episode 5 or Season.1.Episode.5
+  if (!sEPattern) {
+    const wordPattern = /(?:^|[._\-\s\[\(])[sS]eason[\s._-]*(\d{1,2})[\s._-]+(?:[eE]pisode|[eE][pP]?|[eE])[\s._-]*(\d{1,3})(?:-[eE]?(\d{1,3}))?(?:[._\-\s\]\)]|$)/i.exec(name);
+    if (wordPattern) {
+      sEPattern = wordPattern;
+    }
   }
 
   if (sEPattern) {
@@ -84,21 +99,34 @@ export function extractFileMetadata(filename: string, fileSize?: number) {
       episodeNumEnd = parseInt(sEPattern[3], 10);
     }
   } else {
-    const ePattern = /\b[eE](\d{1,3})(?:-[eE]?(\d{1,3}))?\b/i.exec(name) || /\bep(?:isode)?\s*(\d{1,3})(?:-\s*(\d{1,3}))?\b/i.exec(name);
+    // 4. Standalone E05, EP05, Episode 05, Ep. 05
+    const ePattern = /(?:^|[._\-\s\[\(])[eE](\d{1,3})(?:-[eE]?(\d{1,3}))?(?:[._\-\s\]\)]|$)/i.exec(name) 
+      || /(?:^|[._\-\s\[\(])ep(?:isode)?[\s._-]*(\d{1,3})(?:-[\s._-]*(\d{1,3}))?(?:[._\-\s\]\)]|$)/i.exec(name);
     if (ePattern) {
       episodeNum = parseInt(ePattern[1], 10);
       if (ePattern[2]) {
         episodeNumEnd = parseInt(ePattern[2], 10);
       }
     } else {
-      // Fallback for standalone episode numbers: " - 02", "02 - Title"
-      const regex = /(?<=^|\s-\s)0*(\d{1,4})(?=\s|v\d+|$|-)/g;
-      let match;
-      while ((match = regex.exec(name)) !== null) {
+      // 5. Anime bracket/hash notation e.g. [05] or #05 or " - 05 "
+      const bracketMatch = /(?:^|[._\-\s])(?:\[|\#|\-[\s_]+)0*(\d{1,4})(?:\]|\s|\-|_|$)/i.exec(name);
+      if (bracketMatch) {
+        const num = parseInt(bracketMatch[1], 10);
+        if (num < 1900 || num > 2100) {
+          episodeNum = num;
+        }
+      }
+
+      if (episodeNum === null) {
+        // Fallback for standalone episode numbers: " - 02", "02 - Title", "02.mkv", "02"
+        const regex = /(?<=^|\s-\s|_|\s)0*(\d{1,4})(?=\s|v\d+|$|-|\))/g;
+        let match;
+        while ((match = regex.exec(name)) !== null) {
           const num = parseInt(match[1], 10);
           if (num < 1900 || num > 2100) {
-              episodeNum = num;
+            episodeNum = num;
           }
+        }
       }
     }
   }

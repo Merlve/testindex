@@ -468,42 +468,67 @@ function FileRowItem({
       }
   }
 
+  const epNumberFormatted = tmdbEpisode 
+    ? (meta.seasonNum !== null 
+        ? `S${meta.seasonNum.toString().padStart(2, '0')}E${tmdbEpisode.episode_number.toString().padStart(2, '0')}` 
+        : `Ep ${tmdbEpisode.episode_number}`)
+    : (meta.seasonNum !== null && meta.episodeNum !== null 
+        ? `S${meta.seasonNum.toString().padStart(2, '0')}E${meta.episodeNum.toString().padStart(2, '0')}` 
+        : (meta.episodeNum !== null ? `Ep ${meta.episodeNum}` : null));
+
   return (
     <div 
-      className={`p-3.5 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+      className={`p-3 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 ${
         isWatched 
           ? 'bg-black/5 dark:bg-white/5 border-transparent opacity-60 hover:opacity-100' 
           : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-purple-500/40'
       } ${isSelected ? 'ring-2 ring-purple-500 bg-purple-500/5' : ''}`}
     >
-      <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+      <div className="flex items-start sm:items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
         <button 
           onClick={toggleSelection}
-          className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center mt-0.5 sm:mt-0 ${
+          className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center mt-1 sm:mt-0 ${
             isSelected ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
           }`}
           title={isSelected ? "Deselect" : "Select"}
         >
-          {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+          {isSelected ? <CheckSquare size={19} /> : <Square size={19} />}
         </button>
-        {tmdbEpisode && tmdbEpisode.still_path && (
-          <img 
-            src={`https://image.tmdb.org/t/p/w185${tmdbEpisode.still_path}`} 
-            alt={tmdbEpisode.name} 
-            className={`hidden sm:block w-32 h-18 object-cover rounded-lg shrink-0 transition ${isWatched ? 'opacity-50 grayscale hover:grayscale-0 hover:opacity-100' : ''}`}
-          />
-        )}
+
+        {/* Thumbnail on All Devices (Mobile, Tablet, Desktop) */}
+        {tmdbEpisode && tmdbEpisode.still_path ? (
+          <div className="relative shrink-0 rounded-xl overflow-hidden bg-black/10 dark:bg-white/10 w-24 h-14 sm:w-32 sm:h-16 md:w-36 md:h-20 self-start sm:self-center shadow-sm">
+            <img 
+              src={`/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w300${tmdbEpisode.still_path}`)}`} 
+              alt={tmdbEpisode.name || 'Episode thumbnail'} 
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className={`w-full h-full object-cover transition ${isWatched ? 'opacity-50 grayscale hover:grayscale-0 hover:opacity-100' : ''}`}
+            />
+            {typeof tmdbEpisode.vote_average === 'number' && tmdbEpisode.vote_average > 0 && (
+              <span className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 backdrop-blur-sm text-amber-400 font-bold text-[9px] sm:text-[10px] rounded leading-none flex items-center gap-0.5">
+                ★ {tmdbEpisode.vote_average.toFixed(1)}
+              </span>
+            )}
+          </div>
+        ) : null}
+
         <div className="min-w-0 flex-1">
-          <h4 className={`text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
-            {tmdbEpisode 
-              ? `${meta.seasonNum !== null ? `S${meta.seasonNum.toString().padStart(2, '0')}E${tmdbEpisode.episode_number.toString().padStart(2, '0')}` : tmdbEpisode.episode_number}. ${tmdbEpisode.name}` 
-              : fallbackTitle}
-          </h4>
-          {tmdbEpisode && tmdbEpisode.overview && (
-            <p className={`hidden sm:block text-[11px] mt-1 line-clamp-2 transition ${isWatched ? 'text-gray-500/70 dark:text-gray-500/70' : 'text-gray-600 dark:text-gray-400'}`}>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h4 className={`text-xs sm:text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
+              {tmdbEpisode 
+                ? `${epNumberFormatted ? `${epNumberFormatted} • ` : ''}${tmdbEpisode.name || `Episode ${tmdbEpisode.episode_number}`}` 
+                : fallbackTitle}
+            </h4>
+          </div>
+
+          {/* Episode Plot / Overview on all devices */}
+          {tmdbEpisode && tmdbEpisode.overview ? (
+            <p className={`text-[11px] sm:text-xs mt-1 line-clamp-2 leading-relaxed transition ${isWatched ? 'text-gray-500/70 dark:text-gray-500/70' : 'text-gray-600 dark:text-gray-300'}`}>
               {tmdbEpisode.overview}
             </p>
-          )}
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
             {meta.resolution && (
               <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${isWatched ? 'bg-gray-500/15 text-gray-500' : 'bg-purple-600/15 text-purple-600 dark:text-purple-300'}`}>
@@ -524,7 +549,7 @@ function FileRowItem({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+      <div className="flex items-center gap-2 shrink-0 self-end md:self-center mt-1 md:mt-0">
         <button 
           onClick={() => toggleWatched(file.name, itemPath)}
           className={`p-2 rounded-xl transition cursor-pointer shrink-0 ${
@@ -566,9 +591,13 @@ function FileRowItem({
 }
 
 const getFolderSeasonNum = (pathStr: string): number | null => {
-  const match = pathStr.match(/(?:^|[^a-z])(?:season|s)[\s_.-]*(\d+)/i);
+  if (!pathStr) return null;
+  const clean = pathStr.trim();
+  if (/(?:^|[^a-z])(specials|extras|special|sp)(?:$|[^a-z])/i.test(clean)) return 0;
+  const match = clean.match(/(?:^|[^a-z])(?:season|series|staffel|temporada|s)[\s_.-]*(\d+)/i);
   if (match) return parseInt(match[1], 10);
-  if (/(?:^|[^a-z])(specials|extras)/i.test(pathStr)) return 0;
+  const pureNumMatch = clean.match(/^0*(\d{1,2})$/);
+  if (pureNumMatch) return parseInt(pureNumMatch[1], 10);
   return null;
 };
 
@@ -811,7 +840,7 @@ export default function Details() {
       if (targetTvId) {
         axios.get(`/api/meta/tv_details?tvId=${targetTvId}`)
           .then(res => {
-            if (isMounted && res.data) {
+            if (res.data) {
               setTmdb((prev: any) => {
                 if (!prev) return res.data;
                 return {
@@ -836,7 +865,7 @@ export default function Details() {
         const parsedYear = parsed.year || '';
         axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}&full=true`)
           .then(res => {
-            if (isMounted && res.data) {
+            if (res.data) {
               setTmdb(res.data);
             }
           })
@@ -1008,17 +1037,21 @@ export default function Details() {
 
     // 1. From active season folder
     if (seasonItems.length > 0 && activeSeasonIndex !== null && seasonItems[activeSeasonIndex]) {
-       let seasonNum = 1;
-       const match = seasonItems[activeSeasonIndex].name.match(/(?:^|[^a-z])(?:season|s)[\s_.-]*(\d+)/i);
-       if (match) {
-         seasonNum = parseInt(match[1], 10);
-       } else if (/specials|extras/i.test(seasonItems[activeSeasonIndex].name)) {
-         seasonNum = 0;
-       }
+       const folderSeason = getFolderSeasonNum(seasonItems[activeSeasonIndex].name);
+       const seasonNum = folderSeason !== null ? folderSeason : (activeSeasonIndex + 1);
        seasonsToFetch.add(seasonNum);
     }
 
-    // 2. From baseItems (for shows without folders or inside a specific season folder)
+    // 2. From all season folders in seasonItems (prefetch all detected seasons)
+    if (seasonItems.length > 0) {
+      seasonItems.forEach((folder, idx) => {
+        const folderSeason = getFolderSeasonNum(folder.name);
+        const sNum = folderSeason !== null ? folderSeason : (idx + 1);
+        seasonsToFetch.add(sNum);
+      });
+    }
+
+    // 3. From baseItems (for shows without folders or inside a specific season folder)
     if (seasonItems.length === 0 && baseItems.length > 0) {
        const folderSeason = getFolderSeasonNum(actualFolderOpenlistPath.split('/').pop() || '');
        if (folderSeason !== null) {
@@ -1030,9 +1063,12 @@ export default function Details() {
            seasonsToFetch.add(meta.seasonNum);
          }
        });
+       if (seasonsToFetch.size === 0) {
+           seasonsToFetch.add(1);
+       }
     }
 
-    // 3. From currentSeasonEpisodes (as fallback/additional source)
+    // 4. From currentSeasonEpisodes (as fallback/additional source)
     if (currentSeasonEpisodes.length > 0) {
        currentSeasonEpisodes.forEach(item => {
          const meta = extractFileMetadata(item.name, item.size);
@@ -1040,21 +1076,27 @@ export default function Details() {
            seasonsToFetch.add(meta.seasonNum);
          } else if (seasonItems[activeSeasonIndex || 0]) {
            const folderSeason = getFolderSeasonNum(seasonItems[activeSeasonIndex || 0].name);
-           if (folderSeason !== null) {
-             seasonsToFetch.add(folderSeason);
-           }
+           seasonsToFetch.add(folderSeason !== null ? folderSeason : ((activeSeasonIndex || 0) + 1));
          }
        });
+    }
+
+    // 5. If it's a TV show or anime/kdrama, always make sure at least Season 1 is fetched
+    if (seasonsToFetch.size === 0) {
+      seasonsToFetch.add(1);
     }
 
     seasonsToFetch.forEach(seasonNum => {
       setTmdbSeasonsData(prev => {
          if (prev[seasonNum] !== undefined) return prev; // Already fetched or loading
          
+         const targetTvId = tmdb?.id || tmdb?.tmdb_id || location.state?.item?._jf?.tmdbId || location.state?.item?.tmdbId;
+         if (!targetTvId) return prev;
+         
          // Fetch new season data
-         axios.get(`/api/meta/tv_season?tvId=${tmdb.id}&season=${seasonNum}`)
+         axios.get(`/api/meta/tv_season?tvId=${targetTvId}&season=${seasonNum}`)
            .then(res => {
-              if (isMounted && res.data) {
+              if (res.data) {
                  setTmdbSeasonsData(p => ({ ...p, [seasonNum]: res.data }));
               }
            })
@@ -1065,7 +1107,7 @@ export default function Details() {
     });
 
     return () => { isMounted = false; };
-  }, [tmdb, activeSeasonIndex, seasonItems, baseItems, currentSeasonEpisodes, actualFolderOpenlistPath]);
+  }, [tmdb, activeSeasonIndex, seasonItems, baseItems, currentSeasonEpisodes, actualFolderOpenlistPath, isTvMedia]);
 
   // Fetch Season Episodes when active season changes
   useEffect(() => {
@@ -1991,13 +2033,25 @@ export default function Details() {
                     const meta = extractFileMetadata(file.name, file.size);
                     if (meta.seasonNum === null) {
                         const folderSeason = getFolderSeasonNum(selectedSeasonFolder.name);
-                        if (folderSeason !== null) {
-                            meta.seasonNum = folderSeason;
-                        }
+                        meta.seasonNum = folderSeason !== null ? folderSeason : ((activeSeasonIndex || 0) + 1);
                     }
                     const isWatched = watchedItems.some(i => i.name === file.name && i.parentPath === itemPath);
                     const isSelected = selectedFiles.some(i => i.file.name === file.name && i.path === itemPath);
-                    const tmdbEpisode = (meta.seasonNum !== null ? tmdbSeasonsData[meta.seasonNum] : null)?.episodes?.find((ep: any) => ep.episode_number === meta.episodeNum);
+
+                    let seasonData = tmdbSeasonsData[meta.seasonNum !== null ? meta.seasonNum : 1];
+                    const targetEpNum = meta.episodeNum !== null ? meta.episodeNum : (idx + 1);
+                    
+                    let tmdbEpisode = seasonData?.episodes?.find((ep: any) => ep.episode_number === targetEpNum);
+                    
+                    if (!tmdbEpisode && targetEpNum !== null) {
+                        tmdbEpisode = Object.values(tmdbSeasonsData)
+                            .flatMap((s: any) => s?.episodes || [])
+                            .find((ep: any) => ep.episode_number === targetEpNum);
+                    }
+                    
+                    if (!tmdbEpisode && seasonData?.episodes?.[idx]) {
+                        tmdbEpisode = seasonData.episodes[idx];
+                    }
 
                     return (
                       <FileRowItem 
@@ -2030,13 +2084,25 @@ export default function Details() {
                   const meta = extractFileMetadata(file.name, file.size);
                   if (meta.seasonNum === null) {
                       const folderSeason = getFolderSeasonNum(actualFolderOpenlistPath.split('/').pop() || '');
-                      if (folderSeason !== null) {
-                          meta.seasonNum = folderSeason;
-                      }
+                      meta.seasonNum = folderSeason !== null ? folderSeason : (isTvMedia ? 1 : null);
                   }
                   const isWatched = watchedItems.some(i => i.name === file.name && i.parentPath === itemPath);
                   const isSelected = selectedFiles.some(i => i.file.name === file.name && i.path === itemPath);
-                  const tmdbEpisode = (meta.seasonNum !== null ? tmdbSeasonsData[meta.seasonNum] : null)?.episodes?.find((ep: any) => ep.episode_number === meta.episodeNum);
+
+                  let seasonData = tmdbSeasonsData[meta.seasonNum !== null ? meta.seasonNum : 1];
+                  const targetEpNum = meta.episodeNum !== null ? meta.episodeNum : (idx + 1);
+                  
+                  let tmdbEpisode = seasonData?.episodes?.find((ep: any) => ep.episode_number === targetEpNum);
+                  
+                  if (!tmdbEpisode && targetEpNum !== null) {
+                      tmdbEpisode = Object.values(tmdbSeasonsData)
+                          .flatMap((s: any) => s?.episodes || [])
+                          .find((ep: any) => ep.episode_number === targetEpNum);
+                  }
+                  
+                  if (!tmdbEpisode && seasonData?.episodes?.[idx]) {
+                      tmdbEpisode = seasonData.episodes[idx];
+                  }
 
                   return (
                     <FileRowItem 
