@@ -855,7 +855,13 @@ app.get('/api/subtitles', async (req, res) => {
     
     if (downloadData.link) {
       const subRes = await fetch(downloadData.link);
-      const subText = await subRes.text();
+      let subText = await subRes.text();
+      
+      // Auto-convert SRT to VTT if necessary
+      if (!subText.trim().startsWith('WEBVTT')) {
+        subText = 'WEBVTT\n\n' + subText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+      }
+
       res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
       return res.send(subText);
     } else {
