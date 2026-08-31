@@ -116,9 +116,7 @@ export default function VideoPlayer({ src, poster, type, title, subtitles, onClo
           'timeDivider',
           'durationDisplay',
           'progressControl',
-          'playbackRateMenuButton',
           'subsCapsButton',
-          'audioTrackButton',
           'pictureInPictureToggle',
           'fullscreenToggle',
         ]
@@ -403,19 +401,19 @@ export default function VideoPlayer({ src, poster, type, title, subtitles, onClo
             height: 3.8em !important;
             padding: 0 0.5em !important;
             align-items: center !important;
+            justify-content: center !important;
             background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.5) 60%, transparent 100%) !important;
             z-index: 20 !important;
             bottom: 0 !important;
           }
 
-          /* Progress Bar Expansion */
+          /* Short Progress Bar */
           .video-js .vjs-progress-control {
-            flex: 1 1 10% !important;
-            min-width: 40px !important;
-            max-width: 400px !important;
+            flex: 0 1 180px !important;
+            min-width: 80px !important;
             display: flex !important;
             align-items: center !important;
-            margin: 0 0.8em !important;
+            margin: 0 0.5em !important;
             cursor: pointer !important;
           }
 
@@ -462,16 +460,15 @@ export default function VideoPlayer({ src, poster, type, title, subtitles, onClo
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            margin: 0 0.15em !important;
+            margin: 0 0.4em !important;
             flex-shrink: 0 !important;
             border-radius: 6px !important;
             cursor: pointer !important;
           }
 
-          /* Fix Volume Panel merging with Play Button */
+          /* Fix Volume Panel */
           .video-js .vjs-volume-panel {
-            margin-left: 0.3em !important;
-            margin-right: 0.5em !important;
+            margin: 0 0.4em !important;
           }
 
           .video-js .vjs-volume-panel .vjs-mute-control {
@@ -497,7 +494,7 @@ export default function VideoPlayer({ src, poster, type, title, subtitles, onClo
             .video-js .vjs-control-bar > .vjs-control {
               width: 1.9em !important;
               height: 1.9em !important;
-              margin: 0 0.05em !important;
+              margin: 0 0.2em !important;
             }
             .video-js .vjs-current-time,
             .video-js .vjs-time-divider,
@@ -506,7 +503,8 @@ export default function VideoPlayer({ src, poster, type, title, subtitles, onClo
               padding: 0 1px !important;
             }
             .video-js .vjs-progress-control {
-              margin: 0 0.25em !important;
+              flex: 0 1 100px !important;
+              margin: 0 0.3em !important;
             }
           }
         `}} />
