@@ -803,6 +803,25 @@ app.get('/api/subtitles', async (req, res) => {
     const { tmdb_id, type, season, episode, language = 'en' } = req.query;
     if (!tmdb_id) return res.status(400).json({ error: 'tmdb_id is required' });
 
+    // Check local cache first
+    const subsDir = path.join(process.cwd(), 'data', 'subtitles');
+    if (!fs.existsSync(subsDir)) {
+      fs.mkdirSync(subsDir, { recursive: true });
+    }
+    const cacheKey = `${tmdb_id}_${type}_${season || 0}_${episode || 0}_${language}.vtt`;
+    const cachePath = path.join(subsDir, cacheKey);
+
+    if (fs.existsSync(cachePath)) {
+      let cachedSub = fs.readFileSync(cachePath, 'utf8');
+      
+      // Clean up common ASS/SSA artifacts just in case they were cached
+      cachedSub = cachedSub.replace(/\\h/g, ' ');
+      cachedSub = cachedSub.replace(/\{[^}]+\}/g, '');
+
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send(cachedSub);
+    }
+
     const apiKey = process.env.OPENSUBTITLES_API_KEY;
     if (!apiKey) {
        res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
@@ -861,6 +880,13 @@ app.get('/api/subtitles', async (req, res) => {
       if (!subText.trim().startsWith('WEBVTT')) {
         subText = 'WEBVTT\n\n' + subText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
       }
+
+      // Clean up common ASS/SSA artifacts often found in OpenSubtitles
+      subText = subText.replace(/\\h/g, ' ');
+      subText = subText.replace(/\{[^}]+\}/g, '');
+
+      // Save to cache
+      fs.writeFileSync(cachePath, subText, 'utf8');
 
       res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
       return res.send(subText);
