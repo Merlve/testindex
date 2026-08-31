@@ -579,7 +579,7 @@ function FileRowItem({
         </button>
 
         <button
-          onClick={() => setIntentModalData({ item: file, path: itemPath })}
+          onClick={() => setIntentModalData({ item: file, path: itemPath, tmdbEpisode })}
           className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-md shadow-purple-600/20 cursor-pointer"
         >
           <Play size={14} fill="currentColor" />
@@ -659,7 +659,8 @@ export default function Details() {
 
   // Playing / Modal State
   const [playingUrl, setPlayingUrl] = useState('');
-  const [intentModalData, setIntentModalData] = useState<{ item: any; path: string } | null>(null);
+  const [playingItemData, setPlayingItemData] = useState<any>(null);
+  const [intentModalData, setIntentModalData] = useState<{ item: any; path: string; tmdbEpisode?: any } | null>(null);
 
   // Trailer State
   const [showTrailerModal, setShowTrailerModal] = useState(false);
@@ -2205,7 +2206,7 @@ export default function Details() {
             token={token}
             config={config}
             onClose={() => setIntentModalData(null)}
-            onPlayWeb={(url) => setPlayingUrl(url)}
+            onPlayWeb={(url) => { setPlayingUrl(url); setPlayingItemData(intentModalData); }}
             onExternalPlay={() => {
               const isWatched = watchedItems.some(i => i.name === intentModalData.item.name && i.parentPath === intentModalData.path);
               if (!isWatched) {
@@ -2218,13 +2219,33 @@ export default function Details() {
 
       {/* In-Browser Video Player Component */}
       <AnimatePresence>
-        {playingUrl && (
-          <VideoPlayer 
-            src={playingUrl} 
-            title={name} 
-            onClose={() => setPlayingUrl('')} 
-          />
-        )}
+        {playingUrl && (() => {
+          const ep = playingItemData?.tmdbEpisode;
+          let playerTitle = name;
+          let subtitles = [];
+          
+          if (tmdb) {
+            const tmdbId = tmdb.id;
+            let query = `?tmdb_id=${tmdbId}&type=${ep ? 'episode' : 'movie'}`;
+            if (ep) {
+              query += `&season=${ep.season_number}&episode=${ep.episode_number}`;
+              playerTitle = `${name} - S${ep.season_number}E${ep.episode_number}: ${ep.name || 'Episode ' + ep.episode_number}`;
+            }
+            
+            subtitles = [
+              { src: `/api/subtitles${query}&language=en`, label: 'English', srclang: 'en' }
+            ];
+          }
+
+          return (
+            <VideoPlayer 
+              src={playingUrl} 
+              title={playerTitle} 
+              subtitles={subtitles}
+              onClose={() => { setPlayingUrl(''); setPlayingItemData(null); }} 
+            />
+          );
+        })()}
       </AnimatePresence>
 
       {/* Metadata Correction & Logo Fix Modal */}

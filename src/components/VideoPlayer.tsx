@@ -5,15 +5,22 @@ import type Player from 'video.js/dist/types/player';
 import { AlertCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+interface SubtitleTrack {
+  src: string;
+  label: string;
+  srclang: string;
+}
+
 interface VideoPlayerProps {
   src: string;
   poster?: string;
   type?: string;
   title?: string;
+  subtitles?: SubtitleTrack[];
   onClose?: () => void;
 }
 
-export default function VideoPlayer({ src, poster, type, title, onClose }: VideoPlayerProps) {
+export default function VideoPlayer({ src, poster, type, title, subtitles, onClose }: VideoPlayerProps) {
   const videoWrapperRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<Player | null>(null);
   const [audioOnlyWarning, setAudioOnlyWarning] = useState(false);
@@ -80,6 +87,13 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
           type: videoType
         }
       ],
+      tracks: subtitles?.map(sub => ({
+        kind: 'captions',
+        src: sub.src,
+        srclang: sub.srclang,
+        label: sub.label,
+        default: sub.srclang === 'en'
+      })) || [],
       controlBar: {
         children: [
           'playToggle',
@@ -100,6 +114,14 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
     };
 
     const player = (playerRef.current = videojs(videoElement, playerOptions, () => {
+      // 1. Resume from saved progress
+      const progressKey = `watch_progress_${btoa(src).substring(0, 50)}`;
+      const savedProgress = localStorage.getItem(progressKey);
+      
+      if (savedProgress) {
+        player.currentTime(parseFloat(savedProgress));
+      }
+
       const checkCodecSupport = () => {
         try {
           const tech = player.tech({ IWillNotUseThisInPlugins: true });
@@ -117,7 +139,26 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
       };
 
       player.on('playing', checkCodecSupport);
-      player.on('timeupdate', checkCodecSupport);
+      
+      // 2. Track and save progress continuously
+      let lastSaveTime = 0;
+      player.on('timeupdate', () => {
+        checkCodecSupport();
+        
+        const currentTime = player.currentTime();
+        const duration = player.duration();
+        
+        // Save progress every 5 seconds
+        if (Math.abs(currentTime - lastSaveTime) > 5) {
+          // If we are at the very end (last 30 seconds), clear the progress so it starts over next time
+          if (duration > 0 && duration - currentTime < 30) {
+            localStorage.removeItem(progressKey);
+          } else {
+            localStorage.setItem(progressKey, currentTime.toString());
+          }
+          lastSaveTime = currentTime;
+        }
+      });
     }));
 
     return () => {
@@ -184,6 +225,12 @@ export default function VideoPlayer({ src, poster, type, title, onClose }: Video
 
         {/* Video.js Host Container */}
         <div data-vjs-player className="w-full h-full relative" ref={videoWrapperRef} />
+        
+        {/* Force timestamp visibility over remaining time */}
+        <style dangerouslySetInnerHTML={{__html: `
+          .video-js .vjs-time-control { display: block !important; }
+          .video-js .vjs-remaining-time { display: none !important; }
+        `}} />
       </motion.div>
     </div>
   );

@@ -797,6 +797,78 @@ app.post('/api/downloads/track', async (req, res) => {
   }
 });
 
+
+app.get('/api/subtitles', async (req, res) => {
+  try {
+    const { tmdb_id, type, season, episode, language = 'en' } = req.query;
+    if (!tmdb_id) return res.status(400).json({ error: 'tmdb_id is required' });
+
+    const apiKey = process.env.OPENSUBTITLES_API_KEY;
+    if (!apiKey) {
+       res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+       return res.send('WEBVTT\n\nNOTE\nNo API key configured');
+    }
+
+    // OpenSubtitles API v1 Search
+    let searchUrl = `https://api.opensubtitles.com/api/v1/subtitles?tmdb_id=${tmdb_id}&languages=${language}`;
+    if (type === 'episode' || type === 'tv') {
+      if (season) searchUrl += `&season_number=${season}`;
+      if (episode) searchUrl += `&episode_number=${episode}`;
+    }
+
+    const searchResponse = await fetch(searchUrl, {
+      headers: {
+        'Api-Key': apiKey,
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!searchResponse.ok) {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send('WEBVTT\n\nNOTE\nFailed to search subtitles');
+    }
+
+    const searchData = await searchResponse.json();
+    if (!searchData.data || searchData.data.length === 0) {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send('WEBVTT\n\nNOTE\nNo subtitles found');
+    }
+
+    const fileId = searchData.data[0].attributes.files[0].file_id;
+
+    const downloadResponse = await fetch('https://api.opensubtitles.com/api/v1/download', {
+      method: 'POST',
+      headers: {
+        'Api-Key': apiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ file_id: fileId })
+    });
+
+    if (!downloadResponse.ok) {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send('WEBVTT\n\nNOTE\nFailed to get download link');
+    }
+
+    const downloadData = await downloadResponse.json();
+    
+    if (downloadData.link) {
+      const subRes = await fetch(downloadData.link);
+      const subText = await subRes.text();
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send(subText);
+    } else {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send('WEBVTT\n\nNOTE\nNo download link found');
+    }
+  } catch (error) {
+    console.error('Subtitle API error:', error);
+    res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+    return res.send('WEBVTT\n\nNOTE\nInternal error');
+  }
+});
+
 app.get('/api/image-proxy', async (req, res) => {
   try {
     const imageUrl = req.query.url as string;
