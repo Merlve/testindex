@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import ItemCard from './ItemCard';
@@ -6,6 +6,8 @@ import { MonitorPlay } from 'lucide-react';
 import { parseMediaName } from '../utils/nameParser';
 
 export default function DigitalReleasesCarousel({ categories }: { categories: any[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   const fetchDigitalReleases = async () => {
     const now = new Date();
     // Get the first and last day of the current month
@@ -98,6 +100,20 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     ));
   }, [data.items, data.tmdbData]);
 
+  // Restore scroll position
+  useEffect(() => {
+    if (scrollRef.current) {
+      const savedScroll = sessionStorage.getItem('digitalReleasesScroll');
+      if (savedScroll) {
+        scrollRef.current.scrollLeft = parseInt(savedScroll, 10);
+      }
+    }
+  }, [data.items]); // Run when items load
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    sessionStorage.setItem('digitalReleasesScroll', e.currentTarget.scrollLeft.toString());
+  };
+
   if (loading || !data.items || data.items.length === 0) {
     return null;
   }
@@ -118,7 +134,11 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
           </div>
         </div>
       </div>
-      <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+      <div 
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide"
+      >
          {renderedItems}
       </div>
     </div>

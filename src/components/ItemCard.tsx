@@ -250,13 +250,16 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
           {isWatched ? <Eye size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400 fill-purple-400/20" /> : <EyeOff size={12} className="sm:w-3.5 sm:h-3.5" />}
         </button>
 
-        {isWatched && (
+        {item._digital_release && item.releaseDate ? (
+          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-blue-600/90 text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-blue-400/30 truncate">
+            <span className="truncate">{new Date(item.releaseDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </div>
+        ) : isWatched ? (
           <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600  text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
             <CheckCircle size={9} className="fill-current text-white flex-shrink-0" />
             <span className="truncate">Watched</span>
           </div>
-        )}
-
+        ) : null}
       </div>
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
         <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-[11px] sm:text-xs'}`}>
