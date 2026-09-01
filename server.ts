@@ -22,6 +22,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import Fuse from 'fuse.js';
 import dns from 'dns';
 import http from 'http';
 import https from 'https';
@@ -1966,6 +1967,48 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
     let content = [];
     if (response1.data && response1.data.code === 200 && response1.data.data && response1.data.data.content) {
       content = response1.data.data.content;
+    }
+    
+    // Fuzzy search using local libraryIndex
+    if (keywords && typeof keywords === 'string' && keywords.length >= 2) {
+       try {
+           const libIndex = await getLibraryIndex(token).catch(() => []);
+           if (libIndex && libIndex.length > 0) {
+               const fuse = new Fuse(libIndex, {
+                   keys: ['name', 'cleanName'],
+                   threshold: 0.4,
+                   distance: 100,
+                   includeScore: true
+               });
+               const fuzzyResults = fuse.search(keywords);
+               const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+               const seen = new Set(content.map(getUniqId));
+               
+               for (const res of fuzzyResults.slice(0, 30)) {
+                   const item = res.item;
+                   let itemParent = item.parent;
+                   if (!itemParent && item.openlist_path) {
+                       const parts = item.openlist_path.split('/');
+                       parts.pop();
+                       itemParent = parts.join('/');
+                   } else if (!itemParent && item.category) {
+                       itemParent = `${appConfig.basePath}/${item.category}`;
+                   }
+                   
+                   const mappedItem = {
+                       ...item,
+                       parent: itemParent
+                   };
+                   const uid = getUniqId(mappedItem);
+                   if (!seen.has(uid)) {
+                       content.push(mappedItem);
+                       seen.add(uid);
+                   }
+               }
+           }
+       } catch (e) {
+           console.error("Fuzzy search error", e);
+       }
     }
     
     // Handle 'and' vs '&' replacements
