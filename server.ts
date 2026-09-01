@@ -1998,6 +1998,8 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       content = response1.data.data.content;
     }
     
+    let originalContentCount = content.length;
+
     // Fuzzy search using local libraryIndex
     if (keywords && typeof keywords === 'string' && keywords.length >= 2) {
        try {
@@ -2209,6 +2211,9 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
     
     if (response1.data && response1.data.data) {
       response1.data.data.content = filteredContent;
+      if (originalContentCount === 0 && filteredContent.length > 0) {
+        response1.data.data.isFuzzyFallback = true;
+      }
     }
 
     res.json(response1.data);

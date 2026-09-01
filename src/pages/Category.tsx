@@ -87,11 +87,12 @@ export default function Category() {
         
         if (res.data.code !== 200) throw new Error(`Failed to search items: ${res.data.message || 'Unknown error'}`);
         
-        return (res.data.data?.content || []).map((i: any) => {
+        const content = (res.data.data?.content || []).map((i: any) => {
            const parentParts = (i.parent || '').split('/');
            const cat = parentParts[parentParts.length - 1] || 'UNKNOWN';
            return { ...i, _cat: cat, _parent: i.parent };
         });
+        return { items: content, isFuzzy: res.data.data?.isFuzzyFallback || false };
       } else {
         const payload: any = { reqPath: `/home/${name}` };
         if (forceRefreshCounter > 0) payload.refresh = true;
@@ -101,7 +102,8 @@ export default function Category() {
         
         const content = res.data.data?.content || [];
         const isVideo = (n: string) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(n);
-        return content.filter((item: any) => item.is_dir || isVideo(item.name));
+        const filtered = content.filter((item: any) => item.is_dir || isVideo(item.name));
+        return { items: filtered, isFuzzy: false };
       }
     } catch (err: any) {
       if (err.response) {
@@ -110,7 +112,7 @@ export default function Category() {
     }
   };
 
-  const { data: items = [], isLoading, isError, error, isFetching, refetch } = useQuery({
+  const { data = { items: [], isFuzzy: false }, isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ['category', name, query, forceRefreshCounter],
     queryFn: fetchItems,
     enabled: !!token && (!!name || !!query),
@@ -121,7 +123,7 @@ export default function Category() {
       const dashboardData: any = queryClient.getQueryData(['dashboard']);
       if (dashboardData) {
         const cat = dashboardData.find((c: any) => c.name === name);
-        if (cat) return cat.items;
+        if (cat) return { items: cat.items, isFuzzy: false };
       }
       
       try {
@@ -129,13 +131,15 @@ export default function Category() {
         if (cached) {
           const parsed = JSON.parse(cached);
           const cat = parsed.find((c: any) => c.name === name);
-          if (cat) return cat.items;
+          if (cat) return { items: cat.items, isFuzzy: false };
         }
       } catch (e) {}
       
       return undefined;
     }
   });
+
+  const { items, isFuzzy } = data;
 
 
   
@@ -194,10 +198,17 @@ export default function Category() {
       className="p-4 sm:p-12 min-h-screen pb-20"
     >
       <div className="flex flex-col mb-6 sm:mb-8 gap-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-black dark:text-white capitalize tracking-tight">
-            {query ? `Search Results: ${query}` : name}
-          </h2>
+        <div className="flex justify-between items-start sm:items-center gap-4">
+          <div className="flex flex-col min-w-0">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-black dark:text-white capitalize tracking-tight break-words">
+              {query ? `Search Results: ${query}` : name}
+            </h2>
+            {query && isFuzzy && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Showing results related to your search
+              </p>
+            )}
+          </div>
           <div className="flex gap-2">
             <div className="flex bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5 p-1 shrink-0">
               <button 
