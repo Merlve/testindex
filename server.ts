@@ -351,6 +351,35 @@ const getOpenlistApiKey = () => process.env.OPENLIST_API_KEY;
 
 const adminRoleCache = new Map<string, { role: number, expiry: number }>();
 
+const authenticatedMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const token = req.headers.authorization;
+  if (!token || isValidGuest(token) || token === 'null' || token === 'undefined') {
+    return res.status(401).json({ error: 'Unauthorized: User access required' });
+  }
+  
+  const masterApiKey = getOpenlistApiKey();
+  if (token === masterApiKey) {
+    return next();
+  }
+
+  const cached = adminRoleCache.get(token);
+  if (cached && Date.now() < cached.expiry) {
+    return next();
+  }
+
+  try {
+    const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/me`;
+    let response = await axios.get(url, { headers: { Authorization: token } });
+    const role = response.data?.data?.role;
+    if (response.data?.code === 200 && role !== undefined) {
+      adminRoleCache.set(token, { role, expiry: Date.now() + 5 * 60 * 1000 });
+      return next();
+    }
+  } catch (err) {}
+
+  return res.status(403).json({ error: 'Forbidden: Valid account required' });
+};
+
 const adminMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const token = req.headers.authorization;
   if (!token || isValidGuest(token) || token === 'null' || token === 'undefined') {
@@ -3478,7 +3507,7 @@ app.post('/api/meta/correct', adminMiddleware, async (req, res) => {
 });
 
 // Admin override for TMDB by ID
-app.post('/api/meta/override', adminMiddleware, async (req, res) => {
+app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
   const { query, type, year, tmdbId, customTitle, customYear, customLogo, path: itemPath, updateLogoOnly, currentData } = req.body;
   if (!query || (!tmdbId && !customTitle && !customYear && customLogo === undefined)) return res.status(400).json({ error: 'Invalid data' });
 

@@ -1853,7 +1853,7 @@ export default function Details() {
               </button>
             )}
 
-            {user !== 'guest' && (
+            {user && user !== 'guest' && (
             <button
               onClick={() => {
                 const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
