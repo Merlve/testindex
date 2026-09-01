@@ -3570,16 +3570,23 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
       }
     };
 
+    const isMovieCategory = (type || '').toUpperCase() === 'MOVIES';
+
     if (updateLogoOnly || ((customTitle || customYear || customLogo !== undefined) && !tmdbId)) {
       // Just override title/year/logo in existing cache or create a mock
-      let data = tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || currentData || {};
+      let data = { ...(tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || currentData || {}) };
+      
       if (customTitle) {
         data.title = customTitle;
-        data.name = customTitle; // tv uses name
+        if (!isMovieCategory) {
+          data.name = customTitle; // tv uses name
+        }
       }
       if (customYear) {
         data.release_date = customYear + '-01-01'; // approximate for movie
-        data.first_air_date = customYear + '-01-01'; // approximate for tv
+        if (!isMovieCategory) {
+          data.first_air_date = customYear + '-01-01'; // approximate for tv
+        }
       }
       if (customLogo !== undefined) {
         applyLogoToData(data, customLogo);
@@ -3633,11 +3640,15 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
     if (data) {
        if (customTitle) {
          data.title = customTitle;
-         data.name = customTitle;
+         if (!isMovieCategory) {
+           data.name = customTitle;
+         }
        }
        if (customYear) {
          data.release_date = customYear + '-01-01';
-         data.first_air_date = customYear + '-01-01';
+         if (!isMovieCategory) {
+           data.first_air_date = customYear + '-01-01';
+         }
        }
        if (customLogo !== undefined) {
          applyLogoToData(data, customLogo);

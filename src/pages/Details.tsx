@@ -389,7 +389,8 @@ function FileRowItem({
   isSelected,
   toggleSelection,
   tmdbEpisode,
-  showToast
+  showToast,
+  isTvMedia
 }: {
   file: any;
   itemPath: string;
@@ -403,6 +404,7 @@ function FileRowItem({
   toggleSelection: () => void;
   tmdbEpisode?: any;
   showToast?: (msg: string) => void;
+  isTvMedia?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [actionLoading, setActionLoading] = useState<'copy' | 'download' | null>(null);
@@ -457,7 +459,9 @@ function FileRowItem({
   };
 
   let fallbackTitle = file.name;
-  if (!tmdbEpisode) {
+  if (!isTvMedia) {
+      fallbackTitle = file.name;
+  } else if (!tmdbEpisode) {
       if (meta.seasonNum !== null && meta.episodeNum !== null) {
           fallbackTitle = `S${meta.seasonNum.toString().padStart(2, '0')}E${meta.episodeNum.toString().padStart(2, '0')} - Episode ${meta.episodeNum}`;
       } else if (meta.episodeNum !== null) {
@@ -468,13 +472,15 @@ function FileRowItem({
       }
   }
 
-  const epNumberFormatted = tmdbEpisode 
-    ? (meta.seasonNum !== null 
-        ? `S${meta.seasonNum.toString().padStart(2, '0')}E${tmdbEpisode.episode_number.toString().padStart(2, '0')}` 
-        : `Ep ${tmdbEpisode.episode_number}`)
-    : (meta.seasonNum !== null && meta.episodeNum !== null 
-        ? `S${meta.seasonNum.toString().padStart(2, '0')}E${meta.episodeNum.toString().padStart(2, '0')}` 
-        : (meta.episodeNum !== null ? `Ep ${meta.episodeNum}` : null));
+  const epNumberFormatted = isTvMedia 
+    ? (tmdbEpisode 
+        ? (meta.seasonNum !== null 
+            ? `S${meta.seasonNum.toString().padStart(2, '0')}E${tmdbEpisode.episode_number.toString().padStart(2, '0')}` 
+            : `Ep ${tmdbEpisode.episode_number}`)
+        : (meta.seasonNum !== null && meta.episodeNum !== null 
+            ? `S${meta.seasonNum.toString().padStart(2, '0')}E${meta.episodeNum.toString().padStart(2, '0')}` 
+            : (meta.episodeNum !== null ? `Ep ${meta.episodeNum}` : null)))
+    : null;
 
   return (
     <div 
@@ -496,7 +502,7 @@ function FileRowItem({
         </button>
 
         {/* Thumbnail on All Devices (Mobile, Tablet, Desktop) */}
-        {tmdbEpisode && tmdbEpisode.still_path ? (
+        {(tmdbEpisode && tmdbEpisode.still_path && isTvMedia) ? (
           <div className="relative shrink-0 rounded-xl overflow-hidden bg-black/10 dark:bg-white/10 w-24 h-14 sm:w-32 sm:h-16 md:w-36 md:h-20 self-start sm:self-center shadow-sm">
             <img 
               src={`/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w300${tmdbEpisode.still_path}`)}`} 
@@ -516,7 +522,7 @@ function FileRowItem({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
             <h4 className={`text-xs sm:text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
-              {tmdbEpisode 
+              {(tmdbEpisode && isTvMedia)
                 ? `${epNumberFormatted ? `${epNumberFormatted} • ` : ''}${tmdbEpisode.name || `Episode ${tmdbEpisode.episode_number}`}` 
                 : fallbackTitle}
             </h4>
@@ -1032,6 +1038,8 @@ export default function Details() {
   // Fetch TMDB Season Data
   useEffect(() => {
     if (!tmdb || !tmdb.id) return;
+    if (!isTvMedia) return;
+
     let isMounted = true;
 
     const seasonsToFetch = new Set<number>();
@@ -1313,7 +1321,8 @@ export default function Details() {
         year: parsed.year,
         customTitle: customTitle.trim(),
         customYear: customYear.trim() || undefined,
-        path: actualOpenlistPath
+        path: actualOpenlistPath,
+        currentData: tmdb
       }, { headers: { Authorization: token } });
       
       if (res.data && res.data.data) {
@@ -2069,6 +2078,7 @@ export default function Details() {
                         toggleSelection={() => toggleSelection(file, itemPath)}
                         tmdbEpisode={tmdbEpisode}
                         showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
+                        isTvMedia={isTvMedia}
                       />
                     );
                   })}
@@ -2120,6 +2130,7 @@ export default function Details() {
                       toggleSelection={() => toggleSelection(file, itemPath)}
                       tmdbEpisode={tmdbEpisode}
                       showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
+                      isTvMedia={isTvMedia}
                     />
                   );
                 })}
