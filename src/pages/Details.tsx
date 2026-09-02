@@ -521,7 +521,7 @@ function FileRowItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <h4 className={`text-xs sm:text-sm font-semibold break-words leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
+            <h4 className={`text-xs sm:text-sm font-semibold break-all break-words whitespace-normal leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
               {(tmdbEpisode && isTvMedia)
                 ? `${epNumberFormatted ? `${epNumberFormatted} • ` : ''}${tmdbEpisode.name || `Episode ${tmdbEpisode.episode_number}`}` 
                 : fallbackTitle}
