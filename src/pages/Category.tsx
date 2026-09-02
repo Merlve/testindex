@@ -163,9 +163,11 @@ export default function Category() {
         return firstChar === filterLetter;
       });
     }
-    result.sort((a: any, b: any) => {
-      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-    });
+    if (!query) {
+      result.sort((a: any, b: any) => {
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      });
+    }
     return result;
   }, [items, filterLetter, query, searchType]);
 

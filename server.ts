@@ -2209,6 +2209,34 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       return true;
     });
     
+    const searchStr = (keywords || '').toLowerCase().trim();
+    if (searchStr) {
+      filteredContent.sort((a, b) => {
+        const aParsed = parseMediaName(a.name).cleanName.toLowerCase().trim();
+        const bParsed = parseMediaName(b.name).cleanName.toLowerCase().trim();
+        
+        const aExact = aParsed === searchStr;
+        const bExact = bParsed === searchStr;
+        
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+        
+        const aStarts = aParsed.startsWith(searchStr);
+        const bStarts = bParsed.startsWith(searchStr);
+        
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        
+        const aContains = aParsed.includes(searchStr);
+        const bContains = bParsed.includes(searchStr);
+        
+        if (aContains && !bContains) return -1;
+        if (!aContains && bContains) return 1;
+        
+        return 0;
+      });
+    }
+
     if (response1.data && response1.data.data) {
       response1.data.data.content = filteredContent;
       if (originalContentCount === 0 && filteredContent.length > 0) {
