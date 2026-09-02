@@ -1995,7 +1995,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
     const response1 = await axios.post(url, reqBody1, { headers: { Authorization: token } });
     let content = [];
     if (response1.data && response1.data.code === 200 && response1.data.data && response1.data.data.content) {
-      content = response1.data.data.content;
+      content = response1.data.data.content.map((item: any) => ({ ...item, isExact: true }));
     }
     
     let originalContentCount = content.length;
@@ -2028,7 +2028,8 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
                    
                    const mappedItem = {
                        ...item,
-                       parent: itemParent
+                       parent: itemParent,
+                       isFuzzy: true
                    };
                    const uid = getUniqId(mappedItem);
                    if (!seen.has(uid)) {

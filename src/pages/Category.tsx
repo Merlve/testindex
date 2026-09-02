@@ -59,7 +59,8 @@ export default function Category() {
   const [filterLetter, setFilterLetter] = useState<string | null>(initialState.filterLetter);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(initialState.viewMode);
   const [searchType, setSearchType] = useState<'ALL' | 'MOVIES' | 'SHOWS'>(initialState.searchType);
-    
+  const [matchType, setMatchType] = useState<'EXACT' | 'FUZZY'>('EXACT');
+  
   const ITEMS_PER_PAGE = 50;
 
   useEffect(() => {
@@ -68,13 +69,13 @@ export default function Category() {
     setFilterLetter(initialState.filterLetter);
     setViewMode(initialState.viewMode);
     setSearchType(initialState.searchType);
+    setMatchType('EXACT');
   }, [name, query]);
 
   useEffect(() => {
     const storageKey = `category_state_${name}_${query || ''}`;
     sessionStorage.setItem(storageKey, JSON.stringify({ page, filterLetter, viewMode, searchType }));
   }, [page, filterLetter, viewMode, searchType, name, query]);
-
 
   const [forceRefreshCounter, setForceRefreshCounter] = useState(0);
 
@@ -145,6 +146,15 @@ export default function Category() {
   
   const filteredItems = useMemo(() => {
     let result = [...items];
+    
+    if (query) {
+      if (matchType === 'EXACT') {
+        result = result.filter(item => item.isExact);
+      } else if (matchType === 'FUZZY') {
+        result = result.filter(item => item.isFuzzy);
+      }
+    }
+
     if (query && searchType !== 'ALL') {
       result = result.filter((item: any) => {
         const cat = item._cat?.toUpperCase();
@@ -169,7 +179,7 @@ export default function Category() {
       });
     }
     return result;
-  }, [items, filterLetter, query, searchType]);
+  }, [items, filterLetter, query, searchType, matchType]);
 
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const displayedItems = filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -271,25 +281,42 @@ export default function Category() {
         </div>
 
         {query && (
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide w-full max-w-full">
-            <button 
-              onClick={() => { setSearchType('ALL'); setPage(1); }} 
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${searchType === 'ALL' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/5'}`}
-            >
-              All Results
-            </button>
-            <button 
-              onClick={() => { setSearchType('MOVIES'); setPage(1); }} 
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${searchType === 'MOVIES' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/5'}`}
-            >
-              Movies
-            </button>
-            <button 
-              onClick={() => { setSearchType('SHOWS'); setPage(1); }} 
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${searchType === 'SHOWS' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/5'}`}
-            >
-              Shows
-            </button>
+          <div className="flex flex-col gap-3 mt-4">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide w-full max-w-full border-b border-black/5 dark:border-white/5">
+              <button 
+                onClick={() => { setMatchType('EXACT'); setPage(1); }} 
+                className={`px-4 py-2 text-sm font-bold transition shrink-0 border-b-2 ${matchType === 'EXACT' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                Exact matches <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-black/10 dark:bg-white/10">{items.filter((i: any) => i.isExact).length}</span>
+              </button>
+              <button 
+                onClick={() => { setMatchType('FUZZY'); setPage(1); }} 
+                className={`px-4 py-2 text-sm font-bold transition shrink-0 border-b-2 ${matchType === 'FUZZY' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                Similar Results <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-black/10 dark:bg-white/10">{items.filter((i: any) => i.isFuzzy).length}</span>
+              </button>
+            </div>
+            
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide w-full max-w-full">
+              <button 
+                onClick={() => { setSearchType('ALL'); setPage(1); }} 
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${searchType === 'ALL' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/5'}`}
+              >
+                All Results
+              </button>
+              <button 
+                onClick={() => { setSearchType('MOVIES'); setPage(1); }} 
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${searchType === 'MOVIES' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/5'}`}
+              >
+                Movies
+              </button>
+              <button 
+                onClick={() => { setSearchType('SHOWS'); setPage(1); }} 
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${searchType === 'SHOWS' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50' : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/5'}`}
+              >
+                Shows
+              </button>
+            </div>
           </div>
         )}
       </div>
