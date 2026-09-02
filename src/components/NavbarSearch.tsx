@@ -4,6 +4,42 @@ import { useNavigate } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { getRecentSearches, saveRecentSearch, removeRecentSearch, clearRecentSearches } from '../utils/recentSearches';
+import { useQuery } from '@tanstack/react-query';
+import { parseMediaName } from '../utils/nameParser';
+
+function SearchItemImage({ item }: { item: any }) {
+  const { data: tmdbData } = useQuery({
+    queryKey: ['tmdb_search', item.name, item.parent],
+    queryFn: async () => {
+      const parentParts = (item.parent || '').split('/').filter(Boolean);
+      let category = parentParts.length > 1 ? parentParts[1].toUpperCase() : 'MOVIES';
+      let searchName = item.name;
+      if (/^(s\d+|season\s*\d+)$/i.test(item.name)) {
+        searchName = parentParts[parentParts.length - 1];
+      }
+      const { cleanName, year } = parseMediaName(searchName);
+      
+      let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(item.parent + '/' + item.name)}`;
+      const res = await axios.get(url);
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 60 * 24,
+  });
+
+  const posterPath = tmdbData?.poster_path;
+  
+  if (posterPath) {
+    return (
+      <div className="w-8 h-8 rounded shrink-0 overflow-hidden bg-black/50 mr-3">
+        <img src={`https://image.tmdb.org/t/p/w92${posterPath}`} alt="" className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+
+  return (
+    <Film className="w-4 h-4 text-gray-600 dark:text-gray-400 mr-3 shrink-0 group-hover:text-purple-400 transition-colors" />
+  );
+}
 
 export default function NavbarSearch() {
   const [query, setQuery] = useState('');
@@ -30,6 +66,8 @@ export default function NavbarSearch() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchSuggestions = async () => {
       if (!query.trim()) {
         setSuggestions([]);
@@ -37,15 +75,22 @@ export default function NavbarSearch() {
       }
       setLoading(true);
       try {
-        const res = await axios.post('/api/fs/search', { keywords: query, parent: '/home' }, { headers: { Authorization: token } });
+        const res = await axios.post(
+          '/api/fs/search', 
+          { keywords: query, parent: '/home' }, 
+          { headers: { Authorization: token }, signal: controller.signal }
+        );
         if (res.data.code === 200) {
           const content = res.data.data.content || [];
           setSuggestions(content); // Top 8 suggestions
         }
       } catch (err) {
+        if (axios.isCancel(err)) return;
         console.error("Search failed", err);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -53,7 +98,10 @@ export default function NavbarSearch() {
       fetchSuggestions();
     }, 300);
 
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
   }, [query, token]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -163,10 +211,10 @@ export default function NavbarSearch() {
                     onClick={() => handleSelect(item)}
                     className="w-full text-left px-4 py-2 hover:bg-black/5 dark:bg-white/5 flex items-center transition-colors group"
                   >
-                    <Film className="w-4 h-4 text-gray-600 dark:text-gray-400 mr-3 shrink-0 group-hover:text-purple-400 transition-colors" />
-                    <div className="truncate flex-1">
-                      <div className="text-sm text-black dark:text-white truncate">{item.name}</div>
-                      <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{item.parent}</div>
+                    <SearchItemImage item={item} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-black dark:text-white break-words whitespace-normal leading-tight mb-0.5">{item.name}</div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400 break-words whitespace-normal leading-tight">{item.parent}</div>
                     </div>
                   </button>
                 ))}

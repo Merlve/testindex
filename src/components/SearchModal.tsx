@@ -4,6 +4,44 @@ import { useNavigate } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { getRecentSearches, saveRecentSearch, removeRecentSearch, clearRecentSearches } from '../utils/recentSearches';
+import { useQuery } from '@tanstack/react-query';
+import { parseMediaName } from '../utils/nameParser';
+
+function SearchItemImage({ item }: { item: any }) {
+  const { data: tmdbData } = useQuery({
+    queryKey: ['tmdb_search', item.name, item.parent],
+    queryFn: async () => {
+      const parentParts = (item.parent || '').split('/').filter(Boolean);
+      let category = parentParts.length > 1 ? parentParts[1].toUpperCase() : 'MOVIES';
+      let searchName = item.name;
+      if (/^(s\d+|season\s*\d+)$/i.test(item.name)) {
+        searchName = parentParts[parentParts.length - 1];
+      }
+      const { cleanName, year } = parseMediaName(searchName);
+      
+      let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(item.parent + '/' + item.name)}`;
+      const res = await axios.get(url);
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 60 * 24,
+  });
+
+  const posterPath = tmdbData?.poster_path;
+  
+  if (posterPath) {
+    return (
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg mr-4 shrink-0 overflow-hidden bg-black/50">
+        <img src={`https://image.tmdb.org/t/p/w92${posterPath}`} alt="" className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black/50 rounded-lg flex items-center justify-center mr-4 shrink-0 group-hover:bg-purple-600/20 transition-colors">
+      <Film className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 dark:text-gray-400 group-hover:text-purple-400 transition-colors" />
+    </div>
+  );
+}
 
 export default function SearchModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
@@ -18,6 +56,8 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchSuggestions = async () => {
       if (!query.trim()) {
         setSuggestions([]);
@@ -25,15 +65,22 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
       }
       setLoading(true);
       try {
-        const res = await axios.post('/api/fs/search', { keywords: query, parent: '/home' }, { headers: { Authorization: token } });
+        const res = await axios.post(
+          '/api/fs/search', 
+          { keywords: query, parent: '/home' }, 
+          { headers: { Authorization: token }, signal: controller.signal }
+        );
         if (res.data.code === 200) {
           const content = res.data.data.content || [];
           setSuggestions(content);
         }
       } catch (err) {
+        if (axios.isCancel(err)) return;
         console.error("Search failed", err);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -41,7 +88,10 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
       fetchSuggestions();
     }, 300);
 
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
   }, [query, token]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -153,12 +203,10 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
                     onClick={() => handleSelect(item)}
                     className="w-full text-left px-4 sm:px-6 py-3 sm:py-4 hover:bg-black/5 dark:bg-white/5 flex items-center transition-colors group border-b border-black/5 dark:border-white/5 last:border-0"
                   >
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black/50 rounded-lg flex items-center justify-center mr-4 shrink-0 group-hover:bg-purple-600/20 transition-colors">
-                       <Film className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 dark:text-gray-400 group-hover:text-purple-400 transition-colors" />
-                    </div>
-                    <div className="truncate flex-1">
-                      <div className="text-base sm:text-lg text-black dark:text-white font-medium truncate mb-1">{item.name}</div>
-                      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">{item.parent}</div>
+                    <SearchItemImage item={item} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base sm:text-lg text-black dark:text-white font-medium mb-1 break-words whitespace-normal leading-tight">{item.name}</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 break-words whitespace-normal leading-tight">{item.parent}</div>
                     </div>
                   </button>
                 ))}
