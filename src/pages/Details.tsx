@@ -296,13 +296,26 @@ function IntentPlayerModal({
               )}
             </div>
 
-            <button
-              onClick={copyToClipboard}
-              className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer"
-            >
-              {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-              <span>{copied ? 'Direct Link Copied!' : 'Copy Direct Stream URL'}</span>
-            </button>
+            <div className="flex flex-col gap-2 w-full mt-3">
+              {os === 'android' && (
+                <a onClick={() => { onExternalPlay(); }}
+                  href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
+                  className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <span>Other</span>
+                    <span className="opacity-60 font-normal">- select a player or downloader</span>
+                  </div>
+                </a>
+              )}
+              <button
+                onClick={copyToClipboard}
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer"
+              >
+                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                <span>{copied ? 'Direct Link Copied!' : 'Copy Direct Stream URL'}</span>
+              </button>
+            </div>
 
             {/* Platform Download Hints */}
             {os === 'android' && (
