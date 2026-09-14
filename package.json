@@ -44,6 +44,7 @@
     "ua-parser-js": "^2.0.10",
     "video.js": "^8.23.9",
     "vite": "^6.2.3",
+    "wyzie-lib": "^2.5.2",
     "yamljs": "^0.3.0"
   },
   "devDependencies": {

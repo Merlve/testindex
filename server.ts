@@ -852,25 +852,17 @@ app.get('/api/subtitles', async (req, res) => {
       return res.send(cachedSub);
     }
 
-    const apiKey = process.env.OPENSUBTITLES_API_KEY;
-    if (!apiKey) {
-       res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-       return res.send('WEBVTT\n\nNOTE\nNo API key configured');
-    }
+    const apiKey = process.env.WYZIE_API_KEY || '';
 
-    // OpenSubtitles API v1 Search
-    let searchUrl = `https://api.opensubtitles.com/api/v1/subtitles?tmdb_id=${tmdb_id}&languages=${language}`;
+    // Wyzie Subs API Search
+    let searchUrl = `https://sub.wyzie.io/search?id=${tmdb_id}&language=${language}`;
+    if (apiKey) searchUrl += `&key=${apiKey}`;
     if (type === 'episode' || type === 'tv') {
-      if (season) searchUrl += `&season_number=${season}`;
-      if (episode) searchUrl += `&episode_number=${episode}`;
+      if (season) searchUrl += `&season=${season}`;
+      if (episode) searchUrl += `&episode=${episode}`;
     }
 
-    const searchResponse = await fetch(searchUrl, {
-      headers: {
-        'Api-Key': apiKey,
-        'Content-Type': 'application/json',
-      }
-    });
+    const searchResponse = await fetch(searchUrl);
 
     if (!searchResponse.ok) {
       res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
@@ -878,32 +870,16 @@ app.get('/api/subtitles', async (req, res) => {
     }
 
     const searchData = await searchResponse.json();
-    if (!searchData.data || searchData.data.length === 0) {
+
+    if (!Array.isArray(searchData) || searchData.length === 0) {
       res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
       return res.send('WEBVTT\n\nNOTE\nNo subtitles found');
     }
 
-    const fileId = searchData.data[0].attributes.files[0].file_id;
-
-    const downloadResponse = await fetch('https://api.opensubtitles.com/api/v1/download', {
-      method: 'POST',
-      headers: {
-        'Api-Key': apiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ file_id: fileId })
-    });
-
-    if (!downloadResponse.ok) {
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send('WEBVTT\n\nNOTE\nFailed to get download link');
-    }
-
-    const downloadData = await downloadResponse.json();
+    const downloadLink = searchData[0].url;
     
-    if (downloadData.link) {
-      const subRes = await fetch(downloadData.link);
+    if (downloadLink) {
+      const subRes = await fetch(downloadLink);
       let subText = await subRes.text();
       
       // Auto-convert SRT to VTT if necessary
