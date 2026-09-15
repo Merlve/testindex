@@ -89,6 +89,7 @@ export default function VideoPlayer({ src, poster, type, title, subtitles, onClo
       fill: true,
       playsinline: true,
       preload: 'auto',
+      inactivityTimeout: 4000,
       poster: poster || undefined,
       playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
       userActions: { click: false, doubleClick: false },

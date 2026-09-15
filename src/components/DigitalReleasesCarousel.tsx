@@ -19,24 +19,15 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     const lastDayStr = `${lastDay.getFullYear()}-${pad(lastDay.getMonth() + 1)}-${pad(lastDay.getDate())}`;
 
     const params = new URLSearchParams({
-      with_release_type: '4', // Digital
-      region: 'US', // Specific to US
-      'release_date.gte': firstDayStr,
-      'release_date.lte': lastDayStr,
-      primary_release_year: now.getFullYear().toString(),
-      sort_by: 'popularity.desc',
-      include_adult: 'false',
-      without_genres: '10770'
+      gte: firstDayStr,
+      lte: lastDayStr
     });
+    
     let results: any[] = [];
-    for (let page = 1; page <= 3; page++) {
-      params.set('page', page.toString());
-      try {
-        const res = await axios.get(`/api/meta/discover?${params.toString()}`);
-        results = [...results, ...(res.data?.results || [])];
-        if (page >= (res.data?.total_pages || 1)) break;
-      } catch (e) { break; }
-    }
+    try {
+      const res = await axios.get(`/api/meta/digital-releases-strict?${params.toString()}`);
+      results = res.data?.results || [];
+    } catch (e) {}
     const configRes = await axios.get('/api/config').catch(() => null);
     const digitalReleasePaths = configRes?.data?.digitalReleasePaths || {};
     

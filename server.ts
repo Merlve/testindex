@@ -3468,6 +3468,77 @@ app.get('/api/meta/genre/:genreId', async (req, res) => {
   }
 });
 
+app.get('/api/meta/digital-releases-strict', cacheMiddleware(3600, true), async (req, res) => {
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json({ results: [] });
+  
+  try {
+    const { gte, lte } = req.query;
+    if (!gte || !lte) return res.json({ results: [] });
+
+    let rawResults = [];
+    for (let page = 1; page <= 3; page++) {
+      const params = new URLSearchParams({
+        api_key: tmdbKey,
+        with_release_type: '4',
+        region: 'US',
+        'release_date.gte': gte,
+        'release_date.lte': lte,
+        sort_by: 'popularity.desc',
+        include_adult: 'false',
+        without_genres: '10770',
+        page: page.toString()
+      });
+      
+      const discoverRes = await axios.get(`https://api.themoviedb.org/3/discover/movie?${params.toString()}`);
+      rawResults.push(...(discoverRes.data?.results || []));
+      if (page >= (discoverRes.data?.total_pages || 1)) break;
+    }
+
+    const strictResults = [];
+    const chunkSize = 20;
+    
+    const gteTime = new Date(gte).getTime();
+    const lteTime = new Date(lte).getTime() + 86400000;
+
+    for (let i = 0; i < rawResults.length; i += chunkSize) {
+      const chunk = rawResults.slice(i, i + chunkSize);
+      const promises = chunk.map(async (movie) => {
+        try {
+          const rRes = await axios.get(`https://api.themoviedb.org/3/movie/${movie.id}/release_dates?api_key=${tmdbKey}`, { timeout: 4000 });
+          const usDates = rRes.data.results.find(r => r.iso_3166_1 === 'US');
+          if (!usDates) return null;
+          
+          const type4Dates = usDates.release_dates
+            .filter(d => d.type === 4)
+            .map(d => new Date(d.release_date).getTime())
+            .sort((a, b) => a - b);
+            
+          if (type4Dates.length === 0) return null;
+          
+          const earliestType4 = type4Dates[0];
+          
+          if (earliestType4 >= gteTime && earliestType4 <= lteTime) {
+            return movie;
+          }
+          return null;
+        } catch (err) {
+          // Fallback to including it if rate limit or network error
+          return movie;
+        }
+      });
+      
+      const resolved = await Promise.all(promises);
+      strictResults.push(...resolved.filter(Boolean));
+    }
+
+    res.json({ results: strictResults });
+  } catch (error) {
+    console.error('Digital Releases Strict Error', error.message);
+    res.json({ results: [] });
+  }
+});
+
 app.get('/api/meta/discover', cacheMiddleware(3600, true), async (req, res) => {
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return res.json({ results: [] });
