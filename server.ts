@@ -1992,7 +1992,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
                const seen = new Set(content.map(getUniqId));
                
                for (const res of fuzzyResults.slice(0, 30)) {
-                   const item = res.item;
+                   const item: any = res.item;
                    let itemParent = item.parent;
                    if (!itemParent && item.openlist_path) {
                        const parts = item.openlist_path.split('/');
@@ -3473,7 +3473,8 @@ app.get('/api/meta/digital-releases-strict', cacheMiddleware(3600, true), async 
   if (!tmdbKey) return res.json({ results: [] });
   
   try {
-    const { gte, lte } = req.query;
+    const gte = String(req.query.gte || '');
+    const lte = String(req.query.lte || '');
     if (!gte || !lte) return res.json({ results: [] });
 
     let rawResults = [];

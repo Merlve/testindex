@@ -181,15 +181,15 @@ export default function VideoPlayer({ src, poster, type, title, subtitles, onClo
       if (isLandscape) {
         if (!p.isFullscreen()) {
           p.requestFullscreen().catch(() => {});
-          if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
-            window.screen.orientation.lock('landscape').catch(() => {});
+          if (window.screen && window.screen.orientation && (window.screen.orientation as any).lock) {
+            (window.screen.orientation as any).lock('landscape').catch(() => {});
           }
         }
       } else {
         if (p.isFullscreen()) {
           p.exitFullscreen().catch(() => {});
-          if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
-            window.screen.orientation.unlock();
+          if (window.screen && window.screen.orientation && (window.screen.orientation as any).unlock) {
+            (window.screen.orientation as any).unlock();
           }
         }
       }

@@ -206,6 +206,17 @@ function IntentPlayerModal({
                     </div>
                   </a>
 
+                  <a onClick={() => { onExternalPlay(); }}
+                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=app.gyrolet.mpvrx;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">RX</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">mpvRx</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">supports resume</div>
+                    </div>
+                  </a>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -224,6 +235,19 @@ function IntentPlayerModal({
                       <div className="text-[10px] opacity-80 truncate">In Browser</div>
                     </div>
                   </button>
+
+                  <a onClick={() => { onExternalPlay(); }}
+                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 font-bold text-xs flex items-center justify-center shrink-0">
+                      <ExternalLink size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Other</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Select player</div>
+                    </div>
+                  </a>
                 </>
               )}
 
@@ -297,17 +321,6 @@ function IntentPlayerModal({
             </div>
 
             <div className="flex flex-col gap-2 w-full mt-3">
-              {os === 'android' && (
-                <a onClick={() => { onExternalPlay(); }}
-                  href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
-                  className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <span>Other</span>
-                    <span className="opacity-60 font-normal">- select a player or downloader</span>
-                  </div>
-                </a>
-              )}
               <button
                 onClick={copyToClipboard}
                 className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer"
@@ -319,17 +332,30 @@ function IntentPlayerModal({
 
             {/* Platform Download Hints */}
             {os === 'android' && (
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
-                download mpv-android from{' '}
-                <a 
-                  href="https://play.google.com/store/apps/details?id=is.xyz.mpv" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="underline hover:text-purple-600 dark:hover:text-purple-400 not-italic font-medium"
-                >
-                  play store
-                </a>
-              </p>
+              <div className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5 space-y-1">
+                <p>
+                  download mpv-android from{' '}
+                  <a 
+                    href="https://play.google.com/store/apps/details?id=is.xyz.mpv" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="underline hover:text-purple-600 dark:hover:text-purple-400 not-italic font-medium"
+                  >
+                    play store
+                  </a>
+                </p>
+                <p>
+                  download mpvRx{' '}
+                  <a 
+                    href="https://mpvrx.vercel.app" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="underline hover:text-purple-600 dark:hover:text-purple-400 not-italic font-medium"
+                  >
+                    here
+                  </a>
+                </p>
+              </div>
             )}
 
             {os === 'windows' && (
