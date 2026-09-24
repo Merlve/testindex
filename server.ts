@@ -1622,7 +1622,24 @@ app.post('/api/auth/login', async (req, res) => {
 
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/auth/login`;
     console.log(`[LOGIN] Attempting to login via Openlist at: ${url}`);
-    let response = await axios.post(url, { username, password });
+    let response: any;
+    try {
+      response = await axios.post(url, { username, password });
+    } catch (openlistErr: any) {
+      const errData = openlistErr.response?.data;
+      const errMsg = (errData?.message || (typeof errData === 'string' ? errData : '') || openlistErr.message || '').toLowerCase();
+      if (errMsg.includes('disabled') || errMsg.includes('expired') || errMsg.includes('subscription')) {
+        addLog('Login Failed', username, 'Login blocked: Account is disabled or subscription expired on Openlist.');
+        return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
+      }
+      throw openlistErr;
+    }
+
+    const initialMsg = (response.data?.message || (typeof response.data === 'string' ? response.data : '') || '').toLowerCase();
+    if (response.data?.disabled || initialMsg.includes('disabled') || initialMsg.includes('expired') || initialMsg.includes('subscription')) {
+      addLog('Login Failed', username, 'Login blocked: Account is disabled or subscription expired.');
+      return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
+    }
     
     if (response.data.code === 200) {
       const token = response.data.data?.token;
@@ -1635,12 +1652,32 @@ app.post('/api/auth/login', async (req, res) => {
           const userObj = listRes.data?.data?.content?.find((u: any) => u.username === username);
           if (userObj && userObj.disabled) {
             addLog('Login Failed', username, 'Login blocked: Account is disabled or subscription expired.');
-            return res.json({ code: 401, message: 'Subscription Expired / Account Disabled' });
+            return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
           }
         } catch (e) {}
       }
 
       if (token) {
+        // Also verify the user's status directly with their token in Openlist
+        try {
+          const meRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/me`, { headers: { Authorization: token } });
+          if (meRes.data?.data?.disabled) {
+            addLog('Login Failed', username, 'Login blocked: Account is disabled.');
+            return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
+          }
+          const meMsg = (meRes.data?.message || '').toLowerCase();
+          if (meMsg.includes('disabled') || meMsg.includes('expired') || meMsg.includes('subscription')) {
+            addLog('Login Failed', username, 'Login blocked: Account is disabled.');
+            return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
+          }
+        } catch (meErr: any) {
+          const errMsg = (meErr.response?.data?.message || meErr.message || '').toLowerCase();
+          if (errMsg.includes('disabled') || errMsg.includes('expired') || errMsg.includes('subscription')) {
+            addLog('Login Failed', username, 'Login blocked: Account is disabled.');
+            return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
+          }
+        }
+
         const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown') as string;
         const userAgent = req.headers['user-agent'] || 'Unknown';
         try {
@@ -1677,6 +1714,12 @@ app.post('/api/auth/login', async (req, res) => {
     console.error(`[LOGIN ERROR] Target URL: ${targetUrl} | Status: ${error.response?.status} | Message: ${error.message}`);
     
     addLog('Login Failed', username, `Error: ${error.message}`);
+    
+    const errData = error.response?.data;
+    const errMsg = (errData?.message || (typeof errData === 'string' ? errData : '') || error.message || '').toLowerCase();
+    if (errMsg.includes('disabled') || errMsg.includes('expired') || errMsg.includes('subscription')) {
+      return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
+    }
     
     // Pass through the original error response from Openlist if available
     if (error.response?.data) {
@@ -1735,7 +1778,7 @@ app.post('/api/auth/guest_login', async (req, res) => {
 });
 
 // API: Openlist Proxy - Check Auth
-app.get('/api/auth/me', async (req, res) => {
+const handleAuthMe = async (req: express.Request, res: express.Response) => {
   try {
     let token = req.headers.authorization;
     if (isValidGuest(token || '')) {
@@ -1755,11 +1798,17 @@ app.get('/api/auth/me', async (req, res) => {
     let response = await axios.get(url, {
       headers: { Authorization: token }
     });
+    if (response.data?.data?.disabled) {
+      return res.status(401).json({ code: 401, message: 'Subscription is Expired', disabled: true });
+    }
     res.json(response.data);
   } catch (error: any) {
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to verify auth' });
   }
-});
+};
+
+app.get('/api/auth/me', handleAuthMe);
+app.get('/api/me', handleAuthMe);
 
 
 

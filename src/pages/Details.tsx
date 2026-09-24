@@ -196,7 +196,7 @@ function IntentPlayerModal({
               {os === 'android' && (
                 <>
                   <a onClick={() => { onExternalPlay(); }}
-                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
+                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;component=is.xyz.mpv/.MPVActivity;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;S.title=${encodeURIComponent(item.name)};end;`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
                     <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">MPV</div>
@@ -207,7 +207,7 @@ function IntentPlayerModal({
                   </a>
 
                   <a onClick={() => { onExternalPlay(); }}
-                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=app.gyrolet.mpvrx;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
+                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=app.gyrolet.mpvrx;component=app.gyrolet.mpvrx/.ui.player.PlayerActivity;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;S.title=${encodeURIComponent(item.name)};end;`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
                   >
                     <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">RX</div>

@@ -12,7 +12,7 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 let isTerminatingSession = false;
 
-function terminateSessionAndRedirect() {
+function terminateSessionAndRedirect(customLoginError?: string) {
   if (isTerminatingSession) return;
   isTerminatingSession = true;
   localStorage.removeItem('qs_user');
@@ -20,13 +20,30 @@ function terminateSessionAndRedirect() {
   localStorage.removeItem('qs_guest_login_time');
   localStorage.removeItem('qs_guest_last_login_date');
   localStorage.removeItem('qs_server_boot_id');
+  
+  const savedLoginError = customLoginError || sessionStorage.getItem('login_error');
   sessionStorage.clear();
-  window.location.href = '/login';
+  if (savedLoginError) {
+    sessionStorage.setItem('login_error', savedLoginError);
+  }
+
+  // If already on the login page, do NOT force reload with window.location.href!
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  } else {
+    isTerminatingSession = false;
+  }
 }
 
 // Global response interceptor for server boot ID tracking & token invalidation
 axios.interceptors.response.use(
   response => {
+    const url = response.config?.url || '';
+    // Never trigger global session termination on login/guest_login endpoints!
+    if (url.includes('/api/auth/login') || url.includes('/api/auth/guest_login')) {
+      return response;
+    }
+
     const currentBootId = response.headers?.['x-server-boot-id'];
     if (currentBootId) {
       const storedBootId = localStorage.getItem('qs_server_boot_id');
@@ -39,15 +56,28 @@ axios.interceptors.response.use(
       }
     }
 
-    if (response.data && (response.data.code === 401 || (typeof response.data === 'string' && response.data.toLowerCase().includes('invalidated')) || (response.data.message && typeof response.data.message === 'string' && response.data.message.toLowerCase().includes('invalidated')))) {
-      terminateSessionAndRedirect();
-      const err: any = new Error(response.data.message || 'Unauthorized');
+    const resData = response.data;
+    const isString = typeof resData === 'string';
+    const resString = isString ? resData.toLowerCase() : '';
+    const resMsg = (resData?.message && typeof resData.message === 'string') ? resData.message.toLowerCase() : '';
+
+    const isDisabled = resData?.disabled === true || resString.includes('disabled') || resMsg.includes('disabled') || resString.includes('subscription') || resMsg.includes('subscription');
+
+    if (resData && (resData.code === 401 || resData.code === 403 || resString.includes('invalidated') || resMsg.includes('invalidated') || isDisabled)) {
+      terminateSessionAndRedirect(isDisabled ? 'Subscription is Expired' : undefined);
+      const err: any = new Error(isDisabled ? 'Subscription is Expired' : (resData.message || 'Unauthorized'));
       err.response = response;
       return Promise.reject(err);
     }
     return response;
   },
   async error => {
+    const url = error.config?.url || '';
+    // Never trigger global session termination on login/guest_login endpoints!
+    if (url.includes('/api/auth/login') || url.includes('/api/auth/guest_login')) {
+      return Promise.reject(error);
+    }
+
     const currentBootId = error.response?.headers?.['x-server-boot-id'];
     if (currentBootId) {
       const storedBootId = localStorage.getItem('qs_server_boot_id');
@@ -68,8 +98,15 @@ axios.interceptors.response.use(
       return axios(config);
     }
 
-    if (error.response && (error.response.status === 401 || (typeof error.response.data === 'string' && error.response.data.toLowerCase().includes('invalidated')) || (error.response.data && error.response.data.message && typeof error.response.data.message === 'string' && error.response.data.message.toLowerCase().includes('invalidated')))) {
-      terminateSessionAndRedirect();
+    const errData = error.response?.data;
+    const isString = typeof errData === 'string';
+    const errString = isString ? errData.toLowerCase() : '';
+    const errMsg = (errData?.message && typeof errData.message === 'string') ? errData.message.toLowerCase() : '';
+
+    const isDisabled = errData?.disabled === true || errString.includes('disabled') || errMsg.includes('disabled') || errString.includes('subscription') || errMsg.includes('subscription');
+
+    if (error.response && (error.response.status === 401 || error.response.status === 403 || errString.includes('invalidated') || errMsg.includes('invalidated') || isDisabled)) {
+      terminateSessionAndRedirect(isDisabled ? 'Subscription is Expired' : undefined);
     }
     return Promise.reject(error);
   }

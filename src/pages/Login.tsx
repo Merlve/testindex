@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useQueryClient } from "@tanstack/react-query";
 import axios from 'axios';
 import ThemeToggle from '../components/ThemeToggle';
@@ -22,7 +22,11 @@ export default function Login() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (localStorage.getItem('guest_timeout') === 'true') {
+    const savedError = sessionStorage.getItem('login_error');
+    if (savedError) {
+      setError(savedError);
+      sessionStorage.removeItem('login_error');
+    } else if (localStorage.getItem('guest_timeout') === 'true') {
       setError('Guest session expired. Sign up for the website plan.');
       localStorage.removeItem('guest_timeout');
     }
@@ -59,28 +63,72 @@ export default function Login() {
     try {
       // Proxy request to our backend
       const res = await axios.post('/api/auth/login', { username, password });
-      if (res.data.code === 200 && res.data.data?.token) {
-        const token = res.data.data.token;
+      const resData = res.data;
+      const resMsg = (resData?.message || (typeof resData === 'string' ? resData : '') || '').toLowerCase();
+
+      // Check if backend reported account disabled / subscription expired
+      if (
+        resData?.disabled === true ||
+        resData?.code === 403 ||
+        resMsg.includes('disabled') ||
+        resMsg.includes('expired') ||
+        resMsg.includes('subscription')
+      ) {
+        setError('Subscription is Expired');
+        setLoading(false);
+        return;
+      }
+
+      if (resData?.code === 200 && resData?.data?.token) {
+        const token = resData.data.token;
         
         // Test the token to see if the user is disabled using fetch to bypass interceptors
         try {
-          const testRes = await fetch('/api/fs/list', {
+          const testRes = await fetch('/api/auth/me', {
+            headers: { 'Authorization': token }
+          });
+          const testContentType = testRes.headers.get('content-type') || '';
+          if (testContentType.includes('application/json')) {
+            const testData = await testRes.json();
+            const testMsg = (testData?.message || '').toLowerCase();
+            if (
+              testData?.disabled ||
+              testData?.data?.disabled ||
+              testMsg.includes('disabled') ||
+              testMsg.includes('expired') ||
+              testMsg.includes('subscription')
+            ) {
+              setError('Subscription is Expired');
+              setLoading(false);
+              return;
+            }
+          }
+
+          const fsRes = await fetch('/api/fs/list', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
               'Authorization': token 
             },
-            body: JSON.stringify({ reqPath: '/', password: '' })
+            body: JSON.stringify({ path: '/', password: '', page: 1, per_page: 1 })
           });
-          const testData = await testRes.json();
-          
-          if (testData.code === 401 && testData.message?.toLowerCase().includes('disabled')) {
-            setError('Subscription Expired');
-            setLoading(false);
-            return;
+          const fsContentType = fsRes.headers.get('content-type') || '';
+          if (fsContentType.includes('application/json')) {
+            const fsData = await fsRes.json();
+            const fsMsg = (fsData?.message || '').toLowerCase();
+            if (
+              fsData?.disabled ||
+              fsMsg.includes('disabled') ||
+              fsMsg.includes('expired') ||
+              fsMsg.includes('subscription')
+            ) {
+              setError('Subscription is Expired');
+              setLoading(false);
+              return;
+            }
           }
         } catch (testErr) {
-          console.error("Test token error:", testErr);
+          // Token verification fallback encountered non-fatal error; proceed to login
         }
 
         login(username, token);
@@ -89,16 +137,29 @@ export default function Login() {
         const from = location.state?.from || '/';
         navigate(from);
       } else {
-        let errorMsg = res.data.message || 'Login failed';
-        if (errorMsg.toLowerCase().includes('disabled')) {
-          errorMsg = 'Subscription Expired';
+        let errorMsg = resData?.message || 'Login failed';
+        const lower = errorMsg.toLowerCase();
+        if (
+          resData?.disabled ||
+          lower.includes('disabled') ||
+          lower.includes('expired') ||
+          lower.includes('subscription')
+        ) {
+          errorMsg = 'Subscription is Expired';
         }
         setError(errorMsg);
       }
     } catch (err: any) {
-      let errorMsg = err.response?.data?.message || err.message || 'An error occurred';
-      if (errorMsg.toLowerCase().includes('disabled')) {
-        errorMsg = 'Subscription Expired';
+      const errData = err.response?.data;
+      let errorMsg = errData?.message || (typeof errData === 'string' ? errData : '') || err.message || 'An error occurred';
+      const lower = errorMsg.toLowerCase();
+      if (
+        errData?.disabled ||
+        lower.includes('disabled') ||
+        lower.includes('expired') ||
+        lower.includes('subscription')
+      ) {
+        errorMsg = 'Subscription is Expired';
       }
       setError(errorMsg);
     } finally {
@@ -129,7 +190,16 @@ export default function Login() {
           <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm">Sign in to your <a href="https://shutter.ng" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors font-semibold">SHUTTER</a> account</p>
         </div>
         
-        {error && <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-xl mb-6 text-sm">{error}</div>}
+        {error && (
+          <div 
+            role="alert"
+            aria-live="assertive"
+            className="bg-red-500/15 border border-red-500/40 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl mb-6 text-sm font-medium flex items-center gap-2.5 shadow-sm"
+          >
+            <AlertCircle size={18} className="shrink-0 text-red-500" />
+            <span className="flex-1 text-left break-words">{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
