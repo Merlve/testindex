@@ -1857,6 +1857,8 @@ app.post('/api/fs/list', cacheMiddleware(30, true), async (req, res) => {
     
     const cacheKey = `fs_list_shared_${normalizedPath}`;
     
+    const masterApiKey = getOpenlistApiKey();
+
     if (refresh) {
         apiCache.delete(cacheKey);
     } else {
@@ -1867,7 +1869,7 @@ app.post('/api/fs/list', cacheMiddleware(30, true), async (req, res) => {
                 res.json(cached);
                 
                 // Background refresh (stale-while-revalidate) with Openlist refresh
-                axios.post(url, { ...payload, refresh: true }, { headers: { Authorization: token } }).then(response => {
+                axios.post(url, { ...payload, refresh: true }, { headers: { Authorization: masterApiKey || token || '' } }).then(response => {
                     if (response.data?.code === 200 && response.data?.data) {
                         apiCache.set(cacheKey, response.data, 60);
                     }
@@ -1877,9 +1879,64 @@ app.post('/api/fs/list', cacheMiddleware(30, true), async (req, res) => {
         }
     }
 
-    let response = await axios.post(url, payload, {
-      headers: { Authorization: token }
-    });
+    // In Openlist (AList), forcing driver cache refresh (refresh: true) requires admin privilege.
+    // Non-admin tokens will receive 403 "permission denied" if they attempt to refresh driver cache directly.
+    // Use masterApiKey when refreshing if available so all authenticated users can refresh folder contents.
+    let authHeader = (refresh && masterApiKey) ? masterApiKey : (token || masterApiKey || '');
+    let response: any;
+
+    try {
+      response = await axios.post(url, payload, {
+        headers: authHeader ? { Authorization: authHeader } : {}
+      });
+    } catch (openlistErr: any) {
+      if (masterApiKey && authHeader !== masterApiKey) {
+        try {
+          authHeader = masterApiKey;
+          response = await axios.post(url, payload, {
+            headers: { Authorization: masterApiKey }
+          });
+        } catch (retryErr: any) {
+          if (payload.refresh) {
+            response = await axios.post(url, { ...payload, refresh: false }, {
+              headers: token ? { Authorization: token } : (masterApiKey ? { Authorization: masterApiKey } : {})
+            });
+          } else {
+            throw retryErr;
+          }
+        }
+      } else if (payload.refresh) {
+        response = await axios.post(url, { ...payload, refresh: false }, {
+          headers: token ? { Authorization: token } : (masterApiKey ? { Authorization: masterApiKey } : {})
+        });
+      } else {
+        throw openlistErr;
+      }
+    }
+
+    // Handle case where Openlist returned HTTP 200 but payload body code indicates failure (e.g. 403 permission denied)
+    if (response.data?.code !== 200) {
+      if (masterApiKey && authHeader !== masterApiKey) {
+        try {
+          const fallbackRes = await axios.post(url, payload, {
+            headers: { Authorization: masterApiKey }
+          });
+          if (fallbackRes.data?.code === 200) {
+            response = fallbackRes;
+          }
+        } catch (e) {}
+      }
+      if (response.data?.code !== 200 && payload.refresh) {
+        try {
+          const fallbackNoRefresh = await axios.post(url, { ...payload, refresh: false }, {
+            headers: token ? { Authorization: token } : (masterApiKey ? { Authorization: masterApiKey } : {})
+          });
+          if (fallbackNoRefresh.data?.code === 200) {
+            response = fallbackNoRefresh;
+          }
+        } catch (e) {}
+      }
+    }
 
     if (response.data?.code === 200) {
         apiCache.set(cacheKey, response.data, 60); // 60 seconds short-lived memory cache
@@ -1887,11 +1944,6 @@ app.post('/api/fs/list', cacheMiddleware(30, true), async (req, res) => {
 
     res.json(response.data);
   } catch (error: any) {
-
-    if (error.response) {
-  
-  
-    }
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to list files' });
   }
 });

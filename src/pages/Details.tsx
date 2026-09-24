@@ -1193,9 +1193,10 @@ export default function Details() {
       });
 
     return () => { isMounted = false; };
-  }, [activeSeasonIndex, seasonItems, actualOpenlistPath, token, seasonRefresh, user]);
+  }, [activeSeasonIndex, seasonItems, actualFolderOpenlistPath, actualOpenlistPath, token, seasonRefresh, user]);
 
   const handleRefresh = () => {
+    queryClient.invalidateQueries();
     setSeasonRefresh(r => r + 1);
     setBaseRefresh(r => r + 1);
     setToast('Refreshing folder files...');
@@ -1203,6 +1204,7 @@ export default function Details() {
   };
 
   const handleRefreshRoot = () => {
+    queryClient.invalidateQueries();
     setBaseRefresh(r => r + 1);
     setSeasonRefresh(r => r + 1);
     setToast('Refreshing root directory...');

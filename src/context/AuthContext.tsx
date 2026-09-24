@@ -62,8 +62,12 @@ axios.interceptors.response.use(
     const resMsg = (resData?.message && typeof resData.message === 'string') ? resData.message.toLowerCase() : '';
 
     const isDisabled = resData?.disabled === true || resString.includes('disabled') || resMsg.includes('disabled') || resString.includes('subscription') || resMsg.includes('subscription');
+    const isAuthEndpoint = url.includes('/api/auth/me') || url.includes('/api/me');
+    const isSessionInvalidated = resString.includes('invalidated') || resMsg.includes('invalidated');
+    const isUnauthorized = resData?.code === 401;
+    const isAuthForbidden = isAuthEndpoint && resData?.code === 403;
 
-    if (resData && (resData.code === 401 || resData.code === 403 || resString.includes('invalidated') || resMsg.includes('invalidated') || isDisabled)) {
+    if (resData && (isDisabled || isSessionInvalidated || isUnauthorized || isAuthForbidden)) {
       terminateSessionAndRedirect(isDisabled ? 'Subscription is Expired' : undefined);
       const err: any = new Error(isDisabled ? 'Subscription is Expired' : (resData.message || 'Unauthorized'));
       err.response = response;
@@ -104,8 +108,12 @@ axios.interceptors.response.use(
     const errMsg = (errData?.message && typeof errData.message === 'string') ? errData.message.toLowerCase() : '';
 
     const isDisabled = errData?.disabled === true || errString.includes('disabled') || errMsg.includes('disabled') || errString.includes('subscription') || errMsg.includes('subscription');
+    const isAuthEndpoint = url.includes('/api/auth/me') || url.includes('/api/me');
+    const isSessionInvalidated = errString.includes('invalidated') || errMsg.includes('invalidated');
+    const isUnauthorized = error.response?.status === 401;
+    const isAuthForbidden = isAuthEndpoint && error.response?.status === 403;
 
-    if (error.response && (error.response.status === 401 || error.response.status === 403 || errString.includes('invalidated') || errMsg.includes('invalidated') || isDisabled)) {
+    if (error.response && (isDisabled || isSessionInvalidated || isUnauthorized || isAuthForbidden)) {
       terminateSessionAndRedirect(isDisabled ? 'Subscription is Expired' : undefined);
     }
     return Promise.reject(error);
