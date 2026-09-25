@@ -534,65 +534,22 @@ function isGenericCategoryRoot(p: string): boolean {
   return false;
 }
 
-function normalizePathForMatching(p?: string | null): string {
-  if (!p) return '';
-  let clean = String(p).replace(/^\/+/, '').replace(/\/+$/, '').trim();
-  try {
-    clean = decodeURIComponent(clean);
-  } catch (e) {}
-  return clean.toLowerCase();
-}
-
-function pathsAreRelated(p1?: string | null, p2?: string | null): boolean {
-  if (!p1 || !p2) return false;
-  const norm1 = normalizePathForMatching(p1);
-  const norm2 = normalizePathForMatching(p2);
-  if (!norm1 || !norm2) return false;
-  if (norm1 === norm2) return true;
-  if (isGenericCategoryRoot(norm1) || isGenericCategoryRoot(norm2)) return false;
-  
-  if (norm1.startsWith(norm2 + '/') || norm2.startsWith(norm1 + '/')) {
-    return true;
-  }
-  return false;
-}
-
 function findOverriddenKeyInCache(cache: Record<string, any>, type?: string, cleanQuery?: string, year?: string | number, itemPath?: string): string | null {
   if (!cache) return null;
   const baseQuery = (cleanQuery || '').toLowerCase().trim();
   const rawType = (type || '').toUpperCase().trim();
-  const hasItemPath = Boolean(itemPath && !isGenericCategoryRoot(itemPath));
-
   const isTvType = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'TV_SHOW', 'KDRAMA', 'ADRAMA', 'ANIME', 'ANIMES', 'KOREAN_DRAMA', 'ASIAN_DRAMA', 'CARTOON', 'ANIMATION', 'DOCUSERIES'].includes(rawType) ||
     rawType.includes('TV') || rawType.includes('SHOW') || rawType.includes('SERIES') || rawType.includes('DRAMA') || rawType.includes('ANIME');
 
   const movieTypes = ['MOVIES', 'MOVIE', 'FILM', 'FILMS'];
   const tvTypes = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'TV_SHOW', 'ANIME', 'ANIMES', 'KDRAMA', 'ADRAMA', 'KOREAN_DRAMA', 'ASIAN_DRAMA', 'CARTOON', 'ANIMATION', 'DOCUSERIES'];
-  
-  // Strictly isolate TV and Movie categories so a series never inherits a movie and vice-versa
   const typesToCheck = isTvType 
-    ? Array.from(new Set([rawType, ...tvTypes].filter(Boolean))) 
-    : Array.from(new Set([rawType, ...movieTypes].filter(Boolean)));
-
-  const entryMatchesPath = (entry: any): boolean => {
-    if (!entry) return false;
-    // If the entry has a specific openlist path tied to it, it MUST match the requested itemPath
-    if (entry._openlist_path) {
-      if (!hasItemPath) return false;
-      return pathsAreRelated(itemPath, entry._openlist_path);
-    }
-    // If entry does not have _openlist_path, it's a global non-path correction
-    return true;
-  };
-
-  const yearMatches = (entryYear?: any, queryYear?: any): boolean => {
-    if (!queryYear || !entryYear) return true;
-    return String(entryYear).trim() === String(queryYear).trim();
-  };
+    ? Array.from(new Set([rawType, ...tvTypes, ...movieTypes].filter(Boolean))) 
+    : Array.from(new Set([rawType, ...movieTypes, ...tvTypes].filter(Boolean)));
 
   // 1. Hierarchical & Normalized Path Matching (highest specificity)
-  if (hasItemPath) {
-    const rawClean = (itemPath as string).replace(/^\/+/, '').replace(/\/+$/, '');
+  if (itemPath && !isGenericCategoryRoot(itemPath)) {
+    const rawClean = itemPath.replace(/^\/+/, '').replace(/\/+$/, '');
     let decodedClean = rawClean;
     try { decodedClean = decodeURIComponent(rawClean); } catch (e) {}
     const pathVariants = Array.from(new Set([
@@ -613,14 +570,12 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type?: string, cle
         const sub = k.substring(5).replace(/^\/+/, '').toLowerCase();
         let decSub = sub;
         try { decSub = decodeURIComponent(sub); } catch(e) {}
-        if (normVariants.includes(sub) || normVariants.includes(decSub) || pathsAreRelated(itemPath, sub) || (cache[k]._openlist_path && pathsAreRelated(itemPath, cache[k]._openlist_path))) {
-          return k;
-        }
+        if (normVariants.includes(sub) || normVariants.includes(decSub)) return k;
       }
     }
 
     const parts = decodedClean.split('/').filter(Boolean);
-    for (let i = parts.length - 1; i > 0; i--) {
+    for (let i = parts.length; i > 0; i--) {
       const subPath = parts.slice(0, i).join('/');
       if (isGenericCategoryRoot(subPath)) continue;
       const subNorm = subPath.toLowerCase();
@@ -629,46 +584,45 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type?: string, cle
           const sub = k.substring(5).replace(/^\/+/, '').toLowerCase();
           let decSub = sub;
           try { decSub = decodeURIComponent(sub); } catch(e) {}
-          if (sub === subNorm || decSub === subNorm || pathsAreRelated(subPath, sub)) return k;
+          if (sub === subNorm || decSub === subNorm) return k;
         }
       }
     }
   }
 
-  // 2. Exact base matches (type + query + year) - strictly enforcing path and year isolation
+  // 2. Exact base matches (type + query + year)
   if (baseQuery) {
     if (year) {
       const yrStr = String(year).trim();
       for (const t of typesToCheck) {
         const cacheKey = `${t}-${baseQuery}-${yrStr}`;
-        const entry = cache[cacheKey];
-        if (entry?._overridden && entryMatchesPath(entry) && yearMatches(entry._year || entry.year, yrStr)) {
-          return cacheKey;
-        }
+        if (cache[cacheKey]?._overridden) return cacheKey;
       }
     }
 
     for (const t of typesToCheck) {
       const baseKey = `${t}-${baseQuery}`;
-      const entry = cache[baseKey];
-      if (entry?._overridden && entryMatchesPath(entry)) {
-        if (!year || yearMatches(entry._year || entry.year, year)) {
-          return baseKey;
-        }
-      }
+      if (cache[baseKey]?._overridden) return baseKey;
     }
 
-    // 3. Fallback: Search existing cache for exact clean name match (strictly scoped)
+    // 3. Fallback: Search existing cache for baseKey prefix or year prefix
+    for (const t of typesToCheck) {
+      const basePrefix = `${t}-${baseQuery}-`;
+      const found = Object.keys(cache).find(k => {
+        return k.startsWith(basePrefix) && cache[k]?._overridden;
+      });
+      if (found) return found;
+    }
+
+    // 4. Overridden entries matching _cleanName, custom_title, or _customTitle
     for (const k of Object.keys(cache)) {
       const item = cache[k];
       if (item?._overridden) {
-        if (!entryMatchesPath(item)) continue;
-        if (item._category) {
-          const itemIsTv = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'TV_SHOW', 'ANIME', 'KDRAMA', 'ADRAMA'].includes(item._category.toUpperCase());
-          if (itemIsTv !== isTvType) continue;
-        }
-        if (year && !yearMatches(item._year || item.year, year)) continue;
         if (item._cleanName && item._cleanName.toLowerCase() === baseQuery) return k;
+        if (item.custom_title && item.custom_title.toLowerCase().trim() === baseQuery) return k;
+        if (item._customTitle && item._customTitle.toLowerCase().trim() === baseQuery) return k;
+        if (item.title && item.title.toLowerCase().trim() === baseQuery) return k;
+        if (item.name && item.name.toLowerCase().trim() === baseQuery) return k;
       }
     }
   }
@@ -733,12 +687,7 @@ async function getLibraryIndex(token?: string, forceRefresh = false) {
                     const p1 = `path-${itemPath}`;
                     const p2 = `path-/${itemPath}`;
                     const override = (overrideKey ? tmdbCache[overrideKey] : null) || tmdbCache[p1] || tmdbCache[p2];
-                    let customTitle: string | undefined = undefined;
-                    if (override && override._overridden) {
-                        if (!override._openlist_path || pathsAreRelated(itemPath, override._openlist_path)) {
-                            customTitle = override.custom_title || override._customTitle || override.title || override.name;
-                        }
-                    }
+                    const customTitle = (override && override._overridden) ? (override.custom_title || override._customTitle || override.title || override.name) : undefined;
 
                     allItems.push({ ...item, category: c.name, cleanName, year, openlist_path: openlistPath, customTitle });
                 }
@@ -2057,11 +2006,9 @@ app.post('/api/fs/list', cacheMiddleware(30, true), async (req, res) => {
         const p2 = `path-/${itemPath}`;
         const entry = tmdbCache[p1] || tmdbCache[p2] || (overrideKey ? tmdbCache[overrideKey] : null);
         if (entry && entry._overridden) {
-          if (!entry._openlist_path || pathsAreRelated(itemPath, entry._openlist_path)) {
-            const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
-            if (ct) {
-              item.customTitle = ct;
-            }
+          const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
+          if (ct) {
+            item.customTitle = ct;
           }
         }
       }
@@ -2522,10 +2469,8 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
           const overrideKey = findOverriddenKeyInCache(tmdbCache, cat, cleanName, year, itemPath);
           const entry = tmdbCache[p1] || tmdbCache[p2] || (overrideKey ? tmdbCache[overrideKey] : null);
           if (entry && entry._overridden) {
-             if (!entry._openlist_path || pathsAreRelated(itemPath, entry._openlist_path)) {
-                const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
-                if (ct) item.customTitle = ct;
-             }
+             const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
+             if (ct) item.customTitle = ct;
           }
        }
        // If custom title matches search query, ensure isExact and isFuzzy are marked
@@ -2905,22 +2850,6 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
       if (foundKey && tmdbCache[foundKey]) {
         cachedItem = tmdbCache[foundKey];
         cacheKeyToUpdate = foundKey;
-      }
-    }
-  }
-
-  if (cachedItem) {
-    if (cachedItem._overridden && (!overriddenKey || cacheKeyToUpdate !== overriddenKey)) {
-      cachedItem = null;
-      cacheKeyToUpdate = null;
-    } else if (cleanPath && cachedItem._openlist_path && !pathsAreRelated(cleanPath, cachedItem._openlist_path)) {
-      cachedItem = null;
-      cacheKeyToUpdate = null;
-    } else if (year) {
-      const itemYr = cachedItem._year || cachedItem.year || (cachedItem.release_date ? cachedItem.release_date.substring(0, 4) : null) || (cachedItem.first_air_date ? cachedItem.first_air_date.substring(0, 4) : null);
-      if (itemYr && String(itemYr) !== String(year)) {
-        cachedItem = null;
-        cacheKeyToUpdate = null;
       }
     }
   }
@@ -4060,6 +3989,19 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
         dataToStore._year = year || customYear;
       }
 
+      tmdbCache[cacheKey] = dataToStore;
+      tmdbCache[baseKey] = dataToStore;
+
+      // Category aliases so all query variants match
+      const isTv = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'ANIME', 'ANIMES', 'KDRAMA', 'ADRAMA'].includes(typeStr);
+      const aliasTypes = isTv ? ['SERIES', 'TV', 'SHOWS', 'SHOW', 'ANIME', 'KDRAMA', 'ADRAMA'] : ['MOVIES', 'MOVIE', 'FILM'];
+      for (const at of aliasTypes) {
+        tmdbCache[`${at}-${lowerQuery}`] = dataToStore;
+        if (year || customYear) {
+          tmdbCache[`${at}-${lowerQuery}-${year || customYear}`] = dataToStore;
+        }
+      }
+
       if (cleanPath) {
         let decodedClean = cleanPath;
         try { decodedClean = decodeURIComponent(cleanPath); } catch (e) {}
@@ -4074,44 +4016,29 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
         }
 
         // Update any other existing keys in tmdbCache that match cleanPath
+        const normP = cleanPath.toLowerCase().replace(/^\/+/, '');
+        const decNormP = decodedClean.toLowerCase().replace(/^\/+/, '');
         for (const k of Object.keys(tmdbCache)) {
           if (k.startsWith('path-')) {
-            const sub = k.substring(5);
-            if (pathsAreRelated(cleanPath, sub) || (tmdbCache[k]?._openlist_path && pathsAreRelated(cleanPath, tmdbCache[k]._openlist_path))) {
+            const sub = k.substring(5).toLowerCase().replace(/^\/+/, '');
+            if (sub === normP || sub === decNormP) {
               tmdbCache[k] = dataToStore;
             }
           }
         }
-      } else {
-        // ONLY if NO cleanPath was provided (a pure global TMDB title correction not tied to an item path)
-        tmdbCache[cacheKey] = dataToStore;
-        if (!year) {
-          tmdbCache[baseKey] = dataToStore;
-        }
-
-        // Category aliases so all query variants match for this specific type (never cross-pollinate movie & TV)
-        const isTv = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'ANIME', 'ANIMES', 'KDRAMA', 'ADRAMA'].includes(typeStr);
-        const aliasTypes = isTv ? ['SERIES', 'TV', 'SHOWS', 'SHOW', 'ANIME', 'KDRAMA', 'ADRAMA'] : ['MOVIES', 'MOVIE', 'FILM'];
-        for (const at of aliasTypes) {
-          if (year || customYear) {
-            tmdbCache[`${at}-${lowerQuery}-${year || customYear}`] = dataToStore;
-          } else {
-            tmdbCache[`${at}-${lowerQuery}`] = dataToStore;
-          }
-        }
       }
 
-      // Keep libraryIndex in sync immediately with customTitle - ONLY for matching items
+      // Keep libraryIndex in sync immediately with customTitle
       if (libraryIndex && libraryIndex.length > 0 && customTitle) {
+        const normP = cleanPath ? cleanPath.toLowerCase() : '';
+        let decP = '';
+        try { decP = cleanPath ? decodeURIComponent(cleanPath).toLowerCase() : ''; } catch (e) {}
         for (const li of libraryIndex) {
-          if (cleanPath) {
-            if (pathsAreRelated(li.openlist_path, cleanPath)) {
-              li.customTitle = customTitle;
-            }
+          const liP = (li.openlist_path || '').replace(/^\/+/, '').toLowerCase();
+          if (normP && (liP === normP || liP.endsWith('/' + normP) || (decP && (liP === decP || liP.endsWith('/' + decP))))) {
+            li.customTitle = customTitle;
           } else if (li.cleanName && lowerQuery && li.cleanName.toLowerCase() === lowerQuery && (!typeStr || !li.category || li.category.toUpperCase() === typeStr)) {
-            if (!year || !li.year || String(li.year) === String(year)) {
-              li.customTitle = customTitle;
-            }
+            li.customTitle = customTitle;
           }
         }
       } else if (customTitle) {
@@ -4122,13 +4049,8 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
     const isMovieCategory = (type || '').toUpperCase() === 'MOVIES';
 
     if (updateLogoOnly || ((customTitle || customYear || customLogo !== undefined) && !tmdbId)) {
-      // Prioritize path-specific cache or currentData over generic baseKey
-      let data = {
-        ...((pathKey1 && tmdbCache[pathKey1]) || (pathKey2 && tmdbCache[pathKey2]) || currentData || tmdbCache[cacheKey] || tmdbCache[baseKey] || {})
-      };
-      if (data._openlist_path && cleanPath && !pathsAreRelated(cleanPath, data._openlist_path)) {
-        data = { ...(currentData || {}) };
-      }
+      // Just override title/year/logo in existing cache or create a mock
+      let data = { ...(tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || currentData || {}) };
       
       if (customTitle) {
         data.title = customTitle;
@@ -4628,10 +4550,8 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
       const p2 = `path-/${itemPath}`;
       const entry = (overrideKey ? tmdbCache[overrideKey] : null) || tmdbCache[p1] || tmdbCache[p2];
       if (entry && entry._overridden) {
-        if (!entry._openlist_path || pathsAreRelated(itemPath, entry._openlist_path)) {
-          const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
-          if (ct) item.customTitle = ct;
-        }
+        const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
+        if (ct) item.customTitle = ct;
       }
     }
 
@@ -4710,12 +4630,13 @@ export async function initSQLiteState() {
         const item = tmdbCache[k];
         if (item && item._overridden) {
           item._synced = true;
-          // Clean up non-path keys that are tied to a specific openlist path so they never leak to other items
-          if (!k.startsWith('path-') && item._openlist_path) {
-            console.log('Cleaning up non-path key tied to specific openlist path:', k);
-            delete tmdbCache[k];
-            cleanedBadKeys = true;
-            continue;
+          // If this key has a year suffix (e.g. MOVIE-title-2023), ensure baseKey (MOVIE-title) also exists
+          const yearMatch = k.match(/^(.*)-(\d{4})$/);
+          if (yearMatch) {
+            const baseK = yearMatch[1];
+            if (!tmdbCache[baseK]) {
+              tmdbCache[baseK] = item;
+            }
           }
         }
       }

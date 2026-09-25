@@ -849,14 +849,7 @@ export default function Details() {
       .then(res => {
         if (isMounted) {
           if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name || res.data.custom_title || res.data._customTitle)) {
-            setTmdb((prev: any) => {
-              const updated = { ...(prev || {}), ...res.data };
-              if (!res.data.custom_title && !res.data._customTitle) {
-                delete updated.custom_title;
-                delete updated._customTitle;
-              }
-              return updated;
-            });
+            setTmdb((prev: any) => ({ ...(prev || {}), ...res.data }));
           } else if (!tmdb) {
              // Fallback to search_all if initial search fails
              axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}${tmdbId ? `&tmdbId=${tmdbId}` : ''}`)
