@@ -534,97 +534,54 @@ function isGenericCategoryRoot(p: string): boolean {
   return false;
 }
 
-function findOverriddenKeyInCache(cache: Record<string, any>, type?: string, cleanQuery?: string, year?: string | number, itemPath?: string): string | null {
-  if (!cache) return null;
+function findOverriddenKeyInCache(cache: Record<string, any>, type: string, cleanQuery: string, year?: string | number, itemPath?: string): string | null {
+  if (!cleanQuery && !itemPath && !year) return null;
   const baseQuery = (cleanQuery || '').toLowerCase().trim();
   const rawType = (type || '').toUpperCase().trim();
-  const isTvType = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'TV_SHOW', 'KDRAMA', 'ADRAMA', 'ANIME', 'ANIMES', 'KOREAN_DRAMA', 'ASIAN_DRAMA', 'CARTOON', 'ANIMATION', 'DOCUSERIES'].includes(rawType) ||
-    rawType.includes('TV') || rawType.includes('SHOW') || rawType.includes('SERIES') || rawType.includes('DRAMA') || rawType.includes('ANIME');
+  const isTvType = ['SERIES', 'TV', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(rawType);
+  const typesToCheck = isTvType ? [rawType, 'TV', 'SERIES', 'ANIME', 'KDRAMA', 'ADRAMA'] : [rawType, 'MOVIE'];
 
-  const movieTypes = ['MOVIES', 'MOVIE', 'FILM', 'FILMS'];
-  const tvTypes = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'TV_SHOW', 'ANIME', 'ANIMES', 'KDRAMA', 'ADRAMA', 'KOREAN_DRAMA', 'ASIAN_DRAMA', 'CARTOON', 'ANIMATION', 'DOCUSERIES'];
-  const typesToCheck = isTvType 
-    ? Array.from(new Set([rawType, ...tvTypes, ...movieTypes].filter(Boolean))) 
-    : Array.from(new Set([rawType, ...movieTypes, ...tvTypes].filter(Boolean)));
+  // 1. Exact base matches (type + query + year)
+  for (const t of typesToCheck) {
+    if (!t) continue;
+    const cacheKey = baseQuery ? `${t}-${baseQuery}${year ? `-${year}` : ''}` : '';
+    const baseKey = baseQuery ? `${t}-${baseQuery}` : '';
+    if (cacheKey && cache[cacheKey]?._overridden) return cacheKey;
+    if (baseKey && cache[baseKey]?._overridden) return baseKey;
+  }
 
-  // 1. Hierarchical & Normalized Path Matching (highest specificity)
+  // 2. Hierarchical Path Matching (if overridden by path)
   if (itemPath && !isGenericCategoryRoot(itemPath)) {
-    const rawClean = itemPath.replace(/^\/+/, '').replace(/\/+$/, '');
-    let decodedClean = rawClean;
-    try { decodedClean = decodeURIComponent(rawClean); } catch (e) {}
-    const pathVariants = Array.from(new Set([
-      rawClean,
-      decodedClean,
-      rawClean.toLowerCase(),
-      decodedClean.toLowerCase()
-    ]));
-
-    for (const p of pathVariants) {
-      if (cache[`path-${p}`]?._overridden) return `path-${p}`;
-      if (cache[`path-/${p}`]?._overridden) return `path-/${p}`;
-    }
-
-    const normVariants = pathVariants.map(v => v.toLowerCase().replace(/^\/+/, ''));
-    for (const k of Object.keys(cache)) {
-      if (k.startsWith('path-') && cache[k]?._overridden) {
-        const sub = k.substring(5).replace(/^\/+/, '').toLowerCase();
-        let decSub = sub;
-        try { decSub = decodeURIComponent(sub); } catch(e) {}
-        if (normVariants.includes(sub) || normVariants.includes(decSub)) return k;
-      }
-    }
-
-    const parts = decodedClean.split('/').filter(Boolean);
+    const cleanP = itemPath.replace(/^\/+/, '');
+    const parts = cleanP.split('/');
+    // Check from full path down to item directory (never generic category roots)
     for (let i = parts.length; i > 0; i--) {
       const subPath = parts.slice(0, i).join('/');
       if (isGenericCategoryRoot(subPath)) continue;
-      const subNorm = subPath.toLowerCase();
-      for (const k of Object.keys(cache)) {
-        if (k.startsWith('path-') && cache[k]?._overridden) {
-          const sub = k.substring(5).replace(/^\/+/, '').toLowerCase();
-          let decSub = sub;
-          try { decSub = decodeURIComponent(sub); } catch(e) {}
-          if (sub === subNorm || decSub === subNorm) return k;
-        }
-      }
+      const p1 = `path-${subPath}`;
+      const p2 = `path-/${subPath}`;
+      if (cache[p1]?._overridden) return p1;
+      if (cache[p2]?._overridden) return p2;
     }
   }
 
-  // 2. Exact base matches (type + query + year)
-  if (baseQuery) {
-    if (year) {
-      const yrStr = String(year).trim();
-      for (const t of typesToCheck) {
-        const cacheKey = `${t}-${baseQuery}-${yrStr}`;
-        if (cache[cacheKey]?._overridden) return cacheKey;
-      }
-    }
-
-    for (const t of typesToCheck) {
-      const baseKey = `${t}-${baseQuery}`;
-      if (cache[baseKey]?._overridden) return baseKey;
-    }
-
-    // 3. Fallback: Search existing cache for baseKey prefix or year prefix
-    for (const t of typesToCheck) {
-      const basePrefix = `${t}-${baseQuery}-`;
-      const found = Object.keys(cache).find(k => {
-        return k.startsWith(basePrefix) && cache[k]?._overridden;
-      });
-      if (found) return found;
-    }
-
-    // 4. Overridden entries matching _cleanName, custom_title, or _customTitle
-    for (const k of Object.keys(cache)) {
+  // 3. Fallback: Search existing cache for baseKey prefix (only if we have a solid baseQuery)
+  if (baseQuery && baseQuery.length > 2) {
+    const found = Object.keys(cache).find(k => {
       const item = cache[k];
-      if (item?._overridden) {
-        if (item._cleanName && item._cleanName.toLowerCase() === baseQuery) return k;
-        if (item.custom_title && item.custom_title.toLowerCase().trim() === baseQuery) return k;
-        if (item._customTitle && item._customTitle.toLowerCase().trim() === baseQuery) return k;
-        if (item.title && item.title.toLowerCase().trim() === baseQuery) return k;
-        if (item.name && item.name.toLowerCase().trim() === baseQuery) return k;
+      if (!item?._overridden) return false;
+      
+      for (const t of typesToCheck) {
+        if (!t) continue;
+        const baseKey = `${t}-${baseQuery}`;
+        if (k === baseKey) return true;
+        
+        // If year is not provided, allow falling back to a year-specific override
+        if (!year && k.startsWith(`${baseKey}-`)) return true;
       }
-    }
+      return false;
+    });
+    if (found) return found;
   }
 
   return null;
@@ -644,7 +601,7 @@ async function saveLibraryIndex() {
 let isFetchingLibrary = false;
 let libraryFetchPromise = null;
 
-async function getLibraryIndex(token?: string, forceRefresh = false) {
+async function getLibraryIndex(token: string, forceRefresh = false) {
    if (!forceRefresh && libraryIndex.length > 0 && (Date.now() - libraryIndexLastUpdated < 15 * 60 * 1000)) {
        return libraryIndex;
    }
@@ -654,19 +611,14 @@ async function getLibraryIndex(token?: string, forceRefresh = false) {
 
    libraryFetchPromise = (async () => {
        try {
-            const masterApiKey = getOpenlistApiKey();
-            let authHeader = token;
-            if (!authHeader || isValidGuest(authHeader)) {
-                authHeader = masterApiKey || authHeader;
-            }
             const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
-            const res = await axios.post(`${openlistUrl}/api/fs/list`, { path: appConfig.basePath, password: "", page: 1, per_page: 0 }, { headers: authHeader ? { Authorization: authHeader } : {} });
+            const res = await axios.post(`${openlistUrl}/api/fs/list`, { path: appConfig.basePath, password: "", page: 1, per_page: 0 }, { headers: { Authorization: token } });
             if (res.data.code !== 200) return libraryIndex;
             const dirs = (res.data.data?.content || []).filter((c: any) => c.is_dir).map((c: any) => c.name);
             
             const catData = await Promise.all(dirs.map(async (dir: string) => {
                 try {
-                    const subRes = await axios.post(`${openlistUrl}/api/fs/list`, { path: `${appConfig.basePath}/${dir}`, password: "", page: 1, per_page: 0 }, { headers: authHeader ? { Authorization: authHeader } : {} });
+                    const subRes = await axios.post(`${openlistUrl}/api/fs/list`, { path: `${appConfig.basePath}/${dir}`, password: "", page: 1, per_page: 0 }, { headers: { Authorization: token } });
                     return {
                         name: dir,
                         items: subRes.data?.data?.content || []
@@ -681,15 +633,7 @@ async function getLibraryIndex(token?: string, forceRefresh = false) {
                 for (const item of c.items) {
                     const { cleanName, year } = parseMediaName(item.name);
                     const openlistPath = item.path || `${appConfig.basePath}/${c.name}/${item.name}`;
-                    const itemPath = openlistPath.replace(/^\/+/, '');
-
-                    const overrideKey = findOverriddenKeyInCache(tmdbCache, c.name, cleanName, year, itemPath);
-                    const p1 = `path-${itemPath}`;
-                    const p2 = `path-/${itemPath}`;
-                    const override = (overrideKey ? tmdbCache[overrideKey] : null) || tmdbCache[p1] || tmdbCache[p2];
-                    const customTitle = (override && override._overridden) ? (override.custom_title || override._customTitle || override.title || override.name) : undefined;
-
-                    allItems.push({ ...item, category: c.name, cleanName, year, openlist_path: openlistPath, customTitle });
+                    allItems.push({ ...item, category: c.name, cleanName, year, openlist_path: openlistPath });
                 }
             }
             
@@ -1994,26 +1938,8 @@ app.post('/api/fs/list', cacheMiddleware(30, true), async (req, res) => {
       }
     }
 
-    if (response.data?.code === 200 && Array.isArray(response.data?.data?.content)) {
-      const parentParts = normalizedPath.split('/').filter(Boolean);
-      const cat = parentParts[parentParts.length - 1] || 'UNKNOWN';
-
-      for (const item of response.data.data.content) {
-        const itemPath = `${normalizedPath}/${item.name}`.replace(/^\/+/, '');
-        const { cleanName, year } = parseMediaName(item.name);
-        const overrideKey = findOverriddenKeyInCache(tmdbCache, cat, cleanName, year, itemPath);
-        const p1 = `path-${itemPath}`;
-        const p2 = `path-/${itemPath}`;
-        const entry = tmdbCache[p1] || tmdbCache[p2] || (overrideKey ? tmdbCache[overrideKey] : null);
-        if (entry && entry._overridden) {
-          const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
-          if (ct) {
-            item.customTitle = ct;
-          }
-        }
-      }
-
-      apiCache.set(cacheKey, response.data, 60); // 60 seconds short-lived memory cache
+    if (response.data?.code === 200) {
+        apiCache.set(cacheKey, response.data, 60); // 60 seconds short-lived memory cache
     }
 
     res.json(response.data);
@@ -2152,18 +2078,12 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
     let originalContentCount = content.length;
 
     // Fuzzy search using local libraryIndex
-    let libIndex: any[] = [];
     if (keywords && typeof keywords === 'string' && keywords.length >= 2) {
        try {
-           libIndex = await getLibraryIndex(token).catch(() => []);
+           const libIndex = await getLibraryIndex(token).catch(() => []);
            if (libIndex && libIndex.length > 0) {
-               const cleanKw = (keywords || '').toLowerCase().trim();
                const fuse = new Fuse(libIndex, {
-                   keys: [
-                       { name: 'customTitle', weight: 0.7 },
-                       { name: 'name', weight: 0.3 },
-                       { name: 'cleanName', weight: 0.3 }
-                   ],
+                   keys: ['name', 'cleanName'],
                    threshold: 0.4,
                    distance: 100,
                    includeScore: true
@@ -2183,28 +2103,15 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
                        itemParent = `${appConfig.basePath}/${item.category}`;
                    }
                    
-                   const isCloseMatch = (item.customTitle && item.customTitle.toLowerCase().includes(cleanKw)) ||
-                     (item.name && item.name.toLowerCase().includes(cleanKw)) ||
-                     (item.cleanName && item.cleanName.toLowerCase().includes(cleanKw)) ||
-                     ((res.score ?? 1) <= 0.2);
-
                    const mappedItem = {
                        ...item,
                        parent: itemParent,
-                       isFuzzy: true,
-                       isExact: isCloseMatch || false
+                       isFuzzy: true
                    };
                    const uid = getUniqId(mappedItem);
                    if (!seen.has(uid)) {
                        content.push(mappedItem);
                        seen.add(uid);
-                   } else {
-                       const existing = content.find(c => getUniqId(c) === uid);
-                       if (existing) {
-                           if (item.customTitle) existing.customTitle = item.customTitle;
-                           if (isCloseMatch) existing.isExact = true;
-                           existing.isFuzzy = true;
-                       }
                    }
                }
            }
@@ -2264,19 +2171,12 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       } catch (err) {}
     }
     
-    // SEARCH TMDB CACHE AND CUSTOM TITLES
+    // NEW LOGIC: SEARCH TMDB CACHE for titles available on the app
     try {
       const cleanStr = (s: any) => String(s || '').replace(/[^a-z0-9\s]/ig, '').replace(/\s+/g, ' ').trim().toLowerCase();
       const q = cleanStr(keywords || '');
       const qTitle = tmdbTitleForId ? cleanStr(tmdbTitleForId) : null;
       if (q.length >= 2 || qTitle) {
-        if (!libIndex || libIndex.length === 0) {
-          libIndex = await getLibraryIndex(token).catch(() => []);
-        }
-
-        const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
-        const seen = new Set(content.map(getUniqId));
-
         const matchingKeys = Object.keys(tmdbCache).filter(key => {
           const entry = tmdbCache[key];
           if (!entry) return false;
@@ -2286,10 +2186,9 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
           const title = cleanStr(entry.title || '');
           const name = cleanStr(entry.name || '');
           const orig = cleanStr(entry.original_name || entry.original_title || '');
-          const custom = cleanStr(entry.custom_title || entry._customTitle || '');
           
-          if (q.length >= 2 && (title.includes(q) || name.includes(q) || orig.includes(q) || custom.includes(q))) return true;
-          if (qTitle && (title.includes(qTitle) || name.includes(qTitle) || orig.includes(qTitle) || custom.includes(qTitle))) return true;
+          if (q.length >= 2 && (title.includes(q) || name.includes(q) || orig.includes(q))) return true;
+          if (qTitle && (title.includes(qTitle) || name.includes(qTitle) || orig.includes(qTitle))) return true;
           
           return false;
         });
@@ -2297,111 +2196,15 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
         if (matchingKeys.length > 0) {
           const extractedCleanNames = new Set<string>();
           for (const key of matchingKeys) {
-            const entry = tmdbCache[key];
-            if (!entry) continue;
-
-            const itemCustomTitle = entry.custom_title || entry._customTitle || (entry._overridden ? (entry.title || entry.name) : undefined);
-
-            // 1. Direct path from entry or key
-            let targetPath = entry._openlist_path || entry.path || entry._itemPath;
-            if (!targetPath && key.startsWith('path-')) {
-              targetPath = key.replace(/^path-/, '');
-            }
-
-            if (targetPath) {
-              const normP = '/' + targetPath.replace(/^\/+/, '');
-              const lastSlash = normP.lastIndexOf('/');
-              const pParent = normP.substring(0, lastSlash) || '/home';
-              const pName = normP.substring(lastSlash + 1);
-              const pIsDir = !/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(pName);
-
-              const libMatch = libIndex.find(li => {
-                const liPath = (li.openlist_path || (li.parent ? `${li.parent}/${li.name}` : '')).replace(/^\/+/, '').toLowerCase();
-                const checkPath = normP.replace(/^\/+/, '').toLowerCase();
-                return liPath === checkPath || li.name.toLowerCase() === pName.toLowerCase();
-              });
-
-              const resolvedItem = libMatch ? {
-                ...libMatch,
-                parent: libMatch.parent || pParent,
-                name: libMatch.name || pName,
-                is_dir: libMatch.is_dir !== undefined ? libMatch.is_dir : pIsDir,
-                customTitle: itemCustomTitle || libMatch.customTitle,
-                isExact: true,
-                isFuzzy: true
-              } : {
-                name: pName,
-                parent: pParent,
-                is_dir: pIsDir,
-                openlist_path: normP,
-                customTitle: itemCustomTitle,
-                isExact: true,
-                isFuzzy: true
-              };
-
-              const uid = getUniqId(resolvedItem);
-              if (!seen.has(uid)) {
-                content.push(resolvedItem);
-                seen.add(uid);
-              } else {
-                const existing = content.find(c => getUniqId(c) === uid);
-                if (existing) {
-                  if (itemCustomTitle) existing.customTitle = itemCustomTitle;
-                  existing.isExact = true;
-                  existing.isFuzzy = true;
-                }
-              }
-              continue;
-            }
-
-            // 2. Not a direct path key: parse category and cleanName
             const catMatch = key.match(/^([^-]+)-/);
             if (catMatch) {
-              let cleanName = key.substring(catMatch[1].length + 1);
-              if (/\-\d{4}$/.test(cleanName)) {
-                cleanName = cleanName.substring(0, cleanName.length - 5);
-              }
-              const expectedCat = catMatch[1].toUpperCase();
-
-              // Check if matched in libIndex
-              const libMatches = libIndex.filter(li => {
-                if (!li.cleanName || !cleanName) return false;
-                if (li.cleanName.toLowerCase() !== cleanName.toLowerCase()) return false;
-                if (expectedCat && li.category && li.category.toUpperCase() !== expectedCat && expectedCat !== 'ALL') {
-                  return false;
-                }
-                return true;
-              });
-
-              if (libMatches.length > 0) {
-                for (const lm of libMatches) {
-                  const lmParent = lm.parent || (lm.openlist_path ? lm.openlist_path.substring(0, lm.openlist_path.lastIndexOf('/')) : `${appConfig.basePath}/${lm.category}`);
-                  const mapped = {
-                    ...lm,
-                    parent: lmParent,
-                    customTitle: itemCustomTitle || lm.customTitle,
-                    isExact: true,
-                    isFuzzy: true
-                  };
-                  const uid = getUniqId(mapped);
-                  if (!seen.has(uid)) {
-                    content.push(mapped);
-                    seen.add(uid);
-                  } else {
-                    const existing = content.find(c => getUniqId(c) === uid);
-                    if (existing) {
-                      if (itemCustomTitle) existing.customTitle = itemCustomTitle;
-                      existing.isExact = true;
-                      existing.isFuzzy = true;
-                    }
-                  }
-                }
-                continue;
-              }
-
-              if (cleanName.length >= 2) {
-                extractedCleanNames.add(cleanName);
-              }
+               let cleanName = key.substring(catMatch[1].length + 1);
+               if (/\-\d{4}$/.test(cleanName)) {
+                 cleanName = cleanName.substring(0, cleanName.length - 5);
+               }
+               if (cleanName.length >= 2) {
+                 extractedCleanNames.add(cleanName);
+               }
             }
           }
 
@@ -2425,22 +2228,14 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
              try {
                 const responseClean = await axios.post(url, reqBodyClean, { headers: { Authorization: token } });
                 if (responseClean.data && responseClean.data.code === 200 && responseClean.data.data && responseClean.data.data.content) {
-                   for (const cItem of responseClean.data.data.content) {
-                      const uid = getUniqId(cItem);
-                      const mapped = {
-                         ...cItem,
-                         isExact: true,
-                         isFuzzy: true
-                      };
+                   const contentClean = responseClean.data.data.content;
+                   const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+                   const seen = new Set(content.map(getUniqId));
+                   for (const item of contentClean) {
+                      const uid = getUniqId(item);
                       if (!seen.has(uid)) {
-                          content.push(mapped);
+                          content.push(item);
                           seen.add(uid);
-                      } else {
-                          const existing = content.find(c => getUniqId(c) === uid);
-                          if (existing) {
-                              existing.isExact = true;
-                              existing.isFuzzy = true;
-                          }
                       }
                    }
                 }
@@ -2457,30 +2252,6 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
        if (item.parent) {
           // Normalize leading slashes
           item.parent = '/' + item.parent.replace(/^\/+/, '');
-       }
-       // Enrich item with customTitle if present in tmdbCache
-       if (!item.customTitle) {
-          const itemPath = (item.parent ? `${item.parent}/${item.name}` : item.name).replace(/^\/+/, '');
-          const p1 = `path-${itemPath}`;
-          const p2 = `path-/${itemPath}`;
-          const parentParts = (item.parent || '').split('/').filter(Boolean);
-          const cat = parentParts[parentParts.length - 1] || 'UNKNOWN';
-          const { cleanName, year } = parseMediaName(item.name);
-          const overrideKey = findOverriddenKeyInCache(tmdbCache, cat, cleanName, year, itemPath);
-          const entry = tmdbCache[p1] || tmdbCache[p2] || (overrideKey ? tmdbCache[overrideKey] : null);
-          if (entry && entry._overridden) {
-             const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
-             if (ct) item.customTitle = ct;
-          }
-       }
-       // If custom title matches search query, ensure isExact and isFuzzy are marked
-       if (item.customTitle && keywords) {
-          const cleanCt = String(item.customTitle).toLowerCase().trim();
-          const cleanKw = (keywords || '').toLowerCase().trim();
-          if (cleanCt === cleanKw || cleanCt.includes(cleanKw) || cleanKw.includes(cleanCt)) {
-             item.isExact = true;
-             item.isFuzzy = true;
-          }
        }
     });
 
@@ -2521,23 +2292,21 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       filteredContent.sort((a, b) => {
         const aParsed = parseMediaName(a.name).cleanName.toLowerCase().trim();
         const bParsed = parseMediaName(b.name).cleanName.toLowerCase().trim();
-        const aCustom = (a.customTitle || '').toLowerCase().trim();
-        const bCustom = (b.customTitle || '').toLowerCase().trim();
         
-        const aExact = aParsed === searchStr || aCustom === searchStr;
-        const bExact = bParsed === searchStr || bCustom === searchStr;
+        const aExact = aParsed === searchStr;
+        const bExact = bParsed === searchStr;
         
         if (aExact && !bExact) return -1;
         if (!aExact && bExact) return 1;
         
-        const aStarts = aParsed.startsWith(searchStr) || aCustom.startsWith(searchStr);
-        const bStarts = bParsed.startsWith(searchStr) || bCustom.startsWith(searchStr);
+        const aStarts = aParsed.startsWith(searchStr);
+        const bStarts = bParsed.startsWith(searchStr);
         
         if (aStarts && !bStarts) return -1;
         if (!aStarts && bStarts) return 1;
         
-        const aContains = aParsed.includes(searchStr) || aCustom.includes(searchStr);
-        const bContains = bParsed.includes(searchStr) || bCustom.includes(searchStr);
+        const aContains = aParsed.includes(searchStr);
+        const bContains = bParsed.includes(searchStr);
         
         if (aContains && !bContains) return -1;
         if (!aContains && bContains) return 1;
@@ -2651,15 +2420,9 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
     const baseQuery = query.toLowerCase().trim();
     const baseKey = `${type}-${baseQuery}`;
     
-    const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year, item.path || item.openlist_path);
+    const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
     if (overriddenKey) {
-      const entry = { ...tmdbCache[overriddenKey], _synced: true };
-      const ct = entry.custom_title || entry._customTitle;
-      if (ct) {
-        entry.title = ct;
-        entry.name = ct;
-      }
-      results[originalName] = entry;
+      results[originalName] = { ...tmdbCache[overriddenKey], _synced: true };
     } else {
       const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
       if (tmdbCache[cacheKey]) {
@@ -2863,11 +2626,6 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
                   saveDb();
               }
           } catch (e) {}
-      }
-      const ct = cachedItem.custom_title || cachedItem._customTitle;
-      if (ct) {
-        cachedItem.title = ct;
-        cachedItem.name = ct;
       }
       return res.json({ ...cachedItem, _synced: true });
   } else if (cachedItem === null && cacheKeyToUpdate) {
@@ -3973,76 +3731,25 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
     const setOverriddenDataInCache = (dataToStore: any) => {
       dataToStore._overridden = true;
       dataToStore._synced = true;
-      if (customTitle) {
-        dataToStore.custom_title = customTitle;
-        dataToStore._customTitle = customTitle;
-        dataToStore.title = customTitle;
-        dataToStore.name = customTitle;
-      }
-      if (cleanPath) {
-        dataToStore._openlist_path = cleanPath;
-        dataToStore._itemPath = rawPath || cleanPath;
-      }
-      dataToStore._cleanName = lowerQuery;
-      dataToStore._category = typeStr;
-      if (year || customYear) {
-        dataToStore._year = year || customYear;
-      }
-
       tmdbCache[cacheKey] = dataToStore;
-      tmdbCache[baseKey] = dataToStore;
-
-      // Category aliases so all query variants match
-      const isTv = ['SERIES', 'TV', 'SHOW', 'SHOWS', 'ANIME', 'ANIMES', 'KDRAMA', 'ADRAMA'].includes(typeStr);
-      const aliasTypes = isTv ? ['SERIES', 'TV', 'SHOWS', 'SHOW', 'ANIME', 'KDRAMA', 'ADRAMA'] : ['MOVIES', 'MOVIE', 'FILM'];
-      for (const at of aliasTypes) {
-        tmdbCache[`${at}-${lowerQuery}`] = dataToStore;
-        if (year || customYear) {
-          tmdbCache[`${at}-${lowerQuery}-${year || customYear}`] = dataToStore;
-        }
+      
+      if (!year) {
+        tmdbCache[baseKey] = dataToStore;
       }
+      
+      if (pathKey1) tmdbCache[pathKey1] = dataToStore;
+      if (pathKey2) tmdbCache[pathKey2] = dataToStore;
 
+      // Update any other existing keys in tmdbCache that match cleanPath
       if (cleanPath) {
-        let decodedClean = cleanPath;
-        try { decodedClean = decodeURIComponent(cleanPath); } catch (e) {}
-        const pKeys = [
-          `path-${cleanPath}`,
-          `path-/${cleanPath}`,
-          `path-${decodedClean}`,
-          `path-/${decodedClean}`
-        ];
-        for (const pk of pKeys) {
-          tmdbCache[pk] = dataToStore;
-        }
-
-        // Update any other existing keys in tmdbCache that match cleanPath
-        const normP = cleanPath.toLowerCase().replace(/^\/+/, '');
-        const decNormP = decodedClean.toLowerCase().replace(/^\/+/, '');
         for (const k of Object.keys(tmdbCache)) {
-          if (k.startsWith('path-')) {
-            const sub = k.substring(5).toLowerCase().replace(/^\/+/, '');
-            if (sub === normP || sub === decNormP) {
-              tmdbCache[k] = dataToStore;
-            }
+          if (!year && k === baseKey) {
+            tmdbCache[k] = dataToStore;
+          }
+          if (k === `path-${cleanPath}` || k === `path-/${cleanPath}`) {
+            tmdbCache[k] = dataToStore;
           }
         }
-      }
-
-      // Keep libraryIndex in sync immediately with customTitle
-      if (libraryIndex && libraryIndex.length > 0 && customTitle) {
-        const normP = cleanPath ? cleanPath.toLowerCase() : '';
-        let decP = '';
-        try { decP = cleanPath ? decodeURIComponent(cleanPath).toLowerCase() : ''; } catch (e) {}
-        for (const li of libraryIndex) {
-          const liP = (li.openlist_path || '').replace(/^\/+/, '').toLowerCase();
-          if (normP && (liP === normP || liP.endsWith('/' + normP) || (decP && (liP === decP || liP.endsWith('/' + decP))))) {
-            li.customTitle = customTitle;
-          } else if (li.cleanName && lowerQuery && li.cleanName.toLowerCase() === lowerQuery && (!typeStr || !li.category || li.category.toUpperCase() === typeStr)) {
-            li.customTitle = customTitle;
-          }
-        }
-      } else if (customTitle) {
-        getLibraryIndex(undefined, true).catch(() => {});
       }
     };
 
@@ -4054,9 +3761,9 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
       
       if (customTitle) {
         data.title = customTitle;
-        data.name = customTitle;
-        data.custom_title = customTitle;
-        data._customTitle = customTitle;
+        if (!isMovieCategory) {
+          data.name = customTitle; // tv uses name
+        }
       }
       if (customYear) {
         data.release_date = customYear + '-01-01'; // approximate for movie
@@ -4116,9 +3823,9 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
     if (data) {
        if (customTitle) {
          data.title = customTitle;
-         data.name = customTitle;
-         data.custom_title = customTitle;
-         data._customTitle = customTitle;
+         if (!isMovieCategory) {
+           data.name = customTitle;
+         }
        }
        if (customYear) {
          data.release_date = customYear + '-01-01';
@@ -4540,21 +4247,6 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
         })();
     }
     
-    for (const item of items) {
-      const itemPath = (item.path || (item._parent ? `${item._parent}/${item.name}` : item.name) || '').replace(/^\/+/, '');
-      const { cleanName, year } = parseMediaName(item.name);
-      const searchYear = item._jf?.year || year;
-      const type = item._cat || '';
-      const overrideKey = findOverriddenKeyInCache(tmdbCache, type, cleanName, searchYear, itemPath);
-      const p1 = `path-${itemPath}`;
-      const p2 = `path-/${itemPath}`;
-      const entry = (overrideKey ? tmdbCache[overrideKey] : null) || tmdbCache[p1] || tmdbCache[p2];
-      if (entry && entry._overridden) {
-        const ct = entry.custom_title || entry._customTitle || entry.title || entry.name;
-        if (ct) item.customTitle = ct;
-      }
-    }
-
     res.json({ success: true, data: items });
   } catch (error: any) {
     console.error('[Jellyfin API Error]', error.message);

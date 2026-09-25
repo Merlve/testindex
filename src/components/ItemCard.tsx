@@ -264,7 +264,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
         <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-[11px] sm:text-xs'}`}>
             {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle">REC</span>}
-            {item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle || displayTmdb?.title || displayTmdb?.name || item.name}
+            {displayTmdb?.title || displayTmdb?.name || item.name}
         </h3>
         {item._jf?.addedText && (
             <p className={`font-bold text-yellow-500 truncate ${viewMode === 'list' ? 'text-xs mb-1' : 'text-[10px] sm:text-xs'}`}>
@@ -306,7 +306,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
               {innerContent}
           </a>
       ) : (
-          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses} state={{ item: { ...item, customTitle: item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle }, tmdbData: displayTmdb, metaVer: currentMetaVer }}>
+          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses} state={{ item, tmdbData: displayTmdb, metaVer: currentMetaVer }}>
               {innerContent}
           </Link>
       )}
