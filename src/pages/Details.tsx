@@ -828,54 +828,60 @@ export default function Details() {
     ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'ANIMES', 'SHOWS', 'DRAMA', 'CARTOON', 'ANIMATION', 'ASIAN_DRAMA', 'KOREAN_DRAMA', 'DOCUSERIES'].includes(category) ||
     /(series|show|tv|kdrama|adrama|anime|drama|animation|cartoon|serial|docuseries)/i.test(category);
 
-  // Fetch TMDB data if completely missing
+  // Fetch and revalidate TMDB data to ensure latest server overrides (custom titles, logos, etc.) reflect for all users
   useEffect(() => {
     let isMounted = true;
+    const parsed = parseMediaName(name);
+    const cleanName = parsed.cleanName || name;
+    const parsedYear = parsed.year || '';
+
+    const tmdbId = location.state?.item?._jf?.tmdbId || null;
+    let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}&full=true`;
+    if (tmdbId) {
+        url += `&tmdbId=${tmdbId}`;
+    }
+
     if (!tmdb) {
       setLoading(true);
-      const parsed = parseMediaName(name);
-      const cleanName = parsed.cleanName || name;
-      const parsedYear = parsed.year || '';
-
-      const tmdbId = location.state?.item?._jf?.tmdbId || null;
-      let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}&full=true`;
-      if (tmdbId) {
-          url += `&tmdbId=${tmdbId}`;
-      }
-
-      axios.get(url)
-        .then(res => {
-          if (isMounted) {
-            if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name)) {
-              setTmdb(res.data);
-            } else {
-               // Fallback to search_all if initial search fails
-               axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}${tmdbId ? `&tmdbId=${tmdbId}` : ''}`)
-                 .then(fallbackRes => {
-                    if (isMounted && fallbackRes.data?.results?.[0]) {
-                      const itemFound = fallbackRes.data.results[0];
-                      setTmdb(itemFound);
-                      if (itemFound.id && (itemFound.media_type === 'tv' || isTvMedia)) {
-                        axios.get(`/api/meta/tv_details?tvId=${itemFound.id}`).then(tvRes => {
-                          if (isMounted && tvRes.data) {
-                            setTmdb((prev: any) => ({ ...prev, ...tvRes.data, status: tvRes.data.status || prev?.status }));
-                          }
-                        }).catch(() => {});
-                      }
-                    }
-                 }).catch(console.error);
-            }
-          }
-        })
-        .catch(console.error)
-        .finally(() => {
-          if (isMounted) setLoading(false);
-        });
-    } else {
-      setLoading(false);
     }
+
+    axios.get(url)
+      .then(res => {
+        if (isMounted) {
+          if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name || res.data.custom_title || res.data._customTitle)) {
+            setTmdb((prev: any) => {
+              const updated = { ...(prev || {}), ...res.data };
+              if (!res.data.custom_title && !res.data._customTitle) {
+                delete updated.custom_title;
+                delete updated._customTitle;
+              }
+              return updated;
+            });
+          } else if (!tmdb) {
+             // Fallback to search_all if initial search fails
+             axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}${tmdbId ? `&tmdbId=${tmdbId}` : ''}`)
+               .then(fallbackRes => {
+                  if (isMounted && fallbackRes.data?.results?.[0]) {
+                    const itemFound = fallbackRes.data.results[0];
+                    setTmdb(itemFound);
+                    if (itemFound.id && (itemFound.media_type === 'tv' || isTvMedia)) {
+                      axios.get(`/api/meta/tv_details?tvId=${itemFound.id}`).then(tvRes => {
+                        if (isMounted && tvRes.data) {
+                          setTmdb((prev: any) => ({ ...prev, ...tvRes.data, status: tvRes.data.status || prev?.status }));
+                        }
+                      }).catch(() => {});
+                    }
+                  }
+               }).catch(console.error);
+          }
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
     return () => { isMounted = false; };
-  }, [fullPath, name, category, tmdb === null, actualOpenlistPath, location.state]);
+  }, [fullPath, name, category, actualOpenlistPath]);
 
   // If TMDB data exists but status is missing for a TV show/anime/kdrama, fetch full TV details
   useEffect(() => {
@@ -1240,7 +1246,7 @@ export default function Details() {
   // Helper to open YouTube search fallback
   const openYouTubeTrailerSearch = () => {
     const parsed = parseMediaName(name || '');
-    const title = tmdb?.title || tmdb?.name || parsed.cleanName || name || '';
+    const title = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parsed.cleanName || name || '';
     const releaseDate = tmdb?.release_date || tmdb?.first_air_date || '';
     const year = (releaseDate ? releaseDate.substring(0, 4) : '') || parsed.year || '';
     const searchQuery = [title, year, 'trailer'].filter(Boolean).join(' ');
@@ -1762,7 +1768,7 @@ export default function Details() {
             {backdropUrl && (
               <img 
                 src={backdropUrl} 
-                alt={tmdb?.title || tmdb?.name || name} 
+                alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || name} 
                 className="w-full h-full object-cover object-center sm:object-top opacity-100 dark:opacity-85 pointer-events-none transition-opacity duration-700"
               />
             )}
@@ -1803,13 +1809,13 @@ export default function Details() {
           {logoUrl ? (
             <img 
               src={logoUrl} 
-              alt={tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
+              alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
               className="h-20 sm:h-24 md:h-32 object-contain drop-shadow-xl"
               onError={() => setLogoUrl(null)}
             />
           ) : (
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-black dark:text-white drop-shadow-xl leading-tight">
-              {formatTitleCase(tmdb?.title || tmdb?.name || parseMediaName(name).cleanName)}
+              {formatTitleCase(tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName)}
             </h1>
           )}
 
@@ -1906,7 +1912,7 @@ export default function Details() {
             {user && user !== 'guest' && (
             <button
               onClick={() => {
-                const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
+                const curTitle = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
                 setSearchTitle(curTitle);
                 setCustomTitle(curTitle);
                 setLogoSearchQuery(curTitle);
@@ -2351,7 +2357,7 @@ export default function Details() {
                 <button
                   type="button"
                   onClick={() => {
-                    const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
+                    const curTitle = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
                     setModalTab('logo');
                     setLogoSearchQuery(curTitle);
                     if (tmdb?.id) {

@@ -213,8 +213,12 @@ export default function NavbarSearch() {
                   >
                     <SearchItemImage item={item} />
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm text-black dark:text-white break-words whitespace-normal leading-tight mb-0.5">{item.name}</div>
-                      <div className="text-[10px] text-gray-600 dark:text-gray-400 break-words whitespace-normal leading-tight">{item.parent}</div>
+                      <div className="text-sm text-black dark:text-white break-words whitespace-normal leading-tight mb-0.5">
+                        {item.customTitle || item.name}
+                      </div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400 break-words whitespace-normal leading-tight">
+                        {item.customTitle ? `${item.name} • ${item.parent}` : item.parent}
+                      </div>
                     </div>
                   </button>
                 ))}
