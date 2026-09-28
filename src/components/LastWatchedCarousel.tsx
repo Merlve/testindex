@@ -6,6 +6,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
 import { isImageLoaded, markImageLoaded } from '../utils/imageCache';
+import { prefetchItemDetails } from '../utils/detailsPrefetch';
 
 const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { item: any, onDismiss?: (key: string) => void }) {
   const { user, token } = useAuth();
@@ -125,6 +126,22 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
       }
   }
 
+  const handlePrefetch = () => {
+    let type = 'MOVIES';
+    const pLower = (item.parentPath || '').toLowerCase();
+    if (pLower.includes('series') || pLower.includes('tv') || pLower.includes('show')) type = 'SERIES';
+    else if (pLower.includes('anime')) type = 'ANIME';
+    else if (pLower.includes('kdrama')) type = 'KDRAMA';
+
+    prefetchItemDetails(queryClient, {
+      item,
+      category: type,
+      parentPath: item.parentPath,
+      tmdbData: tmdb,
+      token,
+    });
+  };
+
   const targetUrl = `/${linkPath}`.replace(/\/+/g, '/').split('/').map(p => encodeURIComponent(p)).join('/');
   const currentMetaVer = localStorage.getItem('meta_version') || '1';
 
@@ -134,6 +151,10 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
     <Link 
       to={targetUrl}
       state={{ item, tmdbData: tmdb, metaVer: currentMetaVer, preselectSeason }}
+      onPointerEnter={handlePrefetch}
+      onPointerDown={handlePrefetch}
+      onTouchStart={handlePrefetch}
+      onFocus={handlePrefetch}
       className="flex-none w-64 md:w-80 aspect-video bg-black/5 dark:bg-white/5 rounded-2xl overflow-hidden isolate relative group block"
     >
         <div className="absolute inset-0 w-full h-full overflow-hidden">

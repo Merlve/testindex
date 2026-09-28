@@ -6,8 +6,9 @@ import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCoverflow } from 'swiper/modules';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isImageLoaded, markImageLoaded } from '../utils/imageCache';
+import { prefetchItemDetails } from '../utils/detailsPrefetch';
 import 'swiper/css';
 import 'swiper/css/effect-coverflow';
 
@@ -75,8 +76,19 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
 
 const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any }) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const queryClient = useQueryClient();
   const [logoError, setLogoError] = useState(false);
+
+  const handlePrefetch = () => {
+    prefetchItemDetails(queryClient, {
+      item,
+      category: item.category,
+      parentPath: item.parentPath || item._parent,
+      tmdbData: tmdb,
+      token,
+    });
+  };
 
   const { data: tmdb } = useQuery({
     queryKey: ['tmdb', item.name, item.category, item.parentPath],
@@ -157,6 +169,10 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
     <Link 
       to={targetUrl}
       state={{ item, tmdbData: tmdb, metaVer: currentMetaVer }}
+      onPointerEnter={handlePrefetch}
+      onPointerDown={handlePrefetch}
+      onTouchStart={handlePrefetch}
+      onFocus={handlePrefetch}
       className="relative block w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-lg border border-white/10 group cursor-pointer"
     >
        {backdrop ? (

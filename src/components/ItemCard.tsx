@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 import { isImageLoaded, markImageLoaded } from '../utils/imageCache';
+import { prefetchItemDetails } from '../utils/detailsPrefetch';
 
 const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: string | null, lowResSrc?: string | null, alt: string, className?: string, fallbackText?: string }) => {
   const getCacheBustUrl = (url?: string | null) => {
@@ -264,7 +265,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
       <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
         <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-[11px] sm:text-xs'}`}>
             {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle">REC</span>}
-            {displayTmdb?.title || displayTmdb?.name || item.name}
+            {item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle || displayTmdb?.title || displayTmdb?.name || item.name}
         </h3>
         {item._jf?.addedText && (
             <p className={`font-bold text-yellow-500 truncate ${viewMode === 'list' ? 'text-xs mb-1' : 'text-[10px] sm:text-xs'}`}>
@@ -297,6 +298,36 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     </>
   );
 
+  const prefetchTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handlePrefetch = () => {
+    prefetchItemDetails(queryClient, {
+      item,
+      category,
+      parentPath,
+      tmdbData: displayTmdb,
+      token,
+    });
+  };
+
+  const handlePointerEnter = () => {
+    if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+    prefetchTimerRef.current = setTimeout(handlePrefetch, 65);
+  };
+
+  const handlePointerLeave = () => {
+    if (prefetchTimerRef.current) {
+      clearTimeout(prefetchTimerRef.current);
+      prefetchTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+    };
+  }, []);
+
   const cardClasses = `snap-start group relative transition-transform duration-300 transform-gpu backface-hidden ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`}`;
 
   return (
@@ -306,7 +337,16 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
               {innerContent}
           </a>
       ) : (
-          <Link to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} className={cardClasses} state={{ item, tmdbData: displayTmdb, metaVer: currentMetaVer }}>
+          <Link 
+            to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} 
+            className={cardClasses} 
+            state={{ item: { ...item, customTitle: item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle }, tmdbData: displayTmdb, metaVer: currentMetaVer }}
+            onPointerEnter={handlePointerEnter}
+            onPointerLeave={handlePointerLeave}
+            onPointerDown={handlePrefetch}
+            onTouchStart={handlePrefetch}
+            onFocus={handlePrefetch}
+          >
               {innerContent}
           </Link>
       )}

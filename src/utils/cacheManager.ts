@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { clearImageCache } from './imageCache';
+import { clearPaletteCache } from './colorExtractor';
 
 export function clearAllLocalCaches(queryClient?: QueryClient) {
   try {
@@ -13,12 +14,23 @@ export function clearAllLocalCaches(queryClient?: QueryClient) {
   }
 
   clearImageCache();
+  clearPaletteCache();
 
   if (queryClient) {
     try {
+      queryClient.clear();
       queryClient.invalidateQueries();
     } catch (e) {
       console.error('Failed to invalidate queryClient queries', e);
     }
   }
+
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key && (key.startsWith('category_state_') || key.includes('shindex-featured'))) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch (e) {}
 }

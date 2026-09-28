@@ -2,14 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, User, Search, ChevronLeft, Plus, Trash2, Download, Upload, CheckSquare, Square, Eye, EyeOff, Calendar, Key, RefreshCw } from 'lucide-react';
+import { Loader2, User, Search, ChevronLeft, Plus, Trash2, Download, Upload, CheckSquare, Square, Eye, EyeOff, Calendar, Key, RefreshCw, Lock, Unlock, RotateCcw, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 export default function Users() {
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled' | 'locked'>('all');
   const { token } = useAuth();
   
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -38,16 +38,37 @@ export default function Users() {
     staleTime: 0
   });
 
+  const { data: lockoutsData, isLoading: lockoutsLoading, refetch: refetchLockouts, isRefetching: isRefetchingLockouts } = useQuery({
+    queryKey: ['adminUserLockouts', token],
+    queryFn: async () => {
+      const res = await axios.get(`/api/users/lockouts?t=${Date.now()}`, { headers: { Authorization: token } });
+      return res.data || {};
+    },
+    enabled: !!token,
+    staleTime: 0
+  });
+
   const users = usersData || [];
   const expirations = expirationsData || {};
-  const loading = usersLoading || expirationsLoading || isRefetchingUsers || isRefetchingExpirations || actionLoading;
+  const lockouts = lockoutsData || {};
+  const loading = usersLoading || expirationsLoading || lockoutsLoading || isRefetchingUsers || isRefetchingExpirations || isRefetchingLockouts || actionLoading;
 
   const fetchUsers = async () => { await refetchUsers(); };
   const fetchExpirations = async () => { await refetchExpirations(); };
+  const fetchLockouts = async () => { await refetchLockouts(); };
 
   const filteredUsers = users.filter((u: any) => {
     const matchesSearch = u.username.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' ? true : (statusFilter === 'active' ? !u.disabled : !!u.disabled);
+    const isUserAdmin = u.role === 2 || u.username?.toLowerCase() === 'admin';
+    const uLockout = lockouts[u.username?.toLowerCase()] || lockouts[String(u.id)];
+    const isLocked = !isUserAdmin && !!uLockout?.locked;
+    const matchesStatus = statusFilter === 'all' 
+      ? true 
+      : statusFilter === 'active' 
+        ? !u.disabled 
+        : statusFilter === 'disabled' 
+          ? !!u.disabled 
+          : isLocked;
     return matchesSearch && matchesStatus;
   });
 
@@ -163,6 +184,28 @@ export default function Users() {
     }
   };
 
+  const handleBatchResetLockout = async () => {
+    if (!confirm('Are you sure you want to reset login lockout for selected users?')) return;
+    setActionLoading(true);
+    try {
+      const selectedUsers = users.filter(u => selectedIds.has(u.id));
+      const usernames = selectedUsers.map(u => u.username);
+      await axios.post('/api/users/batch-reset-lockout', {
+        userIds: Array.from(selectedIds),
+        usernames,
+        reEnable: true
+      }, { headers: { Authorization: token } });
+      await fetchLockouts();
+      await fetchUsers();
+      setSelectedIds(new Set());
+      alert('Login lockout has been reset for selected users.');
+    } catch (e: any) {
+      alert('Failed to reset lockout: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleExport = () => {
     const exportedUsers = users
       .filter(u => selectedIds.has(u.id))
@@ -236,6 +279,7 @@ export default function Users() {
           onSaved={() => { 
             fetchUsers(); 
             fetchExpirations(); 
+            fetchLockouts();
             setSelectedUser(null);
             setIsCreating(false);
           }} 
@@ -244,7 +288,12 @@ export default function Users() {
             setIsCreating(false);
           }}
           token={token!} 
-          expirations={expirations} 
+          expirations={expirations}
+          lockout={selectedUser ? (lockouts[selectedUser.username?.toLowerCase()] || lockouts[String(selectedUser.id)]) : undefined}
+          onLockoutReset={async () => {
+            await fetchLockouts();
+            await fetchUsers();
+          }}
         />
       </div>
     );
@@ -265,6 +314,7 @@ export default function Users() {
               try {
                 await fetchUsers();
                 await fetchExpirations();
+                await fetchLockouts();
               } finally {
                 setActionLoading(false);
               }
@@ -318,12 +368,13 @@ export default function Users() {
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled')}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled' | 'locked')}
             className="bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 transition-colors"
           >
             <option value="all">All Users</option>
             <option value="active">Active</option>
             <option value="disabled">Disabled</option>
+            <option value="locked">Locked Out</option>
           </select>
           <div className="relative max-w-xs w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -364,6 +415,10 @@ export default function Users() {
           Enable
         </button>
 
+        <button onClick={handleBatchResetLockout} disabled={selectedIds.size === 0} className="flex items-center text-sm font-medium text-amber-500 hover:text-amber-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Reset login lockout for selected users">
+          <RotateCcw className="w-4 h-4 mr-1" /> Reset Lockout
+        </button>
+
         <button onClick={() => { setBulkAction('password'); setBulkValue(''); }} disabled={selectedIds.size === 0} className="flex items-center text-sm font-medium text-purple-500 hover:text-purple-600 disabled:opacity-50 disabled:cursor-not-allowed">
           <Key className="w-4 h-4 mr-1" /> Set Password
         </button>
@@ -395,34 +450,51 @@ export default function Users() {
               No users found matching "{searchQuery}"
             </div>
           ) : (
-            filteredUsers.map(u => (
-              <div
-                key={u.id}
-                onClick={() => setSelectedUser(u)}
-                className={`w-full text-left p-2.5 sm:p-3.5 rounded-xl border flex items-center transition-all bg-[#fffcf9]/80 dark:bg-[#1a1a22]/80 hover:shadow-md backdrop-blur-sm cursor-pointer ${selectedIds.has(u.id) ? 'border-purple-500 shadow-sm' : 'border-black/5 dark:border-white/5 hover:border-purple-500/30'}`}
-              >
-                <div onClick={(e) => toggleSelect(u.id, e)} className="mr-2.5 text-gray-400 hover:text-purple-500 transition-colors">
-                  {selectedIds.has(u.id) ? <CheckSquare className="w-4 h-4 text-purple-500" /> : <Square className="w-4 h-4" />}
-                </div>
-                <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center mr-3 shrink-0">
-                  <User className="w-4 h-4 text-purple-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-black dark:text-white font-bold text-sm truncate">{u.username}</div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${u.disabled ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
-                      {u.disabled ? 'Disabled' : 'Active'}
-                    </span>
-                    {expirations[u.id] && (
-                      <span className="text-[10px] text-gray-400 font-medium ml-auto truncate" title={new Date(expirations[u.id]).toLocaleString()}>
-                        Exp: {new Date(expirations[u.id]).toLocaleDateString()}
+            filteredUsers.map(u => {
+              const isUserAdmin = u.role === 2 || u.username?.toLowerCase() === 'admin';
+              const uLockout = lockouts[u.username?.toLowerCase()] || lockouts[String(u.id)];
+              const isLocked = !isUserAdmin && !!uLockout?.locked;
+              return (
+                <div
+                  key={u.id}
+                  onClick={() => setSelectedUser(u)}
+                  className={`w-full text-left p-2.5 sm:p-3.5 rounded-xl border flex items-center transition-all bg-[#fffcf9]/80 dark:bg-[#1a1a22]/80 hover:shadow-md backdrop-blur-sm cursor-pointer ${selectedIds.has(u.id) ? 'border-purple-500 shadow-sm' : isLocked ? 'border-red-500/40 bg-red-500/5' : 'border-black/5 dark:border-white/5 hover:border-purple-500/30'}`}
+                >
+                  <div onClick={(e) => toggleSelect(u.id, e)} className="mr-2.5 text-gray-400 hover:text-purple-500 transition-colors">
+                    {selectedIds.has(u.id) ? <CheckSquare className="w-4 h-4 text-purple-500" /> : <Square className="w-4 h-4" />}
+                  </div>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 shrink-0 ${isUserAdmin ? 'bg-blue-500/10 text-blue-500' : isLocked ? 'bg-red-500/10 text-red-500' : 'bg-purple-500/10 text-purple-500'}`}>
+                    {isUserAdmin ? <ShieldCheck className="w-4 h-4" /> : isLocked ? <Lock className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-black dark:text-white font-bold text-sm truncate">{u.username}</span>
+                      {isUserAdmin && (
+                        <span className="bg-blue-500/15 text-blue-600 dark:text-blue-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
+                          Admin
+                        </span>
+                      )}
+                      {isLocked && (
+                        <span className="bg-red-500/15 border border-red-500/30 text-red-600 dark:text-red-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 flex items-center gap-0.5">
+                          <Lock className="w-2.5 h-2.5" /> Locked
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-red-500' : u.disabled ? 'bg-amber-500' : 'bg-green-500'}`}></span>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
+                        {isLocked ? 'Locked Out' : u.disabled ? 'Disabled' : 'Active'}
                       </span>
-                    )}
+                      {expirations[u.id] && (
+                        <span className="text-[10px] text-gray-400 font-medium ml-auto truncate" title={new Date(expirations[u.id]).toLocaleString()}>
+                          Exp: {new Date(expirations[u.id]).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
@@ -438,7 +510,25 @@ function formatForDatetimeLocal(val?: string) {
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
 
-function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations }: { user: any, isCreating: boolean, onSaved: () => void, onCancel: () => void, token: string, expirations: Record<string, string> }) {
+function UserEditForm({ 
+  user, 
+  isCreating, 
+  onSaved, 
+  onCancel, 
+  token, 
+  expirations,
+  lockout,
+  onLockoutReset
+}: { 
+  user: any, 
+  isCreating: boolean, 
+  onSaved: () => void, 
+  onCancel: () => void, 
+  token: string, 
+  expirations: Record<string, string>,
+  lockout?: { failedAttempts: number, locked: boolean, lockedAt?: number, lastAttemptAt?: number },
+  onLockoutReset?: () => Promise<void> | void
+}) {
   const [formData, setFormData] = useState({
     ...user,
     permission: typeof user.permission === 'number' ? user.permission : 0,
@@ -447,6 +537,36 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
   });
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [resettingLockout, setResettingLockout] = useState(false);
+
+  const isAdmin = user.role === 2 || user.username?.toLowerCase() === 'admin';
+  const isLocked = !isAdmin && !!lockout?.locked;
+  const failedAttempts = (!isAdmin && lockout?.failedAttempts) || 0;
+
+  const handleResetLockout = async () => {
+    setResettingLockout(true);
+    try {
+      const res = await axios.post('/api/users/reset-lockout', {
+        username: user.username,
+        userId: user.id,
+        reEnable: true
+      }, { headers: { Authorization: token } });
+
+      if (res.data?.success) {
+        if (formData.disabled) {
+          setFormData(prev => ({ ...prev, disabled: false }));
+        }
+        await onLockoutReset?.();
+        alert(`Lockout successfully reset for ${user.username}! Failed login attempts have been cleared.`);
+      } else {
+        alert(`Failed to reset lockout: ${res.data?.message || 'Server error'}`);
+      }
+    } catch (e: any) {
+      alert(`Failed to reset lockout: ${e.response?.data?.message || e.message}`);
+    } finally {
+      setResettingLockout(false);
+    }
+  };
 
   useEffect(() => {
     setFormData({
@@ -616,6 +736,88 @@ function UserEditForm({ user, isCreating, onSaved, onCancel, token, expirations 
           />
           <p className="text-[10px] text-gray-500 mt-2">Leave empty for no expiration. User will be disabled automatically on the set date and time.</p>
         </div>
+
+        {/* Lockout & Security Section */}
+        {!isCreating && (
+          isAdmin ? (
+            <div className="md:col-span-2 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-6 flex items-start gap-4">
+              <div className="p-3 bg-blue-500/20 rounded-xl text-blue-500 shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-base font-bold text-black dark:text-white">Admin Account</h4>
+                  <span className="text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">Lockout Exempt</span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                  Unsuccessful login attempt restrictions are removed for administrator accounts. This account cannot be locked out due to failed login attempts.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className={`md:col-span-2 p-6 rounded-2xl border transition-all ${
+              isLocked 
+                ? 'bg-red-500/10 border-red-500/30' 
+                : (failedAttempts > 0)
+                  ? 'bg-amber-500/10 border-amber-500/30'
+                  : 'bg-white/50 dark:bg-[#08080a]/50 border-black/5 dark:border-white/5'
+            }`}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Login Lockout Status</label>
+                    {isLocked ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white shadow-sm">
+                        <Lock className="w-3 h-3" /> Locked Out
+                      </span>
+                    ) : (failedAttempts > 0) ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                        <AlertTriangle className="w-3 h-3" /> {failedAttempts} / 5 Failed Attempts
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/20">
+                        <Unlock className="w-3 h-3" /> Normal (0 Failed Attempts)
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                    {isLocked 
+                      ? `This non-admin account is currently locked out after ${failedAttempts} unsuccessful login attempts. The user cannot log in until the lockout is reset.`
+                      : (failedAttempts > 0)
+                        ? `${failedAttempts} unsuccessful login attempt${failedAttempts === 1 ? '' : 's'} recorded. Account locks automatically after 5 consecutive failures.`
+                        : 'No unsuccessful login attempts recorded. User account is in good standing.'}
+                  </p>
+
+                  {lockout?.lockedAt && (
+                    <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                      <span>Locked at: {new Date(lockout.lockedAt).toLocaleString()}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Reset Lockout Button */}
+                {(isLocked || failedAttempts > 0) && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleResetLockout}
+                      disabled={resettingLockout}
+                      className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-xs bg-red-600 hover:bg-red-700 text-white transition-all shadow-lg shadow-red-600/20 disabled:opacity-50 cursor-pointer"
+                    >
+                      {resettingLockout ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="w-4 h-4" />
+                      )}
+                      <span>{isLocked ? 'Reset Lockout & Unlock' : 'Clear Failed Attempts'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        )}
       </div>
 
       <div className="pt-8 border-t border-black/5 dark:border-white/5">

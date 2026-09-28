@@ -165,7 +165,7 @@ export default function Category() {
     }
     if (filterLetter) {
       result = result.filter((item: any) => {
-        const itemName = item.name.trim();
+        const itemName = (item.customTitle || item.name).trim();
         const firstChar = itemName.charAt(0).toUpperCase();
         if (filterLetter === '#') {
           return /^[0-9]/.test(firstChar) || /^[^A-Z0-9]/.test(firstChar);

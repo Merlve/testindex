@@ -159,6 +159,34 @@ paths:
       responses:
         '200':
           description: Success
+  /api/users/lockouts:
+    get:
+      summary: GET /api/users/lockouts
+      responses:
+        '200':
+          description: Success
+  /api/users/reset-lockout:
+    post:
+      summary: POST /api/users/reset-lockout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+  /api/users/batch-reset-lockout:
+    post:
+      summary: POST /api/users/batch-reset-lockout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
   /api/admin/sessions:
     get:
       summary: GET /api/admin/sessions

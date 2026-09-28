@@ -2,6 +2,28 @@ import { FastAverageColor } from 'fast-average-color';
 
 const fac = new FastAverageColor();
 
+// In-memory memoization cache for extracted color palettes to make navigation instant
+const paletteCache = new Map<string, BackdropColorPalette>();
+
+export function getCachedPalette(imageUrl?: string | null): BackdropColorPalette | null {
+  if (!imageUrl) return null;
+  return paletteCache.get(imageUrl) || null;
+}
+
+export function setCachedPalette(imageUrl: string, palette: BackdropColorPalette): void {
+  if (imageUrl && palette) {
+    if (paletteCache.size > 200) {
+      const firstKey = paletteCache.keys().next().value;
+      if (firstKey) paletteCache.delete(firstKey);
+    }
+    paletteCache.set(imageUrl, palette);
+  }
+}
+
+export function clearPaletteCache(): void {
+  paletteCache.clear();
+}
+
 export interface BackdropColorPalette {
   rgb: [number, number, number];
   hex: string;
@@ -71,6 +93,9 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
 export async function extractDominantColor(imageUrl: string): Promise<BackdropColorPalette> {
   if (!imageUrl) return DEFAULT_PALETTE;
 
+  const cached = paletteCache.get(imageUrl);
+  if (cached) return cached;
+
   const corsUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + 'cors_for_color=1';
 
   try {
@@ -86,7 +111,9 @@ export async function extractDominantColor(imageUrl: string): Promise<BackdropCo
 
     if (result && result.value && result.value.length >= 3) {
       const [r, g, b] = result.value;
-      return generatePaletteFromRgb(r, g, b);
+      const palette = generatePaletteFromRgb(r, g, b);
+      setCachedPalette(imageUrl, palette);
+      return palette;
     }
   } catch (err) {
     // Fallback: manual canvas sampling with crossOrigin anonymous
@@ -121,7 +148,9 @@ export async function extractDominantColor(imageUrl: string): Promise<BackdropCo
           }
         }
         if (count > 0) {
-          return generatePaletteFromRgb(rSum / count, gSum / count, bSum / count);
+          const palette = generatePaletteFromRgb(rSum / count, gSum / count, bSum / count);
+          setCachedPalette(imageUrl, palette);
+          return palette;
         }
       }
     } catch (e2) {

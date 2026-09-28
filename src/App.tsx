@@ -58,11 +58,16 @@ export default function App() {
     };
 
     checkVersion();
-    const interval = setInterval(checkVersion, 10000);
+    const interval = setInterval(checkVersion, 4000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') checkVersion();
+    };
     window.addEventListener('focus', checkVersion);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', checkVersion);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [queryClient]);
 

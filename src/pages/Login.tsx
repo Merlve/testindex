@@ -66,10 +66,17 @@ export default function Login() {
       const resData = res.data;
       const resMsg = (resData?.message || (typeof resData === 'string' ? resData : '') || '').toLowerCase();
 
+      // Check if account is locked out
+      if (resData?.locked === true) {
+        setError(resData?.message || 'Account is locked due to too many unsuccessful login attempts. Please contact an administrator to reset your lockout.');
+        setLoading(false);
+        return;
+      }
+
       // Check if backend reported account disabled / subscription expired
       if (
         resData?.disabled === true ||
-        resData?.code === 403 ||
+        (resData?.code === 403 && !resData?.locked) ||
         resMsg.includes('disabled') ||
         resMsg.includes('expired') ||
         resMsg.includes('subscription')
@@ -139,7 +146,9 @@ export default function Login() {
       } else {
         let errorMsg = resData?.message || 'Login failed';
         const lower = errorMsg.toLowerCase();
-        if (
+        if (resData?.locked === true) {
+          // Keep specific lockout message
+        } else if (
           resData?.disabled ||
           lower.includes('disabled') ||
           lower.includes('expired') ||
@@ -153,6 +162,11 @@ export default function Login() {
       const errData = err.response?.data;
       let errorMsg = errData?.message || (typeof errData === 'string' ? errData : '') || err.message || 'An error occurred';
       const lower = errorMsg.toLowerCase();
+      if (errData?.locked === true) {
+        setError(errorMsg);
+        setLoading(false);
+        return;
+      }
       if (
         errData?.disabled ||
         lower.includes('disabled') ||

@@ -1279,6 +1279,56 @@ app.post('/api/config', adminMiddleware, (req, res) => {
 // --- User Expirations ---
 let userExpirations: Record<string, string> = {};
 
+interface UserLockoutInfo {
+  failedAttempts: number;
+  locked: boolean;
+  lockedAt?: number;
+  lastAttemptAt?: number;
+}
+let userLockouts: Record<string, UserLockoutInfo> = {};
+
+const adminUsernamesCache = new Set<string>(['admin']);
+let lastAdminCacheUpdate = 0;
+
+async function refreshAdminUsernamesCache(force = false) {
+  const now = Date.now();
+  if (!force && now - lastAdminCacheUpdate < 5 * 60 * 1000 && adminUsernamesCache.size > 0) {
+    return;
+  }
+  const masterApiKey = getOpenlistApiKey();
+  if (!masterApiKey) return;
+  try {
+    const listRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list?page=1&per_page=100`, {
+      headers: { Authorization: masterApiKey },
+      timeout: 6000
+    });
+    const users = listRes.data?.data?.content || [];
+    adminUsernamesCache.clear();
+    adminUsernamesCache.add('admin');
+    for (const u of users) {
+      if (u.role === 2 && u.username) {
+        adminUsernamesCache.add(u.username.trim().toLowerCase());
+      }
+    }
+    lastAdminCacheUpdate = Date.now();
+  } catch (e: any) {
+    console.warn(`[refreshAdminUsernamesCache] Error: ${e.message}`);
+  }
+}
+
+async function isUserAdmin(username: string): Promise<boolean> {
+  const normalized = (username || '').trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'admin') return true;
+  if (adminUsernamesCache.has(normalized)) return true;
+
+  if (Date.now() - lastAdminCacheUpdate > 60000) {
+    await refreshAdminUsernamesCache(true);
+    if (adminUsernamesCache.has(normalized)) return true;
+  }
+  return false;
+}
+
 async function checkAndEnforceExpirations() {
   try {
     const adminToken = getOpenlistApiKey();
@@ -1341,6 +1391,112 @@ app.post('/api/users/expirations', adminMiddleware, async (req, res) => {
   
   await checkAndEnforceExpirations();
   res.json({ success: true });
+});
+
+// --- Lockout Management Endpoints ---
+app.get('/api/users/lockouts', adminMiddleware, (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.json(userLockouts);
+});
+
+app.post('/api/users/reset-lockout', adminMiddleware, async (req, res) => {
+  const { username, userId, reEnable } = req.body;
+  if (!username && !userId) {
+    return res.status(400).json({ error: 'Username or userId is required' });
+  }
+
+  let targetUsername = (username || '').trim().toLowerCase();
+  const masterApiKey = getOpenlistApiKey();
+
+  if (masterApiKey && (!targetUsername || userId || reEnable)) {
+    try {
+      const listRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`, {
+        headers: { Authorization: masterApiKey },
+        timeout: 5000
+      });
+      const users = listRes.data?.data?.content || [];
+      const userObj = users.find((u: any) => (userId && u.id === userId) || (targetUsername && u.username?.toLowerCase() === targetUsername));
+      if (userObj) {
+        targetUsername = userObj.username?.toLowerCase();
+        // If reEnable is requested or user is disabled, re-enable user on Openlist
+        if (reEnable && userObj.disabled) {
+          await axios.post(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/update`, {
+            ...userObj,
+            disabled: false
+          }, { headers: { Authorization: masterApiKey } });
+        }
+      }
+    } catch (err: any) {
+      console.warn('[RESET LOCKOUT] Error looking up user in Openlist:', err.message);
+    }
+  }
+
+  if (targetUsername) {
+    delete userLockouts[targetUsername];
+    if (userId) {
+      delete userLockouts[String(userId)];
+    }
+    await writeSQLiteJSON('users_lockout', userLockouts);
+    addLog('Lockout Reset', targetUsername, `Admin reset login lockout and cleared failed login attempts for user ${targetUsername}.`);
+    return res.json({ success: true, message: `Lockout reset successfully for ${targetUsername}` });
+  }
+
+  res.status(404).json({ error: 'User not found' });
+});
+
+app.post('/api/users/batch-reset-lockout', adminMiddleware, async (req, res) => {
+  const { userIds, usernames, reEnable } = req.body;
+  let count = 0;
+  const masterApiKey = getOpenlistApiKey();
+
+  let openlistUsers: any[] = [];
+  if (masterApiKey && reEnable) {
+    try {
+      const listRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`, {
+        headers: { Authorization: masterApiKey },
+        timeout: 5000
+      });
+      openlistUsers = listRes.data?.data?.content || [];
+    } catch (e) {}
+  }
+
+  if (Array.isArray(usernames)) {
+    for (const u of usernames) {
+      const norm = String(u).trim().toLowerCase();
+      if (userLockouts[norm]) {
+        delete userLockouts[norm];
+        count++;
+      }
+    }
+  }
+
+  if (Array.isArray(userIds)) {
+    for (const id of userIds) {
+      delete userLockouts[String(id)];
+      if (openlistUsers.length > 0) {
+        const uObj = openlistUsers.find((u: any) => u.id === id);
+        if (uObj) {
+          const norm = uObj.username?.toLowerCase();
+          if (norm && userLockouts[norm]) {
+            delete userLockouts[norm];
+            count++;
+          }
+          if (reEnable && uObj.disabled) {
+            try {
+              await axios.post(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/update`, {
+                ...uObj,
+                disabled: false
+              }, { headers: { Authorization: masterApiKey } });
+            } catch (e) {}
+          }
+        }
+      }
+    }
+  }
+
+  await writeSQLiteJSON('users_lockout', userLockouts);
+  addLog('Batch Lockout Reset', 'Admin', `Admin batch reset login lockout for selected users.`);
+  res.json({ success: true, count });
 });
 
 // Expiration checking job (runs every 30 seconds to disable expired users)
@@ -1617,14 +1773,43 @@ app.all('/api/admin/*', adminMiddleware, async (req, res) => {
 // API: Openlist Proxy - Login
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
+  if (!username || typeof username !== 'string' || !username.trim()) {
+    return res.status(400).json({ code: 400, message: 'Username is required' });
+  }
+  const normalizedUser = username.trim().toLowerCase();
+
   try {
     await checkAndEnforceExpirations();
 
+    const isAdmin = await isUserAdmin(normalizedUser);
+
+    // Admin accounts are exempt from unsuccessful login attempts restrictions
+    if (isAdmin) {
+      if (userLockouts[normalizedUser]) {
+        delete userLockouts[normalizedUser];
+        writeSQLiteJSON('users_lockout', userLockouts).catch(() => {});
+      }
+    } else {
+      // Non-admin accounts: enforce lockout restriction ONLY for this specific user account
+      const lockout = userLockouts[normalizedUser];
+      if (lockout && (lockout.locked || lockout.failedAttempts >= 5)) {
+        addLog('Login Blocked', username, `Login blocked: Account "${normalizedUser}" is locked due to ${lockout.failedAttempts} unsuccessful login attempts.`);
+        return res.status(403).json({
+          code: 403,
+          status: 403,
+          locked: true,
+          failedAttempts: lockout.failedAttempts,
+          message: 'Account is locked due to too many unsuccessful login attempts. Please contact an administrator to reset your lockout.'
+        });
+      }
+    }
+
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/auth/login`;
-    console.log(`[LOGIN] Attempting to login via Openlist at: ${url}`);
+    console.log(`[LOGIN] Attempting to login via Openlist for "${normalizedUser}" at: ${url}`);
+
     let response: any;
     try {
-      response = await axios.post(url, { username, password });
+      response = await axios.post(url, { username, password }, { timeout: 10000 });
     } catch (openlistErr: any) {
       const errData = openlistErr.response?.data;
       const errMsg = (errData?.message || (typeof errData === 'string' ? errData : '') || openlistErr.message || '').toLowerCase();
@@ -1632,6 +1817,63 @@ app.post('/api/auth/login', async (req, res) => {
         addLog('Login Failed', username, 'Login blocked: Account is disabled or subscription expired on Openlist.');
         return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
       }
+
+      // Check if OpenList is returning an upstream rate limit (e.g. IP-based limit from OpenList)
+      const isUpstreamRateLimit = 
+        openlistErr.response?.status === 429 ||
+        errMsg.includes('too many') ||
+        errMsg.includes('unsuccessful sign-in attempts') ||
+        errMsg.includes('rate limit');
+
+      if (isUpstreamRateLimit) {
+        console.warn(`[LOGIN] Upstream rate limit reached from Openlist for user "${normalizedUser}": ${errMsg}`);
+        // Do NOT blame or increment failed attempts for this individual account
+        return res.status(429).json({
+          code: 429,
+          status: 429,
+          locked: false,
+          message: 'Upstream login rate limit reached. Please wait a moment and try again.'
+        });
+      }
+
+      // Record failed attempt ONLY for non-admin accounts when it's an actual credential rejection
+      if (!isAdmin) {
+        const current = userLockouts[normalizedUser] || { failedAttempts: 0, locked: false };
+        current.failedAttempts = (current.failedAttempts || 0) + 1;
+        current.lastAttemptAt = Date.now();
+        const MAX_ATTEMPTS = 5;
+        if (current.failedAttempts >= MAX_ATTEMPTS) {
+          current.locked = true;
+          current.lockedAt = Date.now();
+          addLog('Account Locked', username, `Non-admin account "${normalizedUser}" locked after ${current.failedAttempts} unsuccessful login attempts.`);
+        } else {
+          addLog('Login Failed', username, `Login failed: Invalid credentials for "${normalizedUser}" (Attempt ${current.failedAttempts}/${MAX_ATTEMPTS})`);
+        }
+        userLockouts[normalizedUser] = current;
+        await writeSQLiteJSON('users_lockout', userLockouts);
+
+        if (current.locked) {
+          return res.status(403).json({
+            code: 403,
+            status: 403,
+            locked: true,
+            failedAttempts: current.failedAttempts,
+            message: 'Account is locked due to too many unsuccessful login attempts. Please contact an administrator to reset your lockout.'
+          });
+        }
+
+        const remaining = Math.max(0, MAX_ATTEMPTS - current.failedAttempts);
+        const originalMsg = errData?.message || 'Invalid username or password';
+        return res.status(openlistErr.response?.status || 401).json({
+          ...(typeof errData === 'object' ? errData : {}),
+          code: openlistErr.response?.status || 401,
+          locked: false,
+          failedAttempts: current.failedAttempts,
+          remainingAttempts: remaining,
+          message: `${originalMsg}. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before account lockout.`
+        });
+      }
+
       throw openlistErr;
     }
 
@@ -1642,12 +1884,19 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     if (response.data.code === 200) {
+      // Clear failed login attempts counter on successful login for non-admins
+      if (!isAdmin && userLockouts[normalizedUser]) {
+        delete userLockouts[normalizedUser];
+        writeSQLiteJSON('users_lockout', userLockouts).catch(() => {});
+      }
+
       const token = response.data.data?.token;
       const masterApiKey = getOpenlistApiKey();
       if (masterApiKey) {
         try {
-          const listRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list`, {
-            headers: { Authorization: masterApiKey }
+          const listRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/admin/user/list?page=1&per_page=100`, {
+            headers: { Authorization: masterApiKey },
+            timeout: 5000
           });
           const userObj = listRes.data?.data?.content?.find((u: any) => u.username === username);
           if (userObj && userObj.disabled) {
@@ -1660,7 +1909,7 @@ app.post('/api/auth/login', async (req, res) => {
       if (token) {
         // Also verify the user's status directly with their token in Openlist
         try {
-          const meRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/me`, { headers: { Authorization: token } });
+          const meRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/me`, { headers: { Authorization: token }, timeout: 5000 });
           if (meRes.data?.data?.disabled) {
             addLog('Login Failed', username, 'Login blocked: Account is disabled.');
             return res.json({ code: 403, status: 403, disabled: true, message: 'Subscription is Expired' });
@@ -1681,7 +1930,7 @@ app.post('/api/auth/login', async (req, res) => {
         const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown') as string;
         const userAgent = req.headers['user-agent'] || 'Unknown';
         try {
-          const meRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/me`, { headers: { Authorization: token } });
+          const meRes = await axios.get(`${getOpenlistUrl().replace(/\/$/, '')}/api/me`, { headers: { Authorization: token }, timeout: 5000 });
           const role = meRes.data?.data?.role;
           
           if (role !== 2) {
@@ -1705,6 +1954,61 @@ app.post('/api/auth/login', async (req, res) => {
 
       addLog('Login Success', username, 'User logged in successfully.');
     } else {
+      // Response code from OpenList is not 200
+      const isUpstreamRateLimit = 
+        response.data?.code === 429 ||
+        initialMsg.includes('too many') ||
+        initialMsg.includes('unsuccessful sign-in attempts') ||
+        initialMsg.includes('rate limit');
+
+      if (isUpstreamRateLimit) {
+        console.warn(`[LOGIN] Upstream rate limit message for user "${normalizedUser}": ${initialMsg}`);
+        // Do NOT blame or increment failed attempts for this individual account
+        return res.status(429).json({
+          ...response.data,
+          code: 429,
+          status: 429,
+          locked: false,
+          message: 'Upstream login rate limit reached. Please wait a moment and try again.'
+        });
+      }
+
+      if (!isAdmin) {
+        const current = userLockouts[normalizedUser] || { failedAttempts: 0, locked: false };
+        current.failedAttempts = (current.failedAttempts || 0) + 1;
+        current.lastAttemptAt = Date.now();
+        const MAX_ATTEMPTS = 5;
+        if (current.failedAttempts >= MAX_ATTEMPTS) {
+          current.locked = true;
+          current.lockedAt = Date.now();
+          addLog('Account Locked', username, `Non-admin account "${normalizedUser}" locked after ${current.failedAttempts} unsuccessful login attempts.`);
+        } else {
+          addLog('Login Failed', username, `Login failed: ${response.data.message || 'Invalid credentials'} for "${normalizedUser}" (Attempt ${current.failedAttempts}/${MAX_ATTEMPTS})`);
+        }
+        userLockouts[normalizedUser] = current;
+        await writeSQLiteJSON('users_lockout', userLockouts);
+
+        if (current.locked) {
+          return res.status(403).json({
+            code: 403,
+            status: 403,
+            locked: true,
+            failedAttempts: current.failedAttempts,
+            message: 'Account is locked due to too many unsuccessful login attempts. Please contact an administrator to reset your lockout.'
+          });
+        }
+
+        const remaining = Math.max(0, MAX_ATTEMPTS - current.failedAttempts);
+        const originalMsg = response.data.message || 'Invalid credentials';
+        return res.json({
+          ...response.data,
+          locked: false,
+          failedAttempts: current.failedAttempts,
+          remainingAttempts: remaining,
+          message: `${originalMsg}. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before account lockout.`
+        });
+      }
+
       addLog('Login Failed', username, `Login failed: ${response.data.message || 'Invalid credentials'}`);
     }
     
@@ -1723,10 +2027,14 @@ app.post('/api/auth/login', async (req, res) => {
     
     // Pass through the original error response from Openlist if available
     if (error.response?.data) {
-      return res.status(error.response.status).json(error.response.data);
+      return res.status(error.response.status).json({
+        ...error.response.data,
+        locked: false
+      });
     }
     
     res.status(error.response?.status || 500).json({ 
+      locked: false,
       message: `Error ${error.response?.status || 500}: Failed to reach Openlist at ${targetUrl}. Check your OPENLIST_SERVER_URL environment variable.`,
       details: error.message
     });
@@ -4343,6 +4651,7 @@ export async function initSQLiteState() {
       libraryIndexLastUpdated = loadedLibrary.lastUpdated || 0;
     }
     userExpirations = (await readSQLiteJSON('users_expirations')) || {};
+    userLockouts = (await readSQLiteJSON('users_lockout')) || {};
     activityLogs = (await readSQLiteJSON('activity_logs')) || [];
     genreBackdropsCache = (await readSQLiteJSON('genre_backdrops_cache')) || null;
     jfOverrides = (await readSQLiteJSON('jf_override')) || {};

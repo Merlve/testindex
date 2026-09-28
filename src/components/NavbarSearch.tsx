@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { getRecentSearches, saveRecentSearch, removeRecentSearch, clearRecentSearches } from '../utils/recentSearches';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
+import { prefetchItemDetails } from '../utils/detailsPrefetch';
 
 function SearchItemImage({ item }: { item: any }) {
   const { data: tmdbData } = useQuery({
@@ -49,7 +50,20 @@ export default function NavbarSearch() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { token } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const currentMetaVer = localStorage.getItem('meta_version') || '1';
+
+  const handlePrefetchItem = (item: any) => {
+    const parentParts = (item.parent || '').split('/').filter(Boolean);
+    const category = parentParts.length > 1 ? parentParts[1].toUpperCase() : 'MOVIES';
+    prefetchItemDetails(queryClient, {
+      item,
+      category,
+      parentPath: item.parent,
+      token,
+    });
+  };
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
@@ -117,7 +131,10 @@ export default function NavbarSearch() {
   const handleSelect = (item: any) => {
     saveRecentSearch(item.name || query.trim());
     setRecentSearches(getRecentSearches());
-    navigate(`${item.parent.startsWith('/') ? '' : '/'}${item.parent}/${item.name}`.split('/').map(p => encodeURIComponent(p)).join('/'));
+    handlePrefetchItem(item);
+    navigate(`${item.parent.startsWith('/') ? '' : '/'}${item.parent}/${item.name}`.split('/').map(p => encodeURIComponent(p)).join('/'), {
+      state: { item, metaVer: currentMetaVer }
+    });
     setIsFocused(false);
     setQuery('');
   };
@@ -209,12 +226,20 @@ export default function NavbarSearch() {
                   <button
                     key={`${item.parent}/${item.name}`}
                     onClick={() => handleSelect(item)}
-                    className="w-full text-left px-4 py-2 hover:bg-black/5 dark:bg-white/5 flex items-center transition-colors group"
+                    onPointerEnter={() => handlePrefetchItem(item)}
+                    onPointerDown={() => handlePrefetchItem(item)}
+                    onTouchStart={() => handlePrefetchItem(item)}
+                    onFocus={() => handlePrefetchItem(item)}
+                    className="w-full text-left px-4 py-2 hover:bg-black/5 dark:bg-white/5 flex items-center transition-colors group cursor-pointer"
                   >
                     <SearchItemImage item={item} />
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm text-black dark:text-white break-words whitespace-normal leading-tight mb-0.5">{item.name}</div>
-                      <div className="text-[10px] text-gray-600 dark:text-gray-400 break-words whitespace-normal leading-tight">{item.parent}</div>
+                      <div className="text-sm text-black dark:text-white break-words whitespace-normal leading-tight mb-0.5">
+                        {item.customTitle || item.name}
+                      </div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400 break-words whitespace-normal leading-tight">
+                        {item.customTitle ? `${item.name} • ${item.parent}` : item.parent}
+                      </div>
                     </div>
                   </button>
                 ))}

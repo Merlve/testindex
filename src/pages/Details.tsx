@@ -1,6 +1,6 @@
 import { clearAllLocalCaches } from '../utils/cacheManager';
 import DetailsSkeleton from "../components/DetailsSkeleton";
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, memo } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,8 @@ import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameP
 import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
 import { useQueryClient } from '@tanstack/react-query';
-import { extractDominantColor, BackdropColorPalette } from '../utils/colorExtractor';
+import { extractDominantColor, BackdropColorPalette, getCachedPalette } from '../utils/colorExtractor';
+import { markImageLoaded, isImageLoaded } from '../utils/imageCache';
 
 // Helper to identify video files
 const isVideoFile = (filename: string) => {
@@ -416,7 +417,7 @@ function IntentPlayerModal({
   );
 }
 
-function FileRowItem({ 
+const FileRowItem = memo(function FileRowItem({ 
   file, 
   itemPath, 
   meta, 
@@ -633,7 +634,7 @@ function FileRowItem({
       </div>
     </div>
   );
-}
+});
 
 const getFolderSeasonNum = (pathStr: string): number | null => {
   if (!pathStr) return null;
@@ -667,9 +668,13 @@ export default function Details() {
   const currentMetaVer = localStorage.getItem('meta_version') || '1';
   const isStale = passedMetaVer && passedMetaVer !== currentMetaVer;
 
-  const [tmdb, setTmdb] = useState<any>(isStale ? null : (location.state?.tmdbData || null));
-  const hasAttemptedRef = useRef<string | null>(null);
-  const rawOpenlistPath = actualPathOverride || (tmdb?.id ? config?.digitalReleasePaths?.[tmdb.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
+  const parsed = useMemo(() => parseMediaName(name), [name]);
+  const cleanName = parsed.cleanName || name;
+  const parsedYear = parsed.year || '';
+
+  const tmdbId = location.state?.item?._jf?.tmdbId || location.state?.item?.tmdbId || location.state?.tmdbData?.id || null;
+
+  const rawOpenlistPath = actualPathOverride || (location.state?.tmdbData?.id ? config?.digitalReleasePaths?.[location.state.tmdbData.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
   const actualItemOpenlistPath = rawOpenlistPath.startsWith('/') ? rawOpenlistPath : `/${rawOpenlistPath}`;
   const targetFilename = actualItemOpenlistPath.split('/').pop() || '';
   const isVideoTarget = targetFilename && /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(targetFilename);
@@ -678,6 +683,71 @@ export default function Details() {
     : actualItemOpenlistPath;
   const actualOpenlistPath = actualItemOpenlistPath;
 
+  const tmdbQueryKey = useMemo(() => 
+    ['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, tmdbId],
+    [actualItemOpenlistPath, cleanName, category, parsedYear, tmdbId]
+  );
+
+  const initialTmdb = useMemo(() => {
+    if (isStale) return null;
+    if (location.state?.tmdbData) return location.state.tmdbData;
+    const prefetched = queryClient.getQueryData<any>(tmdbQueryKey) ||
+                       queryClient.getQueryData<any>(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, undefined]);
+    if (prefetched) return prefetched;
+    const cachedTmdb = queryClient.getQueryData<any>(['tmdb', name, category, location.state?.item?.parentPath]) ||
+                       queryClient.getQueryData<any>(['tmdb', name, location.state?.item?.parentPath]) ||
+                       queryClient.getQueryData<any>(['tmdb_search', name, location.state?.item?.parent]);
+    return cachedTmdb || null;
+  }, [isStale, location.state?.tmdbData, tmdbQueryKey, queryClient, actualItemOpenlistPath, cleanName, category, parsedYear, name, location.state?.item]);
+
+  const [tmdb, setTmdb] = useState<any>(initialTmdb);
+  const [loading, setLoading] = useState(!initialTmdb);
+  const hasAttemptedRef = useRef<string | null>(null);
+
+  const [baseRefresh, setBaseRefresh] = useState(0);
+  const [seasonRefresh, setSeasonRefresh] = useState(0);
+
+  const folderFilesQueryKey = useMemo(() => 
+    ['details-folder-files', actualFolderOpenlistPath, Boolean(isVideoTarget), targetFilename, baseRefresh],
+    [actualFolderOpenlistPath, isVideoTarget, targetFilename, baseRefresh]
+  );
+
+  const initialFolderFiles = useMemo(() => {
+    return queryClient.getQueryData<any>(folderFilesQueryKey) ||
+           (baseRefresh === 0 ? queryClient.getQueryData<any>(['details-folder-files', actualFolderOpenlistPath, Boolean(isVideoTarget), targetFilename, 0]) : null);
+  }, [queryClient, folderFilesQueryKey, actualFolderOpenlistPath, isVideoTarget, targetFilename, baseRefresh]);
+
+  const [baseItems, setBaseItems] = useState<any[]>(() => initialFolderFiles?.baseFiles || []);
+  const [seasonItems, setSeasonItems] = useState<any[]>(() => initialFolderFiles?.seasonFolders || []);
+  const [loadingFiles, setLoadingFiles] = useState(() => !initialFolderFiles && user !== 'guest');
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const initialSeasonIdx = useMemo(() => {
+    if (!initialFolderFiles?.seasonFolders?.length) return null;
+    if (location.state?.preselectSeason) {
+      const preSeasonStr = String(location.state.preselectSeason).toLowerCase();
+      const matchedIdx = initialFolderFiles.seasonFolders.findIndex((f: any) => f.name.toLowerCase() === preSeasonStr);
+      if (matchedIdx !== -1) return matchedIdx;
+    }
+    return 0;
+  }, [initialFolderFiles, location.state?.preselectSeason]);
+
+  const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(initialSeasonIdx);
+
+  const initialEpisodes = useMemo(() => {
+    if (initialSeasonIdx === null || !initialFolderFiles?.seasonFolders?.[initialSeasonIdx]) return [];
+    const seasonFolder = initialFolderFiles.seasonFolders[initialSeasonIdx];
+    const sPath = `${actualFolderOpenlistPath.replace(/^\/+/, '')}/${seasonFolder.name}`;
+    return queryClient.getQueryData<any[]>(['details-season-episodes', sPath, 0]) || [];
+  }, [initialSeasonIdx, initialFolderFiles, actualFolderOpenlistPath, queryClient]);
+
+  const [currentSeasonEpisodes, setCurrentSeasonEpisodes] = useState<any[]>(initialEpisodes);
+  const [loadingSeasonFiles, setLoadingSeasonFiles] = useState(() => 
+    initialSeasonIdx !== null && initialEpisodes.length === 0 && user !== 'guest'
+  );
+  const [tmdbSeasonsData, setTmdbSeasonsData] = useState<Record<number, any>>({});
+
   useEffect(() => {
     axios.get('/api/config').then(res => {
       if (res.data && typeof res.data === 'object' && !Array.isArray(res.data)) {
@@ -685,22 +755,6 @@ export default function Details() {
       }
     });
   }, []);
-
-  // Directory items & TMDB state
-  const [baseItems, setBaseItems] = useState<any[]>([]);
-  const [seasonItems, setSeasonItems] = useState<any[]>([]);
-
-  const [loading, setLoading] = useState(!location.state?.tmdbData);
-  const [loadingFiles, setLoadingFiles] = useState(true);
-  const [inWatchlist, setInWatchlist] = useState(false);
-  const [toast, setToast] = useState('');
-  
-  const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(null);
-  const [currentSeasonEpisodes, setCurrentSeasonEpisodes] = useState<any[]>([]);
-  const [tmdbSeasonsData, setTmdbSeasonsData] = useState<Record<number, any>>({});
-  const [loadingSeasonFiles, setLoadingSeasonFiles] = useState(false);
-  const [baseRefresh, setBaseRefresh] = useState(0);
-  const [seasonRefresh, setSeasonRefresh] = useState(0);
 
   // Playing / Modal State
   const [playingUrl, setPlayingUrl] = useState('');
@@ -738,12 +792,32 @@ export default function Details() {
   const [activeLogoTmdb, setActiveLogoTmdb] = useState<any>(null);
 
   // Dominant color palette state
-  const [colorPalette, setColorPalette] = useState<BackdropColorPalette | null>(null);
+  const initialPalette = useMemo(() => {
+    const bg = initialTmdb?.backdrop_path;
+    if (!bg) return null;
+    const url = bg.startsWith('http') ? bg : `https://image.tmdb.org/t/p/w1280${bg}`;
+    return getCachedPalette(url);
+  }, [initialTmdb]);
+
+  const [colorPalette, setColorPalette] = useState<BackdropColorPalette | null>(initialPalette);
 
   // Watched state
   const [watchedItems, setWatchedItems] = useState<any[]>([]);
   const [isPlotExpanded, setIsPlotExpanded] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  const initialLogo = useMemo(() => {
+    if (initialTmdb?.custom_logo) {
+      return initialTmdb.custom_logo.startsWith('http') ? initialTmdb.custom_logo : `https://image.tmdb.org/t/p/original${initialTmdb.custom_logo}`;
+    }
+    if (initialTmdb?.logo_path) {
+      return initialTmdb.logo_path.startsWith('http') ? initialTmdb.logo_path : `https://image.tmdb.org/t/p/original${initialTmdb.logo_path}`;
+    }
+    const cachedLogo = queryClient.getQueryData<string>(['details-logo', cleanName, category, parsedYear, tmdbId]);
+    return cachedLogo || null;
+  }, [initialTmdb, queryClient, cleanName, category, parsedYear, tmdbId]);
+
+  const [logoUrl, setLogoUrl] = useState<string | null>(initialLogo);
+  const currentPathRef = useRef(fullPath);
 
   // Parallax backdrop (pins backdrop until logo reaches the top bar)
   const logoContainerRef = useRef<HTMLDivElement>(null);
@@ -788,10 +862,13 @@ export default function Details() {
 
   // Clear logo and state on route/file navigation
   useEffect(() => {
-    setLogoUrl(null);
-    setAvailableLogos([]);
-    setActiveLogoTmdb(null);
-    setSelectedLogoPath(null);
+    if (currentPathRef.current !== fullPath) {
+      currentPathRef.current = fullPath;
+      setLogoUrl(null);
+      setAvailableLogos([]);
+      setActiveLogoTmdb(null);
+      setSelectedLogoPath(null);
+    }
   }, [fullPath, name]);
 
   // Page title and metadata updates
@@ -828,54 +905,61 @@ export default function Details() {
     ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'ANIMES', 'SHOWS', 'DRAMA', 'CARTOON', 'ANIMATION', 'ASIAN_DRAMA', 'KOREAN_DRAMA', 'DOCUSERIES'].includes(category) ||
     /(series|show|tv|kdrama|adrama|anime|drama|animation|cartoon|serial|docuseries)/i.test(category);
 
-  // Fetch TMDB data if completely missing
+  // Fetch and revalidate TMDB data to ensure latest server overrides (custom titles, logos, etc.) reflect for all users
   useEffect(() => {
     let isMounted = true;
+    const parsed = parseMediaName(name);
+    const cleanName = parsed.cleanName || name;
+    const parsedYear = parsed.year || '';
+
+    const tmdbId = location.state?.item?._jf?.tmdbId || null;
+    let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}&full=true`;
+    if (tmdbId) {
+        url += `&tmdbId=${tmdbId}`;
+    }
+
     if (!tmdb) {
       setLoading(true);
-      const parsed = parseMediaName(name);
-      const cleanName = parsed.cleanName || name;
-      const parsedYear = parsed.year || '';
-
-      const tmdbId = location.state?.item?._jf?.tmdbId || null;
-      let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}&path=${encodeURIComponent(actualOpenlistPath)}&full=true`;
-      if (tmdbId) {
-          url += `&tmdbId=${tmdbId}`;
-      }
-
-      axios.get(url)
-        .then(res => {
-          if (isMounted) {
-            if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name)) {
-              setTmdb(res.data);
-            } else {
-               // Fallback to search_all if initial search fails
-               axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}${tmdbId ? `&tmdbId=${tmdbId}` : ''}`)
-                 .then(fallbackRes => {
-                    if (isMounted && fallbackRes.data?.results?.[0]) {
-                      const itemFound = fallbackRes.data.results[0];
-                      setTmdb(itemFound);
-                      if (itemFound.id && (itemFound.media_type === 'tv' || isTvMedia)) {
-                        axios.get(`/api/meta/tv_details?tvId=${itemFound.id}`).then(tvRes => {
-                          if (isMounted && tvRes.data) {
-                            setTmdb((prev: any) => ({ ...prev, ...tvRes.data, status: tvRes.data.status || prev?.status }));
-                          }
-                        }).catch(() => {});
-                      }
-                    }
-                 }).catch(console.error);
-            }
-          }
-        })
-        .catch(console.error)
-        .finally(() => {
-          if (isMounted) setLoading(false);
-        });
-    } else {
-      setLoading(false);
     }
+
+    axios.get(url)
+      .then(res => {
+        if (isMounted) {
+          if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name || res.data.custom_title || res.data._customTitle)) {
+            queryClient.setQueryData(tmdbQueryKey, res.data);
+            setTmdb((prev: any) => {
+              const updated = { ...(prev || {}), ...res.data };
+              if (!res.data.custom_title && !res.data._customTitle) {
+                delete updated.custom_title;
+                delete updated._customTitle;
+              }
+              return updated;
+            });
+          } else if (!tmdb) {
+             // Fallback to search_all if initial search fails
+             axios.get(`/api/meta/search_all?query=${encodeURIComponent(cleanName)}&type=${category}&year=${parsedYear}${tmdbId ? `&tmdbId=${tmdbId}` : ''}`)
+               .then(fallbackRes => {
+                  if (isMounted && fallbackRes.data?.results?.[0]) {
+                    const itemFound = fallbackRes.data.results[0];
+                    setTmdb(itemFound);
+                    if (itemFound.id && (itemFound.media_type === 'tv' || isTvMedia)) {
+                      axios.get(`/api/meta/tv_details?tvId=${itemFound.id}`).then(tvRes => {
+                        if (isMounted && tvRes.data) {
+                          setTmdb((prev: any) => ({ ...prev, ...tvRes.data, status: tvRes.data.status || prev?.status }));
+                        }
+                      }).catch(() => {});
+                    }
+                  }
+               }).catch(console.error);
+          }
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
     return () => { isMounted = false; };
-  }, [fullPath, name, category, tmdb === null, actualOpenlistPath, location.state]);
+  }, [fullPath, name, category, actualOpenlistPath]);
 
   // If TMDB data exists but status is missing for a TV show/anime/kdrama, fetch full TV details
   useEffect(() => {
@@ -955,6 +1039,12 @@ export default function Details() {
     }
 
     if (tmdbId) {
+      const cachedLogo = queryClient.getQueryData<string>(['details-logo', cleanName, category, parsedYear, tmdbId]);
+      if (cachedLogo) {
+        setLogoUrl(cachedLogo);
+        return;
+      }
+
       axios.get(`/api/meta/images?id=${tmdbId}&type=${mediaType}`)
         .then(res => {
           if (!isMounted) return;
@@ -964,7 +1054,10 @@ export default function Details() {
                              logos.find((l: any) => !l.iso_639_1) || 
                              logos[0];
             if (bestLogo?.file_path) {
-              setLogoUrl(bestLogo.file_path.startsWith('http') ? bestLogo.file_path : `https://image.tmdb.org/t/p/original${bestLogo.file_path}`);
+              const fullLogo = bestLogo.file_path.startsWith('http') ? bestLogo.file_path : `https://image.tmdb.org/t/p/original${bestLogo.file_path}`;
+              setLogoUrl(fullLogo);
+              markImageLoaded(fullLogo);
+              queryClient.setQueryData(['details-logo', cleanName, category, parsedYear, tmdbId], fullLogo);
             }
           }
         })
@@ -1002,7 +1095,31 @@ export default function Details() {
       return;
     }
     let isMounted = true;
-    setLoadingFiles(true);
+
+    // Check cache first
+    const cachedFiles = queryClient.getQueryData<any>(folderFilesQueryKey) ||
+      (baseRefresh === 0 ? queryClient.getQueryData<any>(['details-folder-files', actualFolderOpenlistPath, Boolean(isVideoTarget), targetFilename, 0]) : null);
+
+    if (cachedFiles && baseRefresh === 0) {
+      setBaseItems(cachedFiles.baseFiles || []);
+      if (cachedFiles.seasonFolders && cachedFiles.seasonFolders.length > 0) {
+        setSeasonItems(cachedFiles.seasonFolders);
+        if (activeSeasonIndex === null) {
+          let targetIdx = 0;
+          if (location.state?.preselectSeason) {
+            const preSeasonStr = String(location.state.preselectSeason).toLowerCase();
+            const matchedIdx = cachedFiles.seasonFolders.findIndex((f: any) => f.name.toLowerCase() === preSeasonStr);
+            if (matchedIdx !== -1) targetIdx = matchedIdx;
+          }
+          setActiveSeasonIndex(targetIdx);
+        }
+      } else {
+        setSeasonItems([]);
+      }
+      setLoadingFiles(false);
+    } else if (baseItems.length === 0 && seasonItems.length === 0) {
+      setLoadingFiles(true);
+    }
 
     const cleanPath = actualFolderOpenlistPath.replace(/^\/+/, '');
     
@@ -1021,6 +1138,7 @@ export default function Details() {
                 // Keep this as fallback, but ideally it should have hit the reqPath logic above
                 setBaseItems([singleFile]);
                 setSeasonItems([]);
+                queryClient.setQueryData(folderFilesQueryKey, { baseFiles: [singleFile], seasonFolders: [] });
                 return;
             }
         }
@@ -1063,6 +1181,10 @@ export default function Details() {
         } else {
           setSeasonItems([]);
         }
+
+        // Cache in TanStack Query
+        queryClient.setQueryData(folderFilesQueryKey, { baseFiles: dirFiles, seasonFolders: dirFolders });
+        queryClient.setQueryData(['details-folder-files', actualFolderOpenlistPath, Boolean(isVideoTarget), targetFilename, 0], { baseFiles: dirFiles, seasonFolders: dirFolders });
       })
       .catch(err => {
         console.error('Error fetching folder files:', err);
@@ -1072,7 +1194,7 @@ export default function Details() {
       });
 
     return () => { isMounted = false; };
-  }, [actualFolderOpenlistPath, token, baseRefresh, user]);
+  }, [actualFolderOpenlistPath, token, baseRefresh, user, folderFilesQueryKey]);
 
   // Fetch TMDB Season Data
   useEffect(() => {
@@ -1140,11 +1262,17 @@ export default function Details() {
          
          const targetTvId = tmdb?.id || tmdb?.tmdb_id || location.state?.item?._jf?.tmdbId || location.state?.item?.tmdbId;
          if (!targetTvId) return prev;
+
+         const cachedSeason = queryClient.getQueryData(['details-tmdb-season', targetTvId, seasonNum]);
+         if (cachedSeason) {
+            return { ...prev, [seasonNum]: cachedSeason };
+         }
          
          // Fetch new season data
          axios.get(`/api/meta/tv_season?tvId=${targetTvId}&season=${seasonNum}`)
            .then(res => {
               if (res.data) {
+                 queryClient.setQueryData(['details-tmdb-season', targetTvId, seasonNum], res.data);
                  setTmdbSeasonsData(p => ({ ...p, [seasonNum]: res.data }));
               }
            })
@@ -1165,9 +1293,19 @@ export default function Details() {
       return;
     }
     let isMounted = true;
-    setLoadingSeasonFiles(true);
     const selectedSeasonFolder = seasonItems[activeSeasonIndex];
     const seasonPath = `${actualFolderOpenlistPath.replace(/^\/+/, '')}/${selectedSeasonFolder.name}`;
+    const seasonQueryKey = ['details-season-episodes', seasonPath, seasonRefresh];
+
+    const cachedEpisodes = queryClient.getQueryData<any[]>(seasonQueryKey) ||
+      (seasonRefresh === 0 ? queryClient.getQueryData<any[]>(['details-season-episodes', seasonPath, 0]) : null);
+
+    if (cachedEpisodes && seasonRefresh === 0) {
+      setCurrentSeasonEpisodes(cachedEpisodes);
+      setLoadingSeasonFiles(false);
+    } else if (currentSeasonEpisodes.length === 0) {
+      setLoadingSeasonFiles(true);
+    }
 
     const payload: any = { reqPath: seasonPath };
     if (seasonRefresh > 0) payload.refresh = true;
@@ -1186,6 +1324,8 @@ export default function Details() {
           return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
         });
         setCurrentSeasonEpisodes(episodes);
+        queryClient.setQueryData(seasonQueryKey, episodes);
+        queryClient.setQueryData(['details-season-episodes', seasonPath, 0], episodes);
       })
       .catch(console.error)
       .finally(() => {
@@ -1240,7 +1380,7 @@ export default function Details() {
   // Helper to open YouTube search fallback
   const openYouTubeTrailerSearch = () => {
     const parsed = parseMediaName(name || '');
-    const title = tmdb?.title || tmdb?.name || parsed.cleanName || name || '';
+    const title = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parsed.cleanName || name || '';
     const releaseDate = tmdb?.release_date || tmdb?.first_air_date || '';
     const year = (releaseDate ? releaseDate.substring(0, 4) : '') || parsed.year || '';
     const searchQuery = [title, year, 'trailer'].filter(Boolean).join(' ');
@@ -1556,6 +1696,11 @@ export default function Details() {
   useEffect(() => {
     let isMounted = true;
     if (backdropUrl) {
+      const cached = getCachedPalette(backdropUrl);
+      if (cached) {
+        setColorPalette(cached);
+        return;
+      }
       extractDominantColor(backdropUrl)
         .then(palette => {
           if (isMounted) setColorPalette(palette);
@@ -1762,7 +1907,7 @@ export default function Details() {
             {backdropUrl && (
               <img 
                 src={backdropUrl} 
-                alt={tmdb?.title || tmdb?.name || name} 
+                alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || name} 
                 className="w-full h-full object-cover object-center sm:object-top opacity-100 dark:opacity-85 pointer-events-none transition-opacity duration-700"
               />
             )}
@@ -1803,13 +1948,13 @@ export default function Details() {
           {logoUrl ? (
             <img 
               src={logoUrl} 
-              alt={tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
+              alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
               className="h-20 sm:h-24 md:h-32 object-contain drop-shadow-xl"
               onError={() => setLogoUrl(null)}
             />
           ) : (
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-black dark:text-white drop-shadow-xl leading-tight">
-              {formatTitleCase(tmdb?.title || tmdb?.name || parseMediaName(name).cleanName)}
+              {formatTitleCase(tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName)}
             </h1>
           )}
 
@@ -1906,7 +2051,7 @@ export default function Details() {
             {user && user !== 'guest' && (
             <button
               onClick={() => {
-                const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
+                const curTitle = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
                 setSearchTitle(curTitle);
                 setCustomTitle(curTitle);
                 setLogoSearchQuery(curTitle);
@@ -2351,7 +2496,7 @@ export default function Details() {
                 <button
                   type="button"
                   onClick={() => {
-                    const curTitle = tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
+                    const curTitle = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
                     setModalTab('logo');
                     setLogoSearchQuery(curTitle);
                     if (tmdb?.id) {
