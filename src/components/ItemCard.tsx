@@ -1,4 +1,4 @@
-import { clearAllLocalCaches } from '../utils/cacheManager';
+import { softRefreshMediaCaches } from '../utils/cacheManager';
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
@@ -385,7 +385,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
                                    category: overrideCat
                                }, { headers: { Authorization: token } });
                                setShowOverrideModal(false);
-                               try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} localStorage.setItem('meta_version', String(Date.now())); clearAllLocalCaches(queryClient); alert('Saved!');
+                               try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} localStorage.setItem('meta_version', String(Date.now())); softRefreshMediaCaches(queryClient);
                            } catch(e) {
                                alert('Failed to save override');
                            }

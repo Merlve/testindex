@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { clearAllLocalCaches } from './utils/cacheManager';
+import { softRefreshMediaCaches } from './utils/cacheManager';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -48,7 +48,7 @@ export default function App() {
           const serverVer = String(res.data.version);
           const currentVer = localStorage.getItem('meta_version');
           if (currentVer && currentVer !== serverVer) {
-            clearAllLocalCaches(queryClient);
+            softRefreshMediaCaches(queryClient);
           }
           localStorage.setItem('meta_version', serverVer);
         }

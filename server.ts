@@ -186,6 +186,14 @@ class MemoryCache {
     this.cache.delete(key);
   }
 
+  deleteMatching(pattern: RegExp | string) {
+    for (const key of Array.from(this.cache.keys())) {
+      if (typeof pattern === 'string' ? key.includes(pattern) : pattern.test(key)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
   private sweep() {
     const now = Date.now();
     for (const [key, entry] of this.cache.entries()) {
@@ -198,9 +206,15 @@ class MemoryCache {
 
 const apiCache = new MemoryCache();
 let globalMetaVersion = Date.now();
-function bumpMetaVersion() {
+function bumpMetaVersion(clearFullCache: boolean = false) {
   globalMetaVersion = Date.now();
-  apiCache.clear();
+  if (clearFullCache) {
+    apiCache.clear();
+  } else {
+    // Only invalidate metadata, search, and carousel caches.
+    // KEEP expensive directory listings (/api/fs/*) warm in memory!
+    apiCache.deleteMatching(/(api\/meta|api\/jellyfin)/);
+  }
 }
 
 function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
@@ -1651,7 +1665,7 @@ app.post('/api/admin/log', adminMiddleware, async (req, res) => {
 });
 
 app.post('/api/admin/clear-cache', adminMiddleware, (req, res) => {
-  bumpMetaVersion();
+  bumpMetaVersion(true);
   addLog('Clear All Caches', 'Admin', 'Forced global cache reset for all clients');
   res.json({ success: true, version: globalMetaVersion });
 });

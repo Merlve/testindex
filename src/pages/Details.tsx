@@ -1,4 +1,4 @@
-import { clearAllLocalCaches } from '../utils/cacheManager';
+import { softRefreshMediaCaches } from '../utils/cacheManager';
 import DetailsSkeleton from "../components/DetailsSkeleton";
 import { useEffect, useState, useRef, useMemo, memo } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router';
@@ -1483,7 +1483,7 @@ export default function Details() {
       setToast('Metadata updated globally');
       setTimeout(() => setToast(''), 2000);
       localStorage.setItem('meta_version', String(Date.now()));
-      clearAllLocalCaches(queryClient);
+      softRefreshMediaCaches(queryClient);
     } catch (e: any) {
       console.error(e);
       setToast('Failed to save metadata globally');
@@ -1513,7 +1513,7 @@ export default function Details() {
       setToast('Custom metadata saved');
       setTimeout(() => setToast(''), 2000);
       localStorage.setItem('meta_version', String(Date.now()));
-      clearAllLocalCaches(queryClient);
+      softRefreshMediaCaches(queryClient);
     } catch (e: any) {
       console.error(e);
       setToast('Failed to save custom metadata');
@@ -1647,7 +1647,7 @@ export default function Details() {
       setToast(targetLogo ? 'Title logo updated persistently' : 'Logo removed (using text title)');
       setTimeout(() => setToast(''), 2500);
       localStorage.setItem('meta_version', String(Date.now()));
-      clearAllLocalCaches(queryClient);
+      softRefreshMediaCaches(queryClient);
     } catch (err: any) {
       console.error('Error saving custom logo:', err);
       setToast('Failed to save logo override');
