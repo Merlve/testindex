@@ -2850,6 +2850,26 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
        } catch(e) {}
    }
    
+   if (!isTv && !item.digital_release_date) {
+       try {
+           const rRes = await axios.get(`https://api.themoviedb.org/3/movie/${item.id}/release_dates?api_key=${tmdbKey}`, { timeout: 3500 });
+           const usDates = rRes.data?.results?.find((r: any) => r.iso_3166_1 === 'US') || rRes.data?.results?.[0];
+           if (usDates?.release_dates) {
+               const type4 = usDates.release_dates
+                   .filter((d: any) => d.type === 4 && d.release_date)
+                   .map((d: any) => ({
+                       rawDate: d.release_date.split('T')[0],
+                       time: new Date(d.release_date).getTime()
+                   }))
+                   .sort((a: any, b: any) => a.time - b.time);
+               if (type4.length > 0) {
+                   item.digital_release_date = type4[0].rawDate;
+                   modified = true;
+               }
+           }
+       } catch(e) {}
+   }
+   
    if (!item.images || !item.images.logos || item.images.logos.length === 0) {
        try {
            const finalSearchType = isTv ? 'tv' : searchType;
@@ -2862,6 +2882,32 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
    }
    return modified;
 }
+
+app.get('/api/meta/release_dates', cacheMiddleware(86400, true), async (req, res) => {
+  const id = req.query.id;
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!id || !tmdbKey) return res.json({ digital_release_date: null });
+
+  try {
+    const rRes = await axios.get(`https://api.themoviedb.org/3/movie/${id}/release_dates?api_key=${tmdbKey}`, { timeout: 3500 });
+    const usDates = rRes.data?.results?.find((r: any) => r.iso_3166_1 === 'US') || rRes.data?.results?.[0];
+    if (usDates?.release_dates) {
+      const type4Dates = usDates.release_dates
+        .filter((d: any) => d.type === 4 && d.release_date)
+        .map((d: any) => ({
+          rawDate: d.release_date.split('T')[0],
+          time: new Date(d.release_date).getTime()
+        }))
+        .sort((a: any, b: any) => a.time - b.time);
+      if (type4Dates.length > 0) {
+        return res.json({ digital_release_date: type4Dates[0].rawDate });
+      }
+    }
+    res.json({ digital_release_date: null });
+  } catch (e) {
+    res.json({ digital_release_date: null });
+  }
+});
 
 app.get('/api/meta/version', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -3930,25 +3976,52 @@ app.get('/api/meta/digital-releases-strict', cacheMiddleware(3600, true), async 
       const promises = chunk.map(async (movie) => {
         try {
           const rRes = await axios.get(`https://api.themoviedb.org/3/movie/${movie.id}/release_dates?api_key=${tmdbKey}`, { timeout: 4000 });
-          const usDates = rRes.data.results.find(r => r.iso_3166_1 === 'US');
-          if (!usDates) return null;
+          const usDates = rRes.data?.results?.find((r: any) => r.iso_3166_1 === 'US') || rRes.data?.results?.[0];
+          if (!usDates || !Array.isArray(usDates.release_dates)) return null;
           
           const type4Dates = usDates.release_dates
-            .filter(d => d.type === 4)
-            .map(d => new Date(d.release_date).getTime())
-            .sort((a, b) => a - b);
+            .filter((d: any) => d.type === 4 && d.release_date)
+            .map((d: any) => ({
+              rawDate: d.release_date.split('T')[0],
+              time: new Date(d.release_date).getTime()
+            }))
+            .sort((a: any, b: any) => a.time - b.time);
             
           if (type4Dates.length === 0) return null;
           
           const earliestType4 = type4Dates[0];
           
-          if (earliestType4 >= gteTime && earliestType4 <= lteTime) {
-            return movie;
+          // If the movie was already digitally released before this month, ignore it!
+          // (Prevents items from showing up again due to physical releases or secondary platform streams)
+          if (earliestType4.time < gteTime) {
+            return null;
+          }
+
+          // Check all worldwide countries to verify it did not have an earlier digital release elsewhere
+          let hasEarlierWorldwide = false;
+          for (const country of rRes.data?.results || []) {
+            for (const d of country.release_dates || []) {
+              if (d.type === 4 && d.release_date) {
+                const t = new Date(d.release_date).getTime();
+                if (t < gteTime - 86400000 * 2) {
+                  hasEarlierWorldwide = true;
+                  break;
+                }
+              }
+            }
+            if (hasEarlierWorldwide) break;
+          }
+          if (hasEarlierWorldwide) return null;
+          
+          if (earliestType4.time >= gteTime && earliestType4.time <= lteTime) {
+            return {
+              ...movie,
+              digital_release_date: earliestType4.rawDate
+            };
           }
           return null;
         } catch (err) {
-          // Fallback to including it if rate limit or network error
-          return movie;
+          return null;
         }
       });
       

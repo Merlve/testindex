@@ -32,7 +32,8 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     const digitalReleasePaths = configRes?.data?.digitalReleasePaths || {};
     
     const displayItems = results.map((tmdbItem: any) => {
-      const releaseDate = tmdbItem.release_date || tmdbItem.first_air_date || '';
+      const digitalDate = tmdbItem.digital_release_date;
+      const releaseDate = digitalDate || tmdbItem.release_date || tmdbItem.first_air_date || '';
       const tmdbYear = releaseDate ? releaseDate.substring(0, 4) : '';
 
       const cleanTitleForPath = (tmdbItem.title || tmdbItem.name || '').replace(/'/g, '').replace(/[^a-zA-Z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
@@ -47,14 +48,16 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
         is_dir: true,
         _rec: false,
         _digital_release: true,
-        releaseDate: tmdbItem.release_date,
+        releaseDate: digitalDate || tmdbItem.release_date,
+        digitalReleaseDate: digitalDate,
+        digital_release_date: digitalDate,
         parentPath: finalParent,
         openlist_path: manualPath ? `/${manualPath.replace(/^\//, '')}` : undefined
       };
     });
 
     try {
-      localStorage.setItem('digital_releases_cache', JSON.stringify({ items: displayItems, tmdbData: results }));
+      localStorage.setItem('digital_releases_cache_v3', JSON.stringify({ items: displayItems, tmdbData: results }));
     } catch (e) {}
 
     return { items: displayItems, tmdbData: results };
@@ -69,7 +72,7 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     
     placeholderData: () => {
       try {
-        const cached = localStorage.getItem('digital_releases_cache');
+        const cached = localStorage.getItem('digital_releases_cache_v3');
         if (cached) return JSON.parse(cached);
       } catch (e) {}
       return undefined;

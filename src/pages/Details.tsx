@@ -929,6 +929,10 @@ export default function Details() {
             queryClient.setQueryData(tmdbQueryKey, res.data);
             setTmdb((prev: any) => {
               const updated = { ...(prev || {}), ...res.data };
+              const digitalDate = res.data.digital_release_date || prev?.digital_release_date || location.state?.item?.digitalReleaseDate || location.state?.item?.digital_release_date || location.state?.tmdbData?.digital_release_date;
+              if (digitalDate) {
+                updated.digital_release_date = digitalDate;
+              }
               if (!res.data.custom_title && !res.data._customTitle) {
                 delete updated.custom_title;
                 delete updated._customTitle;
@@ -941,6 +945,10 @@ export default function Details() {
                .then(fallbackRes => {
                   if (isMounted && fallbackRes.data?.results?.[0]) {
                     const itemFound = fallbackRes.data.results[0];
+                    const digitalDate = itemFound.digital_release_date || location.state?.item?.digitalReleaseDate || location.state?.item?.digital_release_date || location.state?.tmdbData?.digital_release_date;
+                    if (digitalDate) {
+                      itemFound.digital_release_date = digitalDate;
+                    }
                     setTmdb(itemFound);
                     if (itemFound.id && (itemFound.media_type === 'tv' || isTvMedia)) {
                       axios.get(`/api/meta/tv_details?tvId=${itemFound.id}`).then(tvRes => {
@@ -1065,6 +1073,23 @@ export default function Details() {
     }
     return () => { isMounted = false; };
   }, [tmdb, category]);
+
+  // Fetch Digital Release Date if missing for movies
+  useEffect(() => {
+    const isMovie = isMovieCategory || tmdb?.media_type === 'movie' || (!isTvMedia && !tmdb?.first_air_date && tmdb?.release_date);
+    if (isMovie && tmdb?.id && !tmdb?.digital_release_date) {
+      const digitalFromState = location.state?.item?.digitalReleaseDate || location.state?.item?.digital_release_date || location.state?.tmdbData?.digital_release_date;
+      if (digitalFromState) {
+        setTmdb((prev: any) => prev ? { ...prev, digital_release_date: digitalFromState } : prev);
+      } else {
+        axios.get(`/api/meta/release_dates?id=${tmdb.id}`).then(res => {
+          if (res.data?.digital_release_date) {
+            setTmdb((prev: any) => prev ? { ...prev, digital_release_date: res.data.digital_release_date } : prev);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [isMovieCategory, isTvMedia, tmdb?.id, tmdb?.digital_release_date, location.state]);
 
   // Check Watchlist status
   useEffect(() => {
@@ -2009,6 +2034,22 @@ export default function Details() {
           );
         })()}
 
+        {/* Digital Release Date Badge */}
+        {(() => {
+          const effectiveDigitalDate = tmdb?.digital_release_date || location.state?.item?.digitalReleaseDate || location.state?.item?.digital_release_date || location.state?.tmdbData?.digital_release_date;
+          if (!effectiveDigitalDate) return null;
+          const dateStr = effectiveDigitalDate.includes('T') ? effectiveDigitalDate : `${effectiveDigitalDate}T00:00:00`;
+          const d = new Date(dateStr);
+          const formatted = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          return (
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
+              <span className="px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold uppercase tracking-wider shadow-sm bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30">
+                Digital Release: {formatted}
+              </span>
+            </div>
+          );
+        })()}
+
         {/* Action Buttons Row */}
         <div className="flex flex-wrap items-center justify-center pt-1 mb-2">
           <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 sm:py-2.5 rounded-full bg-black/5 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
@@ -2324,9 +2365,20 @@ export default function Details() {
             ) : (
               <div className="text-center py-12 flex flex-col items-center justify-center">
                 <span className="text-gray-500 text-sm">
-                  {tmdb?.release_date || tmdb?.first_air_date 
-                    ? `Digital Release: ${new Date(tmdb.release_date || tmdb.first_air_date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`
-                    : 'No playable media files found in this folder.'}
+                  {(() => {
+                    const effectiveDigitalDate = tmdb?.digital_release_date || location.state?.item?.digitalReleaseDate || location.state?.item?.digital_release_date || location.state?.tmdbData?.digital_release_date;
+                    if (effectiveDigitalDate) {
+                      const dateStr = effectiveDigitalDate.includes('T') ? effectiveDigitalDate : `${effectiveDigitalDate}T00:00:00`;
+                      const d = new Date(dateStr);
+                      return `Digital Release: ${d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`;
+                    }
+                    if (tmdb?.release_date || tmdb?.first_air_date) {
+                      const dateStr = (tmdb.release_date || tmdb.first_air_date).includes('T') ? (tmdb.release_date || tmdb.first_air_date) : `${tmdb.release_date || tmdb.first_air_date}T00:00:00`;
+                      const d = new Date(dateStr);
+                      return `Release Date: ${d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`;
+                    }
+                    return 'No playable media files found in this folder.';
+                  })()}
                 </span>
                 {user === 'admin' && (
                   <button

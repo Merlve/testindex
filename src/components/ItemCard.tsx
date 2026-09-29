@@ -251,9 +251,9 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
           {isWatched ? <Eye size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400 fill-purple-400/20" /> : <EyeOff size={12} className="sm:w-3.5 sm:h-3.5" />}
         </button>
 
-        {item._digital_release && item.releaseDate ? (
+        {item._digital_release && (item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) ? (
           <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-blue-600/90 text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-blue-400/30 truncate">
-            <span className="truncate">{new Date(item.releaseDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            <span className="truncate">{new Date((item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
           </div>
         ) : isWatched ? (
           <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600  text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
@@ -340,7 +340,19 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
           <Link 
             to={fullPath.split('/').map(p => encodeURIComponent(p)).join('/')} 
             className={cardClasses} 
-            state={{ item: { ...item, customTitle: item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle }, tmdbData: displayTmdb, metaVer: currentMetaVer }}
+            state={{ 
+              item: { 
+                ...item, 
+                customTitle: item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle,
+                digitalReleaseDate: item.digitalReleaseDate || displayTmdb?.digital_release_date || (item._digital_release ? item.releaseDate : undefined),
+                digital_release_date: item.digital_release_date || displayTmdb?.digital_release_date || (item._digital_release ? item.releaseDate : undefined)
+              }, 
+              tmdbData: displayTmdb ? {
+                ...displayTmdb,
+                digital_release_date: displayTmdb.digital_release_date || item.digitalReleaseDate || item.digital_release_date || (item._digital_release ? item.releaseDate : undefined)
+              } : displayTmdb, 
+              metaVer: currentMetaVer 
+            }}
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
             onPointerDown={handlePrefetch}

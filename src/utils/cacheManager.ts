@@ -10,6 +10,8 @@ export function clearAllLocalCaches(queryClient?: QueryClient) {
     localStorage.removeItem('trending_cache');
     localStorage.removeItem('genres_cache');
     localStorage.removeItem('digital_releases_cache');
+    localStorage.removeItem('digital_releases_cache_v2');
+    localStorage.removeItem('digital_releases_cache_v3');
   } catch (e) {
     console.error('Failed to clear localStorage caches', e);
   }

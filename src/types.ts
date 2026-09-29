@@ -14,6 +14,8 @@ export interface MediaItem {
     crew: any[];
   };
   releaseDate?: string;
+  digitalReleaseDate?: string;
+  digital_release_date?: string;
   _digital_release?: boolean;
 }
 
@@ -25,6 +27,7 @@ export interface TMDBData {
   poster_path?: string;
   backdrop_path?: string;
   release_date?: string;
+  digital_release_date?: string;
   first_air_date?: string;
   status?: string;
   genres?: { id: number; name: string }[];
