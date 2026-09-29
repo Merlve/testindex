@@ -8,9 +8,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { prefetchItemDetails } from '../utils/detailsPrefetch';
 
-function SearchItemImage({ item }: { item: any }) {
+function SearchItemImage({ item, metaVer }: { item: any; metaVer?: string }) {
+  const directPoster = item.poster_path;
+  if (directPoster) {
+    return (
+      <div className="w-8 h-8 rounded shrink-0 overflow-hidden bg-black/50 mr-3">
+        <img 
+          src={directPoster.startsWith('http') ? directPoster : `https://image.tmdb.org/t/p/w92${directPoster}`} 
+          alt="" 
+          className="w-full h-full object-cover" 
+        />
+      </div>
+    );
+  }
+
   const { data: tmdbData } = useQuery({
-    queryKey: ['tmdb_search', item.name, item.parent],
+    queryKey: ['tmdb_search', item.name, item.parent, metaVer],
     queryFn: async () => {
       const parentParts = (item.parent || '').split('/').filter(Boolean);
       let category = parentParts.length > 1 ? parentParts[1].toUpperCase() : 'MOVIES';
@@ -21,10 +34,13 @@ function SearchItemImage({ item }: { item: any }) {
       const { cleanName, year } = parseMediaName(searchName);
       
       let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(item.parent + '/' + item.name)}`;
+      if (metaVer) {
+        url += `&v=${metaVer}`;
+      }
       const res = await axios.get(url);
       return res.data;
     },
-    staleTime: 1000 * 60 * 60 * 24,
+    staleTime: 1000 * 60 * 5,
   });
 
   const posterPath = tmdbData?.poster_path;
@@ -154,7 +170,7 @@ export default function NavbarSearch() {
         <input 
           type="text" 
           className="w-full bg-[#fffcf9] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-xl pl-10 pr-10 py-2 text-sm text-black dark:text-white focus:outline-none focus:border-purple-600/50 dark:focus:bg-[#23232d] transition-colors"
-          placeholder="Search matches..."
+          placeholder="Search matches, TMDb or IMDb ID..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
@@ -232,7 +248,7 @@ export default function NavbarSearch() {
                     onFocus={() => handlePrefetchItem(item)}
                     className="w-full text-left px-4 py-2 hover:bg-black/5 dark:bg-white/5 flex items-center transition-colors group cursor-pointer"
                   >
-                    <SearchItemImage item={item} />
+                    <SearchItemImage item={item} metaVer={currentMetaVer} />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm text-black dark:text-white break-words whitespace-normal leading-tight mb-0.5">
                         {item.customTitle || item.name}

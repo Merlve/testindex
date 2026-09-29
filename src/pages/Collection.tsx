@@ -1020,7 +1020,7 @@ export default function Collection() {
                   required
                   value={providerQuery}
                   onChange={(e) => setProviderQuery(e.target.value)}
-                  placeholder="Search movies or TV shows to add..."
+                  placeholder="Search movies, TV shows, TMDb or IMDb ID to add..."
                   className="flex-1 min-w-0 px-4 py-2.5 text-xs rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 <button

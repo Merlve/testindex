@@ -8,9 +8,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { prefetchItemDetails } from '../utils/detailsPrefetch';
 
-function SearchItemImage({ item }: { item: any }) {
+function SearchItemImage({ item, metaVer }: { item: any; metaVer?: string }) {
+  const directPoster = item.poster_path;
+  if (directPoster) {
+    return (
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg mr-4 shrink-0 overflow-hidden bg-black/50">
+        <img 
+          src={directPoster.startsWith('http') ? directPoster : `https://image.tmdb.org/t/p/w92${directPoster}`} 
+          alt="" 
+          className="w-full h-full object-cover" 
+        />
+      </div>
+    );
+  }
+
   const { data: tmdbData } = useQuery({
-    queryKey: ['tmdb_search', item.name, item.parent],
+    queryKey: ['tmdb_search', item.name, item.parent, metaVer],
     queryFn: async () => {
       const parentParts = (item.parent || '').split('/').filter(Boolean);
       let category = parentParts.length > 1 ? parentParts[1].toUpperCase() : 'MOVIES';
@@ -21,10 +34,13 @@ function SearchItemImage({ item }: { item: any }) {
       const { cleanName, year } = parseMediaName(searchName);
       
       let url = `/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${category}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(item.parent + '/' + item.name)}`;
+      if (metaVer) {
+        url += `&v=${metaVer}`;
+      }
       const res = await axios.get(url);
       return res.data;
     },
-    staleTime: 1000 * 60 * 60 * 24,
+    staleTime: 1000 * 60 * 5,
   });
 
   const posterPath = tmdbData?.poster_path;
@@ -150,7 +166,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
             type="text" 
             autoFocus
             className="flex-1 bg-transparent text-black dark:text-white text-xl sm:text-2xl outline-none placeholder-gray-500 font-medium min-w-0" 
-            placeholder="Search Movies, Series, Anime..." 
+            placeholder="Search Movies, Series, TMDb or IMDb ID..." 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -224,7 +240,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
                     onFocus={() => handlePrefetchItem(item)}
                     className="w-full text-left px-4 sm:px-6 py-3 sm:py-4 hover:bg-black/5 dark:bg-white/5 flex items-center transition-colors group border-b border-black/5 dark:border-white/5 last:border-0 cursor-pointer"
                   >
-                    <SearchItemImage item={item} />
+                    <SearchItemImage item={item} metaVer={currentMetaVer} />
                     <div className="min-w-0 flex-1">
                       <div className="text-base sm:text-lg text-black dark:text-white font-medium mb-1 break-words whitespace-normal leading-tight">
                         {item.customTitle || item.name}

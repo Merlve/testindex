@@ -49,6 +49,7 @@ export function softRefreshMediaCaches(queryClient?: QueryClient) {
       queryClient.invalidateQueries({ queryKey: ['digitalReleasesMonth'] });
       queryClient.invalidateQueries({ queryKey: ['featured'] });
       queryClient.invalidateQueries({ queryKey: ['tmdb'] });
+      queryClient.invalidateQueries({ queryKey: ['tmdb_search'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['details'] });
     } catch (e) {

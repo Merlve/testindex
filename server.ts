@@ -212,8 +212,8 @@ function bumpMetaVersion(clearFullCache: boolean = false) {
     apiCache.clear();
   } else {
     // Only invalidate metadata, search, and carousel caches.
-    // KEEP expensive directory listings (/api/fs/*) warm in memory!
-    apiCache.deleteMatching(/(api\/meta|api\/jellyfin)/);
+    // KEEP expensive directory listings (/api/fs/list) warm in memory!
+    apiCache.deleteMatching(/(api\/meta|api\/jellyfin|api\/fs\/search)/);
   }
 }
 
@@ -555,47 +555,45 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
   const isTvType = ['SERIES', 'TV', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(rawType);
   const typesToCheck = isTvType ? [rawType, 'TV', 'SERIES', 'ANIME', 'KDRAMA', 'ADRAMA'] : [rawType, 'MOVIE'];
 
-  // 1. Exact base matches (type + query + year)
-  for (const t of typesToCheck) {
-    if (!t) continue;
-    const cacheKey = baseQuery ? `${t}-${baseQuery}${year ? `-${year}` : ''}` : '';
-    const baseKey = baseQuery ? `${t}-${baseQuery}` : '';
-    if (cacheKey && cache[cacheKey]?._overridden) return cacheKey;
-    if (baseKey && cache[baseKey]?._overridden) return baseKey;
-  }
-
-  // 2. Hierarchical Path Matching (if overridden by path)
+  // 1. EXACT PATH MATCH (HIGHEST PRIORITY - Strictly unique per Openlist item)
   if (itemPath && !isGenericCategoryRoot(itemPath)) {
     const cleanP = itemPath.replace(/^\/+/, '');
-    const parts = cleanP.split('/');
-    // Check from full path down to item directory (never generic category roots)
-    for (let i = parts.length; i > 0; i--) {
-      const subPath = parts.slice(0, i).join('/');
-      if (isGenericCategoryRoot(subPath)) continue;
-      const p1 = `path-${subPath}`;
-      const p2 = `path-/${subPath}`;
-      if (cache[p1]?._overridden) return p1;
-      if (cache[p2]?._overridden) return p2;
-    }
+    const p1 = `path-${cleanP}`;
+    const p2 = `path-/${cleanP}`;
+    if (cache[p1]?._overridden) return p1;
+    if (cache[p2]?._overridden) return p2;
   }
 
-  // 3. Fallback: Search existing cache for baseKey prefix (only if we have a solid baseQuery)
-  if (baseQuery && baseQuery.length > 2) {
-    const found = Object.keys(cache).find(k => {
-      const item = cache[k];
-      if (!item?._overridden) return false;
-      
-      for (const t of typesToCheck) {
-        if (!t) continue;
-        const baseKey = `${t}-${baseQuery}`;
-        if (k === baseKey) return true;
-        
-        // If year is not provided, allow falling back to a year-specific override
-        if (!year && k.startsWith(`${baseKey}-`)) return true;
+  // 2. EXACT YEAR MATCH: ${type}-${baseQuery}-${year}
+  const cleanYearStr = year ? String(year).trim() : null;
+  if (cleanYearStr && baseQuery) {
+    for (const t of typesToCheck) {
+      if (!t) continue;
+      const cacheKey = `${t}-${baseQuery}-${cleanYearStr}`;
+      const candidate = cache[cacheKey];
+      if (candidate?._overridden) {
+        // Confirm candidate release year matches requested year
+        const candYear = (candidate.release_date || candidate.first_air_date || '').substring(0, 4);
+        if (!candYear || candYear === cleanYearStr) {
+          return cacheKey;
+        }
       }
-      return false;
-    });
-    if (found) return found;
+    }
+    // CRITICAL: If a year was provided, NEVER fall back to non-year keys or different years!
+    // A 2015 movie must NEVER inherit a 2023 movie's metadata!
+    return null;
+  }
+
+  // 3. NO YEAR SPECIFIED: Fall back to non-year key ONLY if !cleanYearStr
+  if (!cleanYearStr && baseQuery) {
+    for (const t of typesToCheck) {
+      if (!t) continue;
+      const baseKey = `${t}-${baseQuery}`;
+      const candidate = cache[baseKey];
+      if (candidate?._overridden) {
+        return baseKey;
+      }
+    }
   }
 
   return null;
@@ -2348,6 +2346,38 @@ app.post('/api/fs/remove', async (req, res) => {
   }
 });
 
+// Helper: Parse IMDb or TMDB external IDs from search inputs or URLs
+function parseExternalIds(input: string | any) {
+  if (!input || typeof input !== 'string') return null;
+  const q = input.trim();
+
+  // 1. IMDb ID (tt followed by 6 to 10 digits)
+  const imdbMatch = q.match(/\b(tt\d{6,10})\b/i) || q.match(/imdb\.com\/title\/(tt\d{6,10})/i);
+  if (imdbMatch) {
+    return { type: 'imdb' as const, id: imdbMatch[1].toLowerCase() };
+  }
+
+  // 2. TMDB URL pattern: themoviedb.org/(movie|tv)/(\d+)
+  const tmdbUrlMatch = q.match(/themoviedb\.org\/(movie|tv)\/(\d+)/i);
+  if (tmdbUrlMatch) {
+    const mType = tmdbUrlMatch[1].toLowerCase() === 'tv' ? ('tv' as const) : ('movie' as const);
+    return { type: 'tmdb' as const, mediaType: mType, id: Number(tmdbUrlMatch[2]) };
+  }
+
+  // 3. TMDB prefix: tmdb:12345, tmdb-12345, id:12345
+  const tmdbPrefixMatch = q.match(/^(?:tmdb[:\-_]|id[:\-_])(\d+)$/i);
+  if (tmdbPrefixMatch) {
+    return { type: 'tmdb' as const, id: Number(tmdbPrefixMatch[1]) };
+  }
+
+  // 4. Pure numeric digits: e.g. 1022789 or 278
+  if (/^\d{1,9}$/.test(q)) {
+    return { type: 'tmdb' as const, id: Number(q) };
+  }
+
+  return null;
+}
+
 // API: Openlist Proxy - FS Search
 app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
   try {
@@ -2363,21 +2393,54 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
        return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // Check if keywords might be a TMDB ID
+    // Check if keywords might be an IMDb ID or a TMDB ID
+    let resolvedTmdbId: number | null = null;
+    let resolvedImdbId: string | null = null;
     let tmdbTitleForId: string | null = null;
+    let resolvedMediaType: 'movie' | 'tv' | null = null;
+    let resolvedYear: string | null = null;
+
     const tmdbKey = process.env.TMDB_API_KEY;
-    if (keywords && typeof keywords === 'string' && /^\d+$/.test(keywords.trim()) && tmdbKey) {
-      try {
-        let tmdbRes = await axios.get(`https://api.themoviedb.org/3/movie/${keywords.trim()}?api_key=${tmdbKey}`).catch(() => null);
-        if (tmdbRes?.data?.title) {
-          tmdbTitleForId = tmdbRes.data.title;
-        } else {
-          tmdbRes = await axios.get(`https://api.themoviedb.org/3/tv/${keywords.trim()}?api_key=${tmdbKey}`).catch(() => null);
-          if (tmdbRes?.data?.name) {
-            tmdbTitleForId = tmdbRes.data.name;
+    const parsedExt = parseExternalIds(keywords);
+    if (parsedExt && tmdbKey) {
+      if (parsedExt.type === 'imdb') {
+        try {
+          const findRes = await axios.get(`https://api.themoviedb.org/3/find/${parsedExt.id}?api_key=${tmdbKey}&external_source=imdb_id`);
+          const m = findRes.data?.movie_results?.[0];
+          const t = findRes.data?.tv_results?.[0];
+          if (m) {
+            resolvedTmdbId = m.id;
+            resolvedImdbId = parsedExt.id;
+            tmdbTitleForId = m.title || m.original_title;
+            resolvedMediaType = 'movie';
+            resolvedYear = (m.release_date || '').substring(0, 4);
+          } else if (t) {
+            resolvedTmdbId = t.id;
+            resolvedImdbId = parsedExt.id;
+            tmdbTitleForId = t.name || t.original_name;
+            resolvedMediaType = 'tv';
+            resolvedYear = (t.first_air_date || '').substring(0, 4);
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      } else if (parsedExt.type === 'tmdb') {
+        resolvedTmdbId = parsedExt.id;
+        const targetType = parsedExt.mediaType || 'movie';
+        const altType = targetType === 'tv' ? 'movie' : 'tv';
+        try {
+          let tRes = await axios.get(`https://api.themoviedb.org/3/${targetType}/${parsedExt.id}?api_key=${tmdbKey}`).catch(() => null);
+          if (!tRes?.data?.id) {
+            tRes = await axios.get(`https://api.themoviedb.org/3/${altType}/${parsedExt.id}?api_key=${tmdbKey}`).catch(() => null);
+            if (tRes?.data?.id) resolvedMediaType = altType;
+          } else {
+            resolvedMediaType = targetType;
+          }
+          if (tRes?.data) {
+            tmdbTitleForId = tRes.data.title || tRes.data.name || tRes.data.original_title || tRes.data.original_name;
+            resolvedYear = (tRes.data.release_date || tRes.data.first_air_date || '').substring(0, 4);
+            resolvedImdbId = tRes.data.imdb_id || null;
+          }
+        } catch (e) {}
+      }
     }
 
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/search`;
@@ -2485,12 +2548,101 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
           for (const item of content3) {
              const uid = getUniqId(item);
              if (!seen.has(uid)) {
-                 content.push(item);
+                 content.push({ ...item, isExact: true });
                  seen.add(uid);
              }
           }
         }
       } catch (err) {}
+    }
+
+    // MATCH BY TMDB ID OR IMDB ID IN LIBRARY INDEX
+    if (resolvedTmdbId) {
+      try {
+        const libIndex = await getLibraryIndex(token).catch(() => []);
+        if (libIndex && libIndex.length > 0) {
+          const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+          const seen = new Set(content.map(getUniqId));
+          for (const item of libIndex) {
+            const itemTmdbId = item._jf?.tmdbId || item.tmdbId || item.id;
+            if (itemTmdbId && Number(itemTmdbId) === Number(resolvedTmdbId)) {
+              let itemParent = item.parent;
+              if (!itemParent && item.openlist_path) {
+                const parts = item.openlist_path.split('/');
+                parts.pop();
+                itemParent = parts.join('/');
+              } else if (!itemParent && item.category) {
+                itemParent = `${appConfig.basePath}/${item.category}`;
+              }
+              const mappedItem = {
+                ...item,
+                parent: itemParent,
+                isExact: true
+              };
+              const uid = getUniqId(mappedItem);
+              if (!seen.has(uid)) {
+                content.unshift(mappedItem);
+                seen.add(uid);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // MATCH BY TMDB ID OR IMDB ID IN TMDB CACHE
+    if (resolvedTmdbId || resolvedImdbId) {
+      try {
+        const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+        const seen = new Set(content.map(getUniqId));
+        for (const [key, entry] of Object.entries<any>(tmdbCache)) {
+          if (!entry) continue;
+          const matchId = (resolvedTmdbId && Number(entry.id) === Number(resolvedTmdbId)) ||
+                          (resolvedImdbId && entry.imdb_id && String(entry.imdb_id).toLowerCase() === resolvedImdbId.toLowerCase());
+          if (matchId && key.startsWith('path-')) {
+            const rawPath = key.substring(5);
+            const parts = rawPath.split('/').filter(Boolean);
+            const name = parts.pop() || '';
+            const parent = '/' + parts.join('/');
+            const mappedItem = {
+              name,
+              parent,
+              is_dir: true,
+              isExact: true,
+              customTitle: entry.custom_title || entry.title || entry.name
+            };
+            const uid = getUniqId(mappedItem);
+            if (!seen.has(uid)) {
+              content.unshift(mappedItem);
+              seen.add(uid);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // MATCH IN DIGITAL RELEASE PATHS
+    if (resolvedTmdbId && appConfig.digitalReleasePaths?.[resolvedTmdbId]) {
+      try {
+        const manualPath = appConfig.digitalReleasePaths[resolvedTmdbId];
+        const parts = manualPath.split('/').filter(Boolean);
+        const name = parts.pop() || '';
+        const parent = '/' + parts.join('/');
+        const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+        const seen = new Set(content.map(getUniqId));
+        const mappedItem = {
+          name,
+          parent,
+          is_dir: true,
+          isExact: true,
+          customTitle: tmdbTitleForId || name
+        };
+        const uid = getUniqId(mappedItem);
+        if (!seen.has(uid)) {
+          content.unshift(mappedItem);
+          seen.add(uid);
+        }
+      } catch (e) {}
     }
     
     // NEW LOGIC: SEARCH TMDB CACHE for titles available on the app
@@ -2609,7 +2761,26 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       return true;
     });
     
-    const searchStr = (keywords || '').toLowerCase().trim();
+    // If no local folder was found but an ID search resolved a title, add a virtual item so the user can open it
+    if (filteredContent.length === 0 && resolvedTmdbId && tmdbTitleForId) {
+      const targetCat = resolvedMediaType === 'tv' ? 'SERIES' : 'MOVIES';
+      const cleanTitle = tmdbTitleForId.replace(/'/g, '').replace(/[^a-zA-Z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+      const folderName = resolvedYear ? `${cleanTitle}.${resolvedYear}` : cleanTitle;
+      filteredContent.push({
+        name: folderName,
+        parent: `${appConfig.basePath}/${targetCat}`,
+        is_dir: true,
+        isExact: true,
+        _rec: false,
+        _digital_release: true,
+        id: resolvedTmdbId,
+        tmdbId: resolvedTmdbId,
+        customTitle: tmdbTitleForId,
+        releaseDate: resolvedYear ? `${resolvedYear}-01-01` : undefined
+      });
+    }
+
+    const searchStr = (tmdbTitleForId || keywords || '').toLowerCase().trim();
     if (searchStr) {
       filteredContent.sort((a, b) => {
         const aParsed = parseMediaName(a.name).cleanName.toLowerCase().trim();
@@ -2637,11 +2808,52 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       });
     }
 
-    if (response1.data && response1.data.data) {
-      response1.data.data.content = filteredContent;
-      if (originalContentCount === 0 && filteredContent.length > 0) {
-        response1.data.data.isFuzzyFallback = true;
+    // Attach known metadata overrides (title, poster, tmdbId) to search results
+    filteredContent.forEach((item: any) => {
+      const parentParts = (item.parent || '').split('/').filter(Boolean);
+      let cat = parentParts.length > 1 ? parentParts[1].toUpperCase() : 'MOVIES';
+      const cleanPath = (item.parent ? `${item.parent}/${item.name}` : item.name).replace(/^\/+/, '');
+      const parsed = parseMediaName(item.name);
+      
+      const overriddenKey = findOverriddenKeyInCache(tmdbCache, cat, parsed.cleanName, parsed.year, cleanPath);
+      let entry = null;
+      if (overriddenKey && tmdbCache[overriddenKey]) {
+        entry = tmdbCache[overriddenKey];
+      } else if (tmdbCache[`path-${cleanPath}`]?._overridden) {
+        entry = tmdbCache[`path-${cleanPath}`];
+      } else if (tmdbCache[`path-/${cleanPath}`]?._overridden) {
+        entry = tmdbCache[`path-/${cleanPath}`];
       }
+
+      if (entry) {
+        // Strict year guard: if item has a parsed year, ensure entry matches that year!
+        const entryYear = (entry.release_date || entry.first_air_date || '').substring(0, 4);
+        if (parsed.year && entryYear && parsed.year !== entryYear) {
+          return; // Do not apply override if year differs!
+        }
+        if (!item.customTitle && (entry.custom_title || entry.title || entry.name)) {
+          item.customTitle = entry.custom_title || entry.title || entry.name;
+        }
+        if (entry.poster_path) {
+          item.poster_path = entry.poster_path;
+        }
+        if (entry.id) {
+          item.tmdbId = entry.id;
+        }
+      }
+    });
+
+    if (!response1.data || !response1.data.data) {
+      response1.data = {
+        code: 200,
+        message: 'success',
+        data: { content: filteredContent }
+      };
+    } else {
+      response1.data.data.content = filteredContent;
+    }
+    if (originalContentCount === 0 && filteredContent.length > 0) {
+      response1.data.data.isFuzzyFallback = true;
     }
 
     res.json(response1.data);
@@ -2673,13 +2885,55 @@ app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) =>
        searchType = forceType;
     }
     
+    // Check if query is an IMDb ID or TMDB ID
+    const parsedExt = parseExternalIds(String(query || ''));
+    if (parsedExt) {
+      if (parsedExt.type === 'imdb') {
+        try {
+          const findRes = await axios.get(`https://api.themoviedb.org/3/find/${parsedExt.id}?api_key=${tmdbKey}&external_source=imdb_id`);
+          const movieResults = (findRes.data?.movie_results || []).map((m: any) => ({ ...m, media_type: 'movie', imdb_id: parsedExt.id }));
+          const tvResults = (findRes.data?.tv_results || []).map((t: any) => ({ ...t, media_type: 'tv', imdb_id: parsedExt.id }));
+          const combined = searchType === 'tv' ? [...tvResults, ...movieResults] : [...movieResults, ...tvResults];
+          if (combined.length > 0) {
+            return res.json({ results: combined, page: 1, total_results: combined.length, total_pages: 1 });
+          }
+        } catch (e) {}
+      } else if (parsedExt.type === 'tmdb') {
+        try {
+          const targetType = parsedExt.mediaType || searchType;
+          const altType = targetType === 'tv' ? 'movie' : 'tv';
+          let foundItem = null;
+          try {
+            const r1 = await axios.get(`https://api.themoviedb.org/3/${targetType}/${parsedExt.id}?api_key=${tmdbKey}`);
+            if (r1.data && r1.data.id) {
+              foundItem = { ...r1.data, media_type: targetType };
+            }
+          } catch (e1) {
+            try {
+              const r2 = await axios.get(`https://api.themoviedb.org/3/${altType}/${parsedExt.id}?api_key=${tmdbKey}`);
+              if (r2.data && r2.data.id) {
+                foundItem = { ...r2.data, media_type: altType };
+              }
+            } catch (e2) {}
+          }
+          if (foundItem) {
+            return res.json({ results: [foundItem], page: 1, total_results: 1, total_pages: 1 });
+          }
+        } catch (e) {}
+      }
+    }
+
     let idResult = null;
     if (req.query.tmdbId) {
         try {
             const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${req.query.tmdbId}?api_key=${tmdbKey}`);
-            idResult = idRes.data;
+            idResult = idRes.data ? { ...idRes.data, media_type: searchType } : null;
         } catch(e) {
-            // fallback
+            try {
+              const altType = searchType === 'tv' ? 'movie' : 'tv';
+              const idResAlt = await axios.get(`https://api.themoviedb.org/3/${altType}/${req.query.tmdbId}?api_key=${tmdbKey}`);
+              idResult = idResAlt.data ? { ...idResAlt.data, media_type: altType } : null;
+            } catch (e2) {}
         }
     }
 
@@ -2963,25 +3217,26 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   } else if (pathKey2 && tmdbCache[pathKey2] !== undefined) {
     cachedItem = tmdbCache[pathKey2];
     cacheKeyToUpdate = pathKey2;
-  } else {
-    if (tmdbCache[cacheKey] !== undefined) {
-      cachedItem = tmdbCache[cacheKey];
+  } else if (tmdbCache[cacheKey] !== undefined) {
+    // Only accept cachedItem if year is either empty OR matches the requested year!
+    const cand = tmdbCache[cacheKey];
+    const candYear = (cand?.release_date || cand?.first_air_date || '').substring(0, 4);
+    if (!year || !candYear || String(year).trim() === candYear) {
+      cachedItem = cand;
       cacheKeyToUpdate = cacheKey;
-    } else if (tmdbCache[baseKey] !== undefined) {
-      cachedItem = tmdbCache[baseKey];
-      cacheKeyToUpdate = baseKey;
-    } else {
-      const prefix = `${type}-${baseQuery}`;
-      const foundKey = Object.keys(tmdbCache).find(k => {
-        if (k === baseKey) return true;
-        // Only allow fallback to year-specific cache if we didn't specify a year
-        if (!year && (k.startsWith(`${prefix}-`) || k.startsWith(`${prefix}_`))) return true;
-        return false;
-      });
-      if (foundKey && tmdbCache[foundKey]) {
-        cachedItem = tmdbCache[foundKey];
-        cacheKeyToUpdate = foundKey;
-      }
+    }
+  } else if (!year && tmdbCache[baseKey] !== undefined) {
+    // ONLY check baseKey without year if caller did NOT provide a year!
+    cachedItem = tmdbCache[baseKey];
+    cacheKeyToUpdate = baseKey;
+  }
+
+  // Strict year mismatch safeguard: If caller requested a specific year and cachedItem has a contradicting year, discard cachedItem!
+  if (cachedItem && year) {
+    const candYear = (cachedItem.release_date || cachedItem.first_air_date || '').substring(0, 4);
+    if (candYear && candYear !== String(year).trim()) {
+      cachedItem = null;
+      cacheKeyToUpdate = null;
     }
   }
 
@@ -3002,13 +3257,33 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
 
   try {
     let data: any = { results: [] };
-    if (tmdbId) {
+    const parsedExt = parseExternalIds(query);
+    const targetTmdbId = tmdbId || (parsedExt?.type === 'tmdb' ? parsedExt.id : null);
+    if (targetTmdbId) {
         try {
-            const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${tmdbId}?api_key=${tmdbKey}`);
+            const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${targetTmdbId}?api_key=${tmdbKey}`);
             if (idRes.data) {
                 data = { results: [idRes.data] };
             }
-        } catch(e) {}
+        } catch(e) {
+            try {
+              const altType = searchType === 'tv' ? 'movie' : 'tv';
+              const idResAlt = await axios.get(`https://api.themoviedb.org/3/${altType}/${targetTmdbId}?api_key=${tmdbKey}`);
+              if (idResAlt.data) {
+                data = { results: [idResAlt.data] };
+              }
+            } catch (e2) {}
+        }
+    } else if (parsedExt?.type === 'imdb') {
+        try {
+          const findRes = await axios.get(`https://api.themoviedb.org/3/find/${parsedExt.id}?api_key=${tmdbKey}&external_source=imdb_id`);
+          const movieResults = findRes.data?.movie_results || [];
+          const tvResults = findRes.data?.tv_results || [];
+          const combined = searchType === 'tv' ? [...tvResults, ...movieResults] : [...movieResults, ...tvResults];
+          if (combined.length > 0) {
+            data = { results: combined };
+          }
+        } catch (e) {}
     }
     
     if (data.results.length === 0) {
@@ -4128,17 +4403,22 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
       dataToStore._synced = true;
       tmdbCache[cacheKey] = dataToStore;
       
-      if (!year) {
+      if (!year && !cleanPath) {
         tmdbCache[baseKey] = dataToStore;
       }
       
       if (pathKey1) tmdbCache[pathKey1] = dataToStore;
       if (pathKey2) tmdbCache[pathKey2] = dataToStore;
 
+      // Clean up any stale generic baseKey that might leak across different years/movies
+      if ((year || cleanPath) && tmdbCache[baseKey] && tmdbCache[baseKey]._overridden) {
+        delete tmdbCache[baseKey];
+      }
+
       // Update any other existing keys in tmdbCache that match cleanPath
       if (cleanPath) {
         for (const k of Object.keys(tmdbCache)) {
-          if (!year && k === baseKey) {
+          if (!year && !cleanPath && k === baseKey) {
             tmdbCache[k] = dataToStore;
           }
           if (k === `path-${cleanPath}` || k === `path-/${cleanPath}`) {
@@ -4717,12 +4997,14 @@ export async function initSQLiteState() {
         const item = tmdbCache[k];
         if (item && item._overridden) {
           item._synced = true;
-          // If this key has a year suffix (e.g. MOVIE-title-2023), ensure baseKey (MOVIE-title) also exists
+          // Never copy year-specific overrides to generic non-year base keys, to prevent leaking across movies with the same name.
+          // Clean up any stale generic baseKey if a year-specific override exists:
           const yearMatch = k.match(/^(.*)-(\d{4})$/);
           if (yearMatch) {
             const baseK = yearMatch[1];
-            if (!tmdbCache[baseK]) {
-              tmdbCache[baseK] = item;
+            if (tmdbCache[baseK] && tmdbCache[baseK]._overridden) {
+              delete tmdbCache[baseK];
+              cleanedBadKeys = true;
             }
           }
         }

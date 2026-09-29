@@ -1481,7 +1481,7 @@ export default function Details() {
     setSearching(true);
     try {
       const searchType = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category) ? 'tv' : 'movie';
-      const res = await axios.get(`/api/meta/search_all?query=${encodeURIComponent(searchTitle)}&type=${searchType}`);
+      const res = await axios.get(`/api/meta/search_all?query=${encodeURIComponent(searchTitle.trim())}&type=${searchType}`);
       setSearchResults(res.data?.results || []);
     } catch (e) {
       console.error(e);
@@ -1596,30 +1596,25 @@ export default function Details() {
 
     setSearchingLogos(true);
     try {
-      if (/^\d+$/.test(query)) {
-        // Pure TMDB ID search
-        const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
-        const searchType = isTv ? 'tv' : 'movie';
+      const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+      const searchType = isTv ? 'tv' : 'movie';
+      const res = await axios.get(`/api/meta/search_all?query=${encodeURIComponent(query)}&type=${category}`);
+      const results = res.data?.results || [];
+      setLogoSearchResults(results);
+      if (results.length > 0) {
+        const topResult = results[0];
+        setActiveLogoTmdb(topResult);
+        const topType = topResult.media_type || (topResult.first_air_date ? 'tv' : 'movie') || searchType;
+        await fetchAvailableLogos(topResult.id, topType, topResult);
+      } else if (/^\d+$/.test(query)) {
+        // Direct TMDB ID fallback if search_all returned nothing
         const info = { id: query, title: `TMDB ID #${query}` };
         setActiveLogoTmdb(info);
         setLogoSearchResults([]);
         await fetchAvailableLogos(query, searchType, info);
       } else {
-        // Text title search
-        const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
-        const searchType = isTv ? 'tv' : 'movie';
-        const res = await axios.get(`/api/meta/search_all?query=${encodeURIComponent(query)}&type=${category}`);
-        const results = res.data?.results || [];
-        setLogoSearchResults(results);
-        if (results.length > 0) {
-          const topResult = results[0];
-          setActiveLogoTmdb(topResult);
-          const topType = topResult.media_type || (topResult.first_air_date ? 'tv' : 'movie') || searchType;
-          await fetchAvailableLogos(topResult.id, topType, topResult);
-        } else {
-          setAvailableLogos([]);
-          setActiveLogoTmdb(null);
-        }
+        setAvailableLogos([]);
+        setActiveLogoTmdb(null);
       }
     } catch (err) {
       console.error('Error searching logos:', err);
@@ -2613,7 +2608,7 @@ export default function Details() {
                         value={searchTitle}
                         onChange={(e) => setSearchTitle(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearchTMDB()}
-                        placeholder="Search title..."
+                        placeholder="Search title, TMDb ID, or IMDb ID (e.g. tt1234567)..."
                         className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm focus:outline-none focus:border-purple-500 text-black dark:text-white"
                       />
                       <button 
@@ -2699,7 +2694,7 @@ export default function Details() {
                         value={logoSearchQuery}
                         onChange={(e) => setLogoSearchQuery(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearchLogos()}
-                        placeholder="Search TMDB ID (e.g. 550) or show/movie title..."
+                        placeholder="Search title, TMDb ID, or IMDb ID (e.g. tt1234567)..."
                         className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs focus:outline-none focus:border-purple-500 text-black dark:text-white"
                       />
                       <button
