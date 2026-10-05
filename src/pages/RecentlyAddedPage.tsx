@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import ItemCard from '../components/ItemCard';
-import { RefreshCw, Clock } from 'lucide-react';
+import { RefreshCw, Clock, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -203,22 +204,46 @@ export default function RecentlyAddedPage() {
         </div>
       </div>
 
-      {filteredItems.length === 0 ? (
-        <div className="text-gray-600 dark:text-gray-400 text-center py-20 text-sm">No items found.</div>
-      ) : (
-        <>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
-            {displayedItems.map((item: any, i: number) => (
-              <ItemCard key={i} item={item} category={item._cat || 'Unknown'} parentPath={item._parent || `/home/${item._cat || 'Unknown'}`} className="w-full" />
-            ))}
-          </div>
-          {filteredItems.length > displayedItems.length && (
-            <div className="flex justify-center mt-8">
-              <button onClick={() => setPage(p => p + 1)} className="px-6 py-2 bg-purple-600 rounded-full text-black dark:text-white font-semibold hover:bg-purple-500 transition">View More</button>
+      <div className="relative rounded-2xl overflow-hidden min-h-[400px]">
+        {filteredItems.length === 0 ? (
+          <div className="text-gray-600 dark:text-gray-400 text-center py-20 text-sm">No items found.</div>
+        ) : (
+          <div className={user === 'guest' ? 'filter blur-[7px] sm:blur-[9px] pointer-events-none select-none opacity-45 dark:opacity-35' : ''}>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
+              {displayedItems.map((item: any, i: number) => (
+                <ItemCard key={i} item={item} category={item._cat || 'Unknown'} parentPath={item._parent || `/home/${item._cat || 'Unknown'}`} className="w-full" />
+              ))}
             </div>
-          )}
-        </>
-      )}
+            {user !== 'guest' && filteredItems.length > displayedItems.length && (
+              <div className="flex justify-center mt-8">
+                <button onClick={() => setPage(p => p + 1)} className="px-6 py-2 bg-purple-600 rounded-full text-black dark:text-white font-semibold hover:bg-purple-500 transition">View More</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {user === 'guest' && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 bg-black/10 dark:bg-black/30 backdrop-blur-[2px] rounded-2xl">
+            <div className="flex flex-col items-center text-center max-w-sm sm:max-w-md mx-auto p-6 sm:p-8 rounded-2xl bg-white/50 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-[180%] border border-white/60 dark:border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.15)]">
+              <div className="w-14 h-14 rounded-full bg-purple-600/15 dark:bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mb-4 text-purple-600 dark:text-purple-400 shadow-inner">
+                <Lock size={26} className="stroke-[2.5]" />
+              </div>
+              <h4 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 tracking-tight">
+                Sign In to View Recently Added
+              </h4>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-5 leading-relaxed">
+                Please sign in with your account to see recently added media and access the full catalog.
+              </p>
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full text-sm font-semibold text-white bg-purple-600 hover:bg-purple-500 active:scale-[0.98] shadow-lg shadow-purple-600/30 hover:scale-[1.02] transition-all cursor-pointer"
+              >
+                Sign In
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
     </motion.div>
     </>
   );
