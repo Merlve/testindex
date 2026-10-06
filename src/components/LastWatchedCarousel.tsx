@@ -282,8 +282,6 @@ export default function LastWatchedCarousel() {
         seen.add(dedupeKey);
         uniqueList.push({ ...item, _dedupeKey: dedupeKey });
       }
-      
-      if (uniqueList.length >= 10) break;
     }
 
     return uniqueList;
