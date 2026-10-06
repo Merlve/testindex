@@ -6,6 +6,7 @@ import ItemCard from '../components/ItemCard';
 import { RefreshCw, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { parseMediaName, isExactSearchMatch } from '../utils/nameParser';
 
 
 const ALPHABET = ['#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
@@ -144,14 +145,21 @@ export default function Category() {
 
 
   
+  const isItemExact = (item: any) => {
+    if (item.isExact) return true;
+    if (!query) return true;
+    const parsed = parseMediaName(item.name);
+    return isExactSearchMatch(query, item.name, parsed.cleanName, item.customTitle || item.tmdbTitle || item.title);
+  };
+
   const filteredItems = useMemo(() => {
     let result = [...items];
     
     if (query) {
       if (matchType === 'EXACT') {
-        result = result.filter(item => item.isExact);
+        result = result.filter(item => isItemExact(item));
       } else if (matchType === 'FUZZY') {
-        result = result.filter(item => item.isFuzzy);
+        result = result.filter(item => !isItemExact(item) && item.isFuzzy);
       }
     }
 
@@ -287,13 +295,13 @@ export default function Category() {
                 onClick={() => { setMatchType('EXACT'); setPage(1); }} 
                 className={`px-4 py-2 text-sm font-bold transition shrink-0 border-b-2 ${matchType === 'EXACT' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
               >
-                Exact matches <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-black/10 dark:bg-white/10">{items.filter((i: any) => i.isExact).length}</span>
+                Exact matches <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-black/10 dark:bg-white/10">{items.filter(isItemExact).length}</span>
               </button>
               <button 
                 onClick={() => { setMatchType('FUZZY'); setPage(1); }} 
                 className={`px-4 py-2 text-sm font-bold transition shrink-0 border-b-2 ${matchType === 'FUZZY' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
               >
-                Similar Results <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-black/10 dark:bg-white/10">{items.filter((i: any) => i.isFuzzy).length}</span>
+                Similar Results <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-black/10 dark:bg-white/10">{items.filter((i: any) => !isItemExact(i) && i.isFuzzy).length}</span>
               </button>
             </div>
             

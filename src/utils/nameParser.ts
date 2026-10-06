@@ -41,6 +41,40 @@ export function parseMediaName(rawName: string) {
   return { cleanName, year };
 }
 
+export function isExactSearchMatch(queryStr: string, rawName: string, cleanName?: string, tmdbTitle?: string | null): boolean {
+  if (!queryStr) return false;
+  const clean = (s: string) => String(s || '').toLowerCase().trim();
+  const toWords = (s: string) => clean(s).replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
+  const toCompact = (s: string) => clean(s).replace(/[^a-z0-9]/gi, '');
+
+  const qRaw = clean(queryStr);
+  const qWords = toWords(queryStr);
+  const qCompact = toCompact(queryStr);
+
+  if (!qCompact) return false;
+
+  const targets = [rawName, cleanName, tmdbTitle].filter(Boolean) as string[];
+
+  for (const target of targets) {
+    const tRaw = clean(target);
+    const tWords = toWords(target);
+    const tCompact = toCompact(target);
+
+    // 1. Literal substring match
+    if (tRaw.includes(qRaw)) return true;
+
+    // 2. Space-delimited word match
+    if (tWords.includes(qWords)) return true;
+
+    // 3. Compact match for compound / hyphenated phrases
+    if (qCompact.length >= 4 && tCompact.includes(qCompact)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function formatBytes(bytes: number, decimals = 1) {
   if (!bytes || isNaN(bytes) || bytes <= 0) return '';
   const k = 1024;

@@ -456,6 +456,40 @@ function parseMediaName(rawName: string) {
   return { cleanName, year };
 }
 
+function isExactSearchMatch(queryStr: string, rawName: string, cleanName?: string, tmdbTitle?: string | null): boolean {
+  if (!queryStr) return false;
+  const clean = (s: string) => String(s || '').toLowerCase().trim();
+  const toWords = (s: string) => clean(s).replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
+  const toCompact = (s: string) => clean(s).replace(/[^a-z0-9]/gi, '');
+
+  const qRaw = clean(queryStr);
+  const qWords = toWords(queryStr);
+  const qCompact = toCompact(queryStr);
+
+  if (!qCompact) return false;
+
+  const targets = [rawName, cleanName, tmdbTitle].filter(Boolean) as string[];
+
+  for (const target of targets) {
+    const tRaw = clean(target);
+    const tWords = toWords(target);
+    const tCompact = toCompact(target);
+
+    // 1. Literal substring match
+    if (tRaw.includes(qRaw)) return true;
+
+    // 2. Space-delimited word match
+    if (tWords.includes(qWords)) return true;
+
+    // 3. Compact match for compound / hyphenated phrases
+    if (qCompact.length >= 4 && tCompact.includes(qCompact)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function saveConfig() {
   await writeSQLiteJSON('config', appConfig);
 }
@@ -2445,19 +2479,63 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
 
     const url = `${getOpenlistUrl().replace(/\/$/, '')}/api/fs/search`;
     
-    const reqBody1 = { 
+    const reqBodyBase = { 
       parent: targetParent, 
-      keywords: keywords,
       scope: 0, // 0 = all, 1 = folder, 2 = file
       page: 1,
       per_page: 10000,
       password: "" 
     };
-    
-    const response1 = await axios.post(url, reqBody1, { headers: { Authorization: token } });
-    let content = [];
-    if (response1.data && response1.data.code === 200 && response1.data.data && response1.data.data.content) {
-      content = response1.data.data.content.map((item: any) => ({ ...item, isExact: true }));
+
+    const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
+    const seenUids = new Set<string>();
+    let content: any[] = [];
+    let response1: any = null;
+
+    // Collect variations of the search keyword to ensure filesystem delimiter differences
+    // (such as dashes vs spaces vs dots vs compound names, e.g. Spider-Man vs Spider Man vs Spider.Man vs Spiderman)
+    // are all queried against the filesystem.
+    const searchVariants = new Set<string>();
+    if (keywords && typeof keywords === 'string') {
+      const trimmed = keywords.trim();
+      searchVariants.add(trimmed);
+      if (trimmed.includes('-')) {
+        searchVariants.add(trimmed.replace(/-/g, ' '));
+        searchVariants.add(trimmed.replace(/-/g, '.'));
+      }
+      if (trimmed.includes('.')) {
+        searchVariants.add(trimmed.replace(/\./g, ' '));
+      }
+      if (trimmed.includes(' ')) {
+        searchVariants.add(trimmed.replace(/\s+/g, '.'));
+        searchVariants.add(trimmed.replace(/\s+/g, '-'));
+      }
+      if (trimmed.includes('&')) {
+        searchVariants.add(trimmed.replace(/&/g, 'and'));
+      } else if (trimmed.match(/\band\b/i)) {
+        searchVariants.add(trimmed.replace(/\band\b/ig, '&'));
+      }
+      // Compact variant for hyphenated / compound words like Spider-Man -> Spiderman
+      const compact = trimmed.replace(/[\s\-_.]+/g, '');
+      if (compact.length >= 4 && compact !== trimmed) {
+        searchVariants.add(compact);
+      }
+    }
+
+    for (const kw of searchVariants) {
+      try {
+        const resp = await axios.post(url, { ...reqBodyBase, keywords: kw }, { headers: { Authorization: token } });
+        if (resp.data?.code === 200 && resp.data?.data?.content) {
+          if (!response1) response1 = resp;
+          for (const item of resp.data.data.content) {
+            const uid = getUniqId(item);
+            if (!seenUids.has(uid)) {
+              seenUids.add(uid);
+              content.push(item);
+            }
+          }
+        }
+      } catch (e) {}
     }
     
     let originalContentCount = content.length;
@@ -2474,9 +2552,6 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
                    includeScore: true
                });
                const fuzzyResults = fuse.search(keywords);
-               const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
-               const seen = new Set(content.map(getUniqId));
-               
                for (const res of fuzzyResults.slice(0, 30)) {
                    const item: any = res.item;
                    let itemParent = item.parent;
@@ -2490,13 +2565,12 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
                    
                    const mappedItem = {
                        ...item,
-                       parent: itemParent,
-                       isFuzzy: true
+                       parent: itemParent
                    };
                    const uid = getUniqId(mappedItem);
-                   if (!seen.has(uid)) {
+                   if (!seenUids.has(uid)) {
+                       seenUids.add(uid);
                        content.push(mappedItem);
-                       seen.add(uid);
                    }
                }
            }
@@ -2505,52 +2579,16 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
        }
     }
     
-    // Handle 'and' vs '&' replacements
-    let altKeywords = null;
-    if (keywords && typeof keywords === 'string') {
-      if (keywords.includes('&')) {
-        altKeywords = keywords.replace(/&/g, 'and');
-      } else if (keywords.match(/\band\b/i)) {
-        altKeywords = keywords.replace(/\band\b/ig, '&');
-      }
-    }
-    
-    if (altKeywords) {
-      const reqBody2 = { ...reqBody1, keywords: altKeywords };
-      try {
-        const response2 = await axios.post(url, reqBody2, { headers: { Authorization: token } });
-        if (response2.data && response2.data.code === 200 && response2.data.data && response2.data.data.content) {
-          const content2 = response2.data.data.content;
-          // Merge results uniquely
-          const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
-          const seen = new Set(content.map(getUniqId));
-          for (const item of content2) {
-             const uid = getUniqId(item);
-             if (!seen.has(uid)) {
-                 content.push(item);
-                 seen.add(uid);
-             }
-          }
-        }
-      } catch (err) {
-        // silently ignore error on secondary search
-      }
-    }
-    
     if (tmdbTitleForId) {
-      const reqBody3 = { ...reqBody1, keywords: tmdbTitleForId };
       try {
-        const response3 = await axios.post(url, reqBody3, { headers: { Authorization: token } });
-        if (response3.data && response3.data.code === 200 && response3.data.data && response3.data.data.content) {
-          const content3 = response3.data.data.content;
-          const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
-          const seen = new Set(content.map(getUniqId));
-          for (const item of content3) {
-             const uid = getUniqId(item);
-             if (!seen.has(uid)) {
-                 content.push({ ...item, isExact: true });
-                 seen.add(uid);
-             }
+        const response3 = await axios.post(url, { ...reqBodyBase, keywords: tmdbTitleForId }, { headers: { Authorization: token } });
+        if (response3.data?.code === 200 && response3.data?.data?.content) {
+          for (const item of response3.data.data.content) {
+            const uid = getUniqId(item);
+            if (!seenUids.has(uid)) {
+              seenUids.add(uid);
+              content.push(item);
+            }
           }
         }
       } catch (err) {}
@@ -2698,7 +2736,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
           }
 
           for (const cleanName of extractedCleanNames) {
-             const reqBodyClean = { ...reqBody1, keywords: cleanName };
+             const reqBodyClean = { ...reqBodyBase, keywords: cleanName };
              try {
                 const responseClean = await axios.post(url, reqBodyClean, { headers: { Authorization: token } });
                 if (responseClean.data && responseClean.data.code === 200 && responseClean.data.data && responseClean.data.data.content) {
@@ -2780,35 +2818,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
       });
     }
 
-    const searchStr = (tmdbTitleForId || keywords || '').toLowerCase().trim();
-    if (searchStr) {
-      filteredContent.sort((a, b) => {
-        const aParsed = parseMediaName(a.name).cleanName.toLowerCase().trim();
-        const bParsed = parseMediaName(b.name).cleanName.toLowerCase().trim();
-        
-        const aExact = aParsed === searchStr;
-        const bExact = bParsed === searchStr;
-        
-        if (aExact && !bExact) return -1;
-        if (!aExact && bExact) return 1;
-        
-        const aStarts = aParsed.startsWith(searchStr);
-        const bStarts = bParsed.startsWith(searchStr);
-        
-        if (aStarts && !bStarts) return -1;
-        if (!aStarts && bStarts) return 1;
-        
-        const aContains = aParsed.includes(searchStr);
-        const bContains = bParsed.includes(searchStr);
-        
-        if (aContains && !bContains) return -1;
-        if (!aContains && bContains) return 1;
-        
-        return 0;
-      });
-    }
-
-    // Attach known metadata overrides (title, poster, tmdbId) to search results
+    // Attach known metadata (overrides, cached TMDB entries, titles, posters, tmdbId) to search results
     filteredContent.forEach((item: any) => {
       const parentParts = (item.parent || '').split('/').filter(Boolean);
       let cat = parentParts.length > 1 ? parentParts[1].toUpperCase() : 'MOVIES';
@@ -2825,23 +2835,93 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
         entry = tmdbCache[`path-/${cleanPath}`];
       }
 
+      // If not manually overridden, check regular cached TMDB metadata
+      if (!entry) {
+        const pathKey1 = `path-${cleanPath}`;
+        const pathKey2 = `path-/${cleanPath}`;
+        const cacheKeyYear = parsed.year ? `${cat}-${parsed.cleanName.toLowerCase()}-${parsed.year}` : null;
+        const cacheKeyBase = `${cat}-${parsed.cleanName.toLowerCase()}`;
+        
+        if (tmdbCache[pathKey1]) entry = tmdbCache[pathKey1];
+        else if (tmdbCache[pathKey2]) entry = tmdbCache[pathKey2];
+        else if (cacheKeyYear && tmdbCache[cacheKeyYear]) entry = tmdbCache[cacheKeyYear];
+        else if (tmdbCache[cacheKeyBase]) {
+          const cand = tmdbCache[cacheKeyBase];
+          const candYear = (cand.release_date || cand.first_air_date || '').substring(0, 4);
+          if (!parsed.year || !candYear || candYear === parsed.year) {
+            entry = cand;
+          }
+        }
+      }
+
       if (entry) {
         // Strict year guard: if item has a parsed year, ensure entry matches that year!
         const entryYear = (entry.release_date || entry.first_air_date || '').substring(0, 4);
-        if (parsed.year && entryYear && parsed.year !== entryYear) {
-          return; // Do not apply override if year differs!
-        }
-        if (!item.customTitle && (entry.custom_title || entry.title || entry.name)) {
-          item.customTitle = entry.custom_title || entry.title || entry.name;
-        }
-        if (entry.poster_path) {
-          item.poster_path = entry.poster_path;
-        }
-        if (entry.id) {
-          item.tmdbId = entry.id;
+        if (!parsed.year || !entryYear || parsed.year === entryYear) {
+          if (!item.customTitle && (entry.custom_title || entry.title || entry.name)) {
+            item.customTitle = entry.custom_title || entry.title || entry.name;
+          }
+          if (entry.title || entry.name) {
+            item.tmdbTitle = entry.title || entry.name;
+          }
+          if (entry.poster_path) {
+            item.poster_path = entry.poster_path;
+          }
+          if (entry.id) {
+            item.tmdbId = entry.id;
+          }
         }
       }
+
+      // Compute exact match: does keywords match raw file/folder name, clean title, or TMDB title?
+      const isExact = isExactSearchMatch(
+        keywords,
+        item.name,
+        parsed.cleanName,
+        item.tmdbTitle || item.customTitle
+      );
+      if (isExact) {
+        item.isExact = true;
+        item.isFuzzy = false;
+      } else {
+        item.isExact = false;
+        item.isFuzzy = true;
+      }
     });
+
+    const searchStr = (tmdbTitleForId || keywords || '').toLowerCase().trim();
+    if (searchStr) {
+      filteredContent.sort((a, b) => {
+        // 1. Exact matches strictly above fuzzy matches
+        if (a.isExact && !b.isExact) return -1;
+        if (!a.isExact && b.isExact) return 1;
+
+        const aTitle = (a.customTitle || a.tmdbTitle || a.name || '').toLowerCase();
+        const bTitle = (b.customTitle || b.tmdbTitle || b.name || '').toLowerCase();
+        const aParsed = parseMediaName(a.name).cleanName.toLowerCase().trim();
+        const bParsed = parseMediaName(b.name).cleanName.toLowerCase().trim();
+        
+        // 2. Exact equality on title or parsed name
+        const aExact = aTitle === searchStr || aParsed === searchStr;
+        const bExact = bTitle === searchStr || bParsed === searchStr;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+        
+        // 3. Starts-with
+        const aStarts = aTitle.startsWith(searchStr) || aParsed.startsWith(searchStr);
+        const bStarts = bTitle.startsWith(searchStr) || bParsed.startsWith(searchStr);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        
+        // 4. Contains
+        const aContains = aTitle.includes(searchStr) || aParsed.includes(searchStr);
+        const bContains = bTitle.includes(searchStr) || bParsed.includes(searchStr);
+        if (aContains && !bContains) return -1;
+        if (!aContains && bContains) return 1;
+        
+        return 0;
+      });
+    }
 
     if (!response1.data || !response1.data.data) {
       response1.data = {
