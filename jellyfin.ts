@@ -104,7 +104,7 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
       res = await axios.get(`${url.replace(/\/$/, '')}/Users/${userId}/Items/Latest`, {
         params: {
           IncludeItemTypes: "Movie,Episode,Series",
-          Limit: 30,
+          Limit: 100,
           Fields: "ProviderIds,Overview,Genres,CommunityRating,ProductionYear,SeriesYear,RunTimeTicks,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,OriginalLanguage,ProductionLocations,SeriesId,MediaSources,MediaStreams,DateCreated"
         },
         headers: {
@@ -232,9 +232,6 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
         let searchKeywords = cleanSearchTitle || getSearchKeywords(search.name);
         
         const base = basePath.replace(/\/$/, '');
-        const targetPaths = search.isSeries 
-            ? [`${base}/ANIME`, `${base}/SERIES`, `${base}/KDRAMA`]
-            : [`${base}/MOVIES`];
         
         let queriesToTry = [];
         if (search.year && !searchKeywords.includes(String(search.year))) {
@@ -252,20 +249,18 @@ async function fetchAndMatchJellyfin(getOpenlistUrl: () => string, getOpenlistAp
 
         let content: any[] = [];
         for (const query of queriesToTry) {
-            for (const targetPath of targetPaths) {
-                let searchRes = await axios.post(`${openlistUrl}/api/fs/search`, {
-                  parent: targetPath,
-                  keywords: query,
-                  scope: 1, // folders only
-                  page: 1,
-                  per_page: 100,
-                  password: ""
-                }, { headers: { Authorization: token } }).catch(() => null);
-                if (searchRes?.data?.data?.content) {
-                    content.push(...searchRes.data.data.content);
-                }
+            let searchRes = await axios.post(`${openlistUrl}/api/fs/search`, {
+              parent: base,
+              keywords: query,
+              scope: 1, // folders only
+              page: 1,
+              per_page: 100,
+              password: ""
+            }, { headers: { Authorization: token } }).catch(() => null);
+            if (searchRes?.data?.data?.content && searchRes.data.data.content.length > 0) {
+                content.push(...searchRes.data.data.content);
+                break;
             }
-            if (content.length > 0) break; // Stop if we found results for this query level
         }
 
         const cleanTitleNorm = normalizeStr(cleanSearchTitle);
