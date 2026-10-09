@@ -223,6 +223,7 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
 
 export default function LastWatchedCarousel() {
   const { user, token } = useAuth();
+  const scrollRef = useRef<HTMLDivElement>(null);
   
   const [dismissedSeries, setDismissedSeries] = useState<Record<string, number>>(() => {
     try {
@@ -294,15 +295,25 @@ export default function LastWatchedCarousel() {
       <div className="flex justify-between items-end mb-2">
         <h3 className="text-lg font-bold text-black dark:text-white">Last Watched</h3>
         <div className="flex gap-2 items-center">
-          <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: -400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
+          <button 
+            type="button"
+            onClick={() => scrollRef.current?.scrollBy({ left: -400, behavior: 'smooth' })} 
+            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
+            aria-label="Scroll left"
+          >
             <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-          </div>
-          <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: 400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
+          </button>
+          <button 
+            type="button"
+            onClick={() => scrollRef.current?.scrollBy({ left: 400, behavior: 'smooth' })} 
+            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
+            aria-label="Scroll right"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-          </div>
+          </button>
         </div>
       </div>
-      <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+      <div ref={scrollRef} className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
         {recentWatched.map((item, i) => (
           <LastWatchedCard key={item.name || i} item={item} onDismiss={handleDismissSeries} />
         ))}

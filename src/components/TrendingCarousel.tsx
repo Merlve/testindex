@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { motion } from 'motion/react';
@@ -7,6 +7,7 @@ import { parseMediaName } from '../utils/nameParser';
 import { Flame } from 'lucide-react';
 
 export default function TrendingCarousel({ categories }: { categories: any[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const fetchTrending = async () => {
     const res = await axios.get('/api/meta/trending');
     const results = res.data?.results || [];
@@ -89,15 +90,25 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
            Trending Now
         </h3>
         <div className="flex gap-2">
-          <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: -400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
+          <button 
+            type="button"
+            onClick={() => scrollRef.current?.scrollBy({ left: -400, behavior: 'smooth' })} 
+            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
+            aria-label="Scroll left"
+          >
             <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-          </div>
-          <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: 400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white">
+          </button>
+          <button 
+            type="button"
+            onClick={() => scrollRef.current?.scrollBy({ left: 400, behavior: 'smooth' })} 
+            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
+            aria-label="Scroll right"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-          </div>
+          </button>
         </div>
       </div>
-      <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+      <div ref={scrollRef} className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
          {renderedItems}
       </div>
     </div>

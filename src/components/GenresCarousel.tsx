@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router';
 import axios from 'axios';
@@ -14,6 +14,7 @@ interface GenreBackdrop {
 export default function GenresCarousel() {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchGenres = async () => {
     const res = await axios.get('/api/meta/genres/backdrops', {
@@ -78,15 +79,25 @@ export default function GenresCarousel() {
         </h3>
         <div className="flex gap-2 items-center">
           <Link to="/genres" className="text-xs text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider mr-2">View All</Link>
-          <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: -400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition">
+          <button 
+            type="button"
+            onClick={() => scrollRef.current?.scrollBy({ left: -400, behavior: 'smooth' })} 
+            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition"
+            aria-label="Scroll left"
+          >
             <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-          </div>
-          <div onClick={(e) => (e.currentTarget.parentElement?.parentElement?.nextElementSibling as HTMLElement)?.scrollBy({ left: 400, behavior: 'smooth' })} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition">
+          </button>
+          <button 
+            type="button"
+            onClick={() => scrollRef.current?.scrollBy({ left: 400, behavior: 'smooth' })} 
+            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition"
+            aria-label="Scroll right"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-          </div>
+          </button>
         </div>
       </div>
-      <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+      <div ref={scrollRef} className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
         {renderedItems}
       </div>
     </div>
