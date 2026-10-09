@@ -38,21 +38,32 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
     }
   };
 
+  const targetShowName = item._targetName || item.showName || item.name;
+  const targetShowPath = item._targetPath || item.showPath || (item.parentPath ? `${item.parentPath}/${item.name}` : item.name);
+  const preselectSeason = item._preselectSeason;
+
   const { data: tmdb } = useQuery({
-    queryKey: ['tmdb', item.name, item.parentPath],
+    queryKey: ['tmdb-watched', targetShowName, targetShowPath, item.tmdbId || item.tmdbData?.id],
     queryFn: async () => {
-      let searchName = item.name;
-      const { cleanName, year } = parseMediaName(searchName);
-      const itemPath = item._jf_name ? item._jf_name : item.parentPath ? `${item.parentPath}/${item.name}` : item.name;
+      // If item already contains full tmdbData, use it directly
+      if (item.tmdbData && (item.tmdbData.backdrop_path || item.tmdbData.poster_path || item.tmdbData.title || item.tmdbData.name)) {
+        return item.tmdbData;
+      }
+
+      const { cleanName, year } = parseMediaName(targetShowName);
+      const itemPath = targetShowPath;
       
       let type = 'movie'; // fallback
-      if (itemPath.toLowerCase().includes('series') || itemPath.toLowerCase().includes('tv') || itemPath.toLowerCase().includes('anime')) {
+      const lower = (itemPath || '').toLowerCase();
+      if (lower.includes('series') || lower.includes('tv') || lower.includes('anime') || lower.includes('kdrama') || lower.includes('show')) {
         type = 'tv';
       }
       
-      const res = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${type}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}`);
+      const tmdbIdParam = (item.tmdbId || item.tmdbData?.id) ? `&tmdbId=${item.tmdbId || item.tmdbData?.id}` : '';
+      const res = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${type}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}${tmdbIdParam}`);
       return res.data;
     },
+    initialData: (item.tmdbData && (item.tmdbData.backdrop_path || item.tmdbData.poster_path || item.tmdbData.title || item.tmdbData.name)) ? item.tmdbData : undefined,
     enabled: !!item,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
@@ -84,7 +95,9 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
 
   const backdrop = tmdb?.backdrop_path 
     ? `https://image.tmdb.org/t/p/w780${tmdb.backdrop_path}` 
-    : null;
+    : tmdb?.poster_path
+      ? `https://image.tmdb.org/t/p/w780${tmdb.poster_path}`
+      : null;
 
   const isAlreadyLoaded = isImageLoaded(backdrop);
   const [imgLoaded, setImgLoaded] = useState<boolean>(isAlreadyLoaded);
@@ -96,7 +109,7 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
     }
   }, [backdrop]);
 
-  const title = tmdb?.title || tmdb?.name || item.name;
+  const title = tmdb?.custom_title || tmdb?.title || tmdb?.name || targetShowName || item.name;
   
   const formatTitleCase = (text: string) => {
     if (!text) return '';
@@ -105,52 +118,37 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
     return normalized.replace(/(?:^|\s|-|\/)\S/g, (c) => c.toUpperCase());
   };
 
-  const parentClean = (item.parentPath || '').replace(/^\/+/, '');
-  const isVideo = /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(item.name);
-  
-  let linkPath = parentClean ? `${parentClean}/${item.name}` : item.name;
-  let preselectSeason: string | undefined = undefined;
-  
-  if (isVideo) {
-      const seasonMatch = parentClean.match(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i);
-      if (seasonMatch) {
-          // If it's an episode in a Season folder (e.g. Season 1, S01), go to the Show root
-          linkPath = parentClean.replace(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i, '');
-          preselectSeason = seasonMatch[1];
-      } else if (parentClean.toLowerCase() === 'home/movies' || parentClean.toLowerCase() === 'home/shows' || parentClean === '') {
-          // If parent is just the root category, we must link to the file itself since there's no folder
-          linkPath = parentClean ? `${parentClean}/${item.name}` : item.name;
-      } else {
-          // If it's a movie in its own folder, go to the folder
-          linkPath = parentClean;
-      }
-  }
+  const parentClean = (targetShowPath || item.parentPath || '').replace(/^\/+/, '');
+  const targetUrl = `/${parentClean}`.replace(/\/+/g, '/').split('/').map(p => encodeURIComponent(p)).join('/');
+  const currentMetaVer = localStorage.getItem('meta_version') || '1';
 
   const handlePrefetch = () => {
     let type = 'MOVIES';
-    const pLower = (item.parentPath || '').toLowerCase();
+    const pLower = (targetShowPath || item.parentPath || '').toLowerCase();
     if (pLower.includes('series') || pLower.includes('tv') || pLower.includes('show')) type = 'SERIES';
     else if (pLower.includes('anime')) type = 'ANIME';
     else if (pLower.includes('kdrama')) type = 'KDRAMA';
 
     prefetchItemDetails(queryClient, {
-      item,
+      item: { ...item, name: targetShowName, openlist_path: targetShowPath },
       category: type,
-      parentPath: item.parentPath,
+      parentPath: targetShowPath,
       tmdbData: tmdb,
       token,
     });
   };
-
-  const targetUrl = `/${linkPath}`.replace(/\/+/g, '/').split('/').map(p => encodeURIComponent(p)).join('/');
-  const currentMetaVer = localStorage.getItem('meta_version') || '1';
 
   if (!backdrop) return null; // Only show items with backdrops
 
   return (
     <Link 
       to={targetUrl}
-      state={{ item, tmdbData: tmdb, metaVer: currentMetaVer, preselectSeason }}
+      state={{ 
+        item: { ...item, name: targetShowName, openlist_path: targetShowPath }, 
+        tmdbData: tmdb, 
+        metaVer: currentMetaVer, 
+        preselectSeason 
+      }}
       onPointerEnter={handlePrefetch}
       onPointerDown={handlePrefetch}
       onTouchStart={handlePrefetch}
@@ -160,7 +158,7 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
         <div className="absolute inset-0 w-full h-full overflow-hidden">
           {!imgLoaded && (
             <img 
-              src={`https://image.tmdb.org/t/p/w300${tmdb.backdrop_path}`} 
+              src={tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w300${tmdb.backdrop_path}` : backdrop || ''} 
               className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100" 
               alt="" 
               aria-hidden="true" 
@@ -261,15 +259,35 @@ export default function LastWatchedCarousel() {
       const isVideo = /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(item.name || '');
       
       let dedupeKey = parentClean ? `${parentClean}/${item.name}` : item.name;
+      let targetName = item.name;
+      let targetPath = parentClean ? `${parentClean}/${item.name}` : item.name;
+      let preselectSeason: string | undefined = undefined;
       
       if (isVideo) {
-          if (/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i.test(parentClean)) {
-              dedupeKey = parentClean.replace(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i, '');
+          const seasonMatch = parentClean.match(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i);
+          if (seasonMatch) {
+              // If it's an episode in a Season folder (e.g. Season 1, S01), go to the Show root
+              targetPath = parentClean.replace(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i, '');
+              const parts = targetPath.split('/').filter(Boolean);
+              targetName = parts.length > 0 ? parts[parts.length - 1] : item.name;
+              dedupeKey = targetPath;
+              preselectSeason = seasonMatch[1];
           } else if (parentClean.toLowerCase() === 'home/movies' || parentClean.toLowerCase() === 'home/shows' || parentClean === '') {
-              dedupeKey = parentClean ? `${parentClean}/${item.name}` : item.name;
+              // Direct video in category root
+              targetPath = parentClean ? `${parentClean}/${item.name}` : item.name;
+              targetName = item.name;
+              dedupeKey = targetPath;
           } else {
-              dedupeKey = parentClean;
+              // Movie or series inside its own named folder
+              targetPath = parentClean;
+              const parts = targetPath.split('/').filter(Boolean);
+              targetName = parts.length > 0 ? parts[parts.length - 1] : item.name;
+              dedupeKey = targetPath;
           }
+      } else {
+          targetName = item.name;
+          targetPath = parentClean ? `${parentClean}/${item.name}` : item.name;
+          dedupeKey = targetPath;
       }
       
       dedupeKey = dedupeKey.replace(/\/+/g, '/').replace(/\/$/, '').toLowerCase();
@@ -281,12 +299,18 @@ export default function LastWatchedCarousel() {
 
       if (!seen.has(dedupeKey)) {
         seen.add(dedupeKey);
-        uniqueList.push({ ...item, _dedupeKey: dedupeKey });
+        uniqueList.push({ 
+          ...item, 
+          _dedupeKey: dedupeKey,
+          _targetName: item.showName || (item.tmdbData?.title || item.tmdbData?.name) || targetName,
+          _targetPath: item.showPath || targetPath,
+          _preselectSeason: preselectSeason
+        });
       }
     }
 
     return uniqueList;
-  }, [watchedList]);
+  }, [watchedList, dismissedSeries]);
 
   if (!recentWatched || recentWatched.length === 0) return null;
 

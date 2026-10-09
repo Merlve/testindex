@@ -1461,11 +1461,25 @@ export default function Details() {
     if (isWatched) {
       setWatchedItems(prev => prev.filter(i => !(i.name === itemName && i.parentPath === itemPath)));
     } else {
-      setWatchedItems(prev => [...prev, { name: itemName, parentPath: itemPath }]);
+      setWatchedItems(prev => [...prev, { 
+        name: itemName, 
+        parentPath: itemPath,
+        showName: name,
+        showPath: actualFolderOpenlistPath,
+        tmdbData: tmdb,
+        tmdbId: tmdb?.id
+      }]);
     }
     
     try {
-      const res = await axios.post('/api/watched/toggle', { name: itemName, parentPath: itemPath }, { headers: { 'x-user': user } });
+      const res = await axios.post('/api/watched/toggle', { 
+        name: itemName, 
+        parentPath: itemPath,
+        showName: name,
+        showPath: actualFolderOpenlistPath,
+        tmdbData: tmdb,
+        tmdbId: tmdb?.id
+      }, { headers: { 'x-user': user } });
       if (res.data?.success) {
         queryClient.setQueryData(['watched-list', user], res.data.watched || []);
         queryClient.invalidateQueries({ queryKey: ['watched-list', user] });
@@ -2450,7 +2464,14 @@ export default function Details() {
             token={token}
             config={config}
             onClose={() => setIntentModalData(null)}
-            onPlayWeb={(url) => { setPlayingUrl(url); setPlayingItemData(intentModalData); }}
+            onPlayWeb={(url) => { 
+              setPlayingUrl(url); 
+              setPlayingItemData(intentModalData); 
+              const isWatched = watchedItems.some(i => i.name === intentModalData.item.name && i.parentPath === intentModalData.path);
+              if (!isWatched) {
+                toggleWatched(intentModalData.item.name, intentModalData.path);
+              }
+            }}
             onExternalPlay={() => {
               const isWatched = watchedItems.some(i => i.name === intentModalData.item.name && i.parentPath === intentModalData.path);
               if (!isWatched) {

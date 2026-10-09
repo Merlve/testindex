@@ -1071,7 +1071,7 @@ app.post('/api/watched/toggle', async (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
-  const { name, parentPath } = req.body;
+  const { name, parentPath, tmdbData, showName, showPath, tmdbId } = req.body;
   if (!name || !parentPath) return res.status(400).json({ error: 'Missing name or parentPath' });
 
   const list = await loadUserWatched(user);
@@ -1081,7 +1081,15 @@ app.post('/api/watched/toggle', async (req, res) => {
   if (existingIndex >= 0) {
     list.splice(existingIndex, 1);
   } else {
-    list.push({ name, parentPath, timestamp: Date.now() });
+    list.push({ 
+      name, 
+      parentPath, 
+      timestamp: Date.now(),
+      ...(tmdbData ? { tmdbData } : {}),
+      ...(showName ? { showName } : {}),
+      ...(showPath ? { showPath } : {}),
+      ...(tmdbId ? { tmdbId } : {})
+    });
   }
   
   await saveUserWatched(user, list);
@@ -1101,7 +1109,15 @@ app.post('/api/watched/bulk-toggle', async (req, res) => {
   for (const item of items) {
     const existingIndex = list.findIndex(i => i.name === item.name && i.parentPath === item.parentPath);
     if (item.watched && existingIndex < 0) {
-      list.push({ name: item.name, parentPath: item.parentPath, timestamp: Date.now() });
+      list.push({ 
+        name: item.name, 
+        parentPath: item.parentPath, 
+        timestamp: Date.now(),
+        ...(item.tmdbData ? { tmdbData: item.tmdbData } : {}),
+        ...(item.showName ? { showName: item.showName } : {}),
+        ...(item.showPath ? { showPath: item.showPath } : {}),
+        ...(item.tmdbId ? { tmdbId: item.tmdbId } : {})
+      });
       changed = true;
     } else if (!item.watched && existingIndex >= 0) {
       list.splice(existingIndex, 1);

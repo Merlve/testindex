@@ -152,7 +152,11 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     try {
       const res = await axios.post('/api/watched/toggle', {
         name: item.name || item.title || '',
-        parentPath: parentPath
+        parentPath: parentPath,
+        showName: item.name || item.title || '',
+        showPath: parentPath ? `${parentPath}/${item.name}` : item.name,
+        tmdbData: tmdb,
+        tmdbId: tmdb?.id
       }, { headers: { Authorization: token, 'x-user': user } });
       if (res.data?.success) {
         queryClient.setQueryData(['watched-list', user], res.data.watched || []);
