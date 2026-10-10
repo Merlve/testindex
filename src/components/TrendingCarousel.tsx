@@ -78,6 +78,24 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
     ));
   }, [trendingItems]);
 
+  // Restore scroll position
+  useEffect(() => {
+    if (scrollRef.current) {
+      const savedScroll = sessionStorage.getItem('trendingScroll');
+      if (savedScroll) {
+        const val = parseInt(savedScroll, 10);
+        scrollRef.current.scrollLeft = val;
+        requestAnimationFrame(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        });
+      }
+    }
+  }, [trendingItems]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    sessionStorage.setItem('trendingScroll', e.currentTarget.scrollLeft.toString());
+  };
+
   if (loading || trendingItems.length === 0) {
     return null; // Don't show anything if no trending matches or still loading
   }
@@ -108,7 +126,11 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
           </button>
         </div>
       </div>
-      <div ref={scrollRef} className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+      <div 
+        ref={scrollRef} 
+        onScroll={handleScroll}
+        className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide"
+      >
          {renderedItems}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { Link } from 'react-router';
@@ -10,7 +10,7 @@ export default function RecentlyAddedCarousel() {
   const { user, token } = useAuth();
   const isGuest = user === 'guest';
   const scrollRef = useRef<HTMLDivElement>(null);
-  
+
   const fetchRecentlyAdded = async () => {
     const res = await axios.get('/api/jellyfin/recently-added', { headers: { Authorization: token } });
     if (res.data?.success) {
@@ -39,6 +39,24 @@ export default function RecentlyAddedCarousel() {
       return undefined;
     }
   });
+
+  // Restore scroll position
+  useEffect(() => {
+    if (scrollRef.current) {
+      const savedScroll = sessionStorage.getItem('recentlyAddedScroll');
+      if (savedScroll) {
+        const val = parseInt(savedScroll, 10);
+        scrollRef.current.scrollLeft = val;
+        requestAnimationFrame(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        });
+      }
+    }
+  }, [items]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    sessionStorage.setItem('recentlyAddedScroll', e.currentTarget.scrollLeft.toString());
+  };
 
   const renderedItems = useMemo(() => {
     if (items.length > 0) {
@@ -115,6 +133,7 @@ export default function RecentlyAddedCarousel() {
       <div className="relative rounded-2xl overflow-hidden">
         <div 
           ref={scrollRef}
+          onScroll={handleScroll}
           className={`flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide ${
             isGuest ? 'filter blur-[7px] sm:blur-[9px] pointer-events-none select-none opacity-45 dark:opacity-35' : ''
           }`}

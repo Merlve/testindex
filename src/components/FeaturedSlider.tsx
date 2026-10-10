@@ -66,6 +66,8 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
         coverflowEffect={COVERFLOW_EFFECT}
         breakpoints={BREAKPOINTS}
         modules={MODULES}
+        initialSlide={parseInt(sessionStorage.getItem('featuredSliderIndex') || '0', 10)}
+        onSlideChange={(swiper) => sessionStorage.setItem('featuredSliderIndex', swiper.activeIndex.toString())}
         className="w-full h-[240px] sm:h-[340px] md:h-[380px] transform-gpu"
       >
         {renderedSlides}

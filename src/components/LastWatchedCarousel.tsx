@@ -312,6 +312,24 @@ export default function LastWatchedCarousel() {
     return uniqueList;
   }, [watchedList, dismissedSeries]);
 
+  // Restore scroll position
+  useEffect(() => {
+    if (scrollRef.current) {
+      const savedScroll = sessionStorage.getItem('lastWatchedScroll');
+      if (savedScroll) {
+        const val = parseInt(savedScroll, 10);
+        scrollRef.current.scrollLeft = val;
+        requestAnimationFrame(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        });
+      }
+    }
+  }, [recentWatched]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    sessionStorage.setItem('lastWatchedScroll', e.currentTarget.scrollLeft.toString());
+  };
+
   if (!recentWatched || recentWatched.length === 0) return null;
 
   return (
@@ -337,7 +355,11 @@ export default function LastWatchedCarousel() {
           </button>
         </div>
       </div>
-      <div ref={scrollRef} className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide">
+      <div 
+        ref={scrollRef} 
+        onScroll={handleScroll}
+        className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide"
+      >
         {recentWatched.map((item, i) => (
           <LastWatchedCard key={item.name || i} item={item} onDismiss={handleDismissSeries} />
         ))}

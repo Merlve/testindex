@@ -115,7 +115,11 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     if (scrollRef.current) {
       const savedScroll = sessionStorage.getItem('digitalReleasesScroll');
       if (savedScroll) {
-        scrollRef.current.scrollLeft = parseInt(savedScroll, 10);
+        const val = parseInt(savedScroll, 10);
+        scrollRef.current.scrollLeft = val;
+        requestAnimationFrame(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        });
       }
     }
   }, [data.items]); // Run when items load
