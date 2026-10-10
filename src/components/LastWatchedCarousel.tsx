@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, memo, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { X, Film } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { parseMediaName } from '../utils/nameParser';
@@ -138,8 +138,6 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
     });
   };
 
-  if (!backdrop) return null; // Only show items with backdrops
-
   return (
     <Link 
       to={targetUrl}
@@ -155,36 +153,44 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
       onFocus={handlePrefetch}
       className="flex-none w-64 md:w-80 aspect-video bg-black/5 dark:bg-white/5 rounded-2xl overflow-hidden isolate relative group block"
     >
-        <div className="absolute inset-0 w-full h-full overflow-hidden">
-          {!imgLoaded && (
-            <img 
-              src={tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w300${tmdb.backdrop_path}` : backdrop || ''} 
-              className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100" 
-              alt="" 
-              aria-hidden="true" 
-            />
+        <div className="absolute inset-0 w-full h-full overflow-hidden bg-gradient-to-br from-[#1a102f] via-[#101018] to-black">
+          {backdrop ? (
+            <>
+              {!imgLoaded && (
+                <img 
+                  src={tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w300${tmdb.backdrop_path}` : backdrop || ''} 
+                  className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100" 
+                  alt="" 
+                  aria-hidden="true" 
+                />
+              )}
+              <img 
+                ref={(el) => {
+                  imgRef.current = el;
+                  if (el && el.complete && el.naturalWidth > 0 && !imgLoaded) {
+                    markImageLoaded(backdrop);
+                    setImgLoaded(true);
+                  }
+                }}
+                src={backdrop} 
+                onLoad={() => {
+                  markImageLoaded(backdrop);
+                  setImgLoaded(true);
+                }}
+                className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
+                  imgLoaded 
+                    ? 'opacity-100' 
+                    : 'opacity-0'
+                }`} 
+                alt={title} 
+                loading="lazy" 
+              />
+            </>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-950/60 via-zinc-900 to-black">
+              <Film className="w-12 h-12 text-purple-400/20 group-hover:scale-110 transition-transform duration-300" />
+            </div>
           )}
-          <img 
-            ref={(el) => {
-              imgRef.current = el;
-              if (el && el.complete && el.naturalWidth > 0 && !imgLoaded) {
-                markImageLoaded(backdrop);
-                setImgLoaded(true);
-              }
-            }}
-            src={backdrop} 
-            onLoad={() => {
-              markImageLoaded(backdrop);
-              setImgLoaded(true);
-            }}
-            className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
-              imgLoaded 
-                ? 'opacity-100' 
-                : 'opacity-0'
-            }`} 
-            alt={title} 
-            loading="lazy" 
-          />
         </div>
 
         {/* Gradient Overlay for Logo */}
@@ -246,7 +252,7 @@ export default function LastWatchedCarousel() {
       return Array.isArray(res.data) ? res.data : (res.data?.watched || []);
     },
     enabled: !!user && !!token,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
   });
 
   const recentWatched = useMemo(() => {
@@ -264,30 +270,41 @@ export default function LastWatchedCarousel() {
       let preselectSeason: string | undefined = undefined;
       
       if (isVideo) {
+          const parts = parentClean.split('/').filter(Boolean);
+          const isCategoryRoot = parts.length <= 2;
           const seasonMatch = parentClean.match(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i);
+          
           if (seasonMatch) {
               // If it's an episode in a Season folder (e.g. Season 1, S01), go to the Show root
               targetPath = parentClean.replace(/(?:\/|^)(season\s*\d+|s\d+|series\s*\d+|specials)\s*\/?$/i, '');
-              const parts = targetPath.split('/').filter(Boolean);
-              targetName = parts.length > 0 ? parts[parts.length - 1] : item.name;
+              const sParts = targetPath.split('/').filter(Boolean);
+              targetName = sParts.length > 0 ? sParts[sParts.length - 1] : item.name;
               dedupeKey = targetPath;
               preselectSeason = seasonMatch[1];
-          } else if (parentClean.toLowerCase() === 'home/movies' || parentClean.toLowerCase() === 'home/shows' || parentClean === '') {
-              // Direct video in category root
+          } else if (isCategoryRoot || parentClean === '') {
+              // Direct video in category root (e.g. home/MOVIES, home/ANIME, home/SERIES)
               targetPath = parentClean ? `${parentClean}/${item.name}` : item.name;
               targetName = item.name;
               dedupeKey = targetPath;
           } else {
               // Movie or series inside its own named folder
               targetPath = parentClean;
-              const parts = targetPath.split('/').filter(Boolean);
-              targetName = parts.length > 0 ? parts[parts.length - 1] : item.name;
+              const sParts = targetPath.split('/').filter(Boolean);
+              targetName = sParts.length > 0 ? sParts[sParts.length - 1] : item.name;
               dedupeKey = targetPath;
           }
       } else {
           targetName = item.name;
           targetPath = parentClean ? `${parentClean}/${item.name}` : item.name;
           dedupeKey = targetPath;
+      }
+
+      if (item.showPath) {
+        targetPath = item.showPath.replace(/^\/+/, '');
+        dedupeKey = targetPath;
+      }
+      if (item.showName) {
+        targetName = item.showName;
       }
       
       dedupeKey = dedupeKey.replace(/\/+/g, '/').replace(/\/$/, '').toLowerCase();

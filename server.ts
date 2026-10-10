@@ -1071,29 +1071,103 @@ app.post('/api/watched/toggle', async (req, res) => {
   const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
-  const { name, parentPath, tmdbData, showName, showPath, tmdbId } = req.body;
+  const { name, parentPath, tmdbData, showName, showPath, tmdbId, action } = req.body;
   if (!name || !parentPath) return res.status(400).json({ error: 'Missing name or parentPath' });
 
   const list = await loadUserWatched(user);
+  const cleanParent = String(parentPath).replace(/^\/+/, '').replace(/\/+$/, '');
   
-  const existingIndex = list.findIndex(i => i.name === name && i.parentPath === parentPath);
+  const existingIndex = list.findIndex(i => 
+    i.name === name && 
+    String(i.parentPath || '').replace(/^\/+/, '').replace(/\/+$/, '') === cleanParent
+  );
   
-  if (existingIndex >= 0) {
+  if (action === 'record') {
+    const watchedItem = { 
+      name, 
+      parentPath: cleanParent, 
+      timestamp: Date.now(),
+      ...(tmdbData ? { tmdbData } : {}),
+      ...(showName ? { showName } : {}),
+      ...(showPath ? { showPath: String(showPath).replace(/^\/+/, '') } : {}),
+      ...(tmdbId ? { tmdbId } : {})
+    };
+    if (existingIndex >= 0) {
+      const existing = list[existingIndex];
+      list.splice(existingIndex, 1);
+      list.push({
+        ...existing,
+        ...watchedItem,
+        tmdbData: tmdbData || existing.tmdbData,
+        showName: showName || existing.showName,
+        showPath: showPath ? String(showPath).replace(/^\/+/, '') : existing.showPath,
+        tmdbId: tmdbId || existing.tmdbId,
+        timestamp: Date.now()
+      });
+    } else {
+      list.push(watchedItem);
+    }
+  } else if (existingIndex >= 0) {
     list.splice(existingIndex, 1);
   } else {
     list.push({ 
       name, 
-      parentPath, 
+      parentPath: cleanParent, 
       timestamp: Date.now(),
       ...(tmdbData ? { tmdbData } : {}),
       ...(showName ? { showName } : {}),
-      ...(showPath ? { showPath } : {}),
+      ...(showPath ? { showPath: String(showPath).replace(/^\/+/, '') } : {}),
       ...(tmdbId ? { tmdbId } : {})
     });
   }
   
   await saveUserWatched(user, list);
-  res.json({ success: true, watched: list, added: existingIndex < 0 });
+  res.json({ success: true, watched: list, added: existingIndex < 0 || action === 'record' });
+});
+
+app.post('/api/watched/record', async (req, res) => {
+  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const { name, parentPath, tmdbData, showName, showPath, tmdbId } = req.body;
+  if (!name || !parentPath) return res.status(400).json({ error: 'Missing name or parentPath' });
+
+  const list = await loadUserWatched(user);
+  const cleanParent = String(parentPath).replace(/^\/+/, '').replace(/\/+$/, '');
+  
+  const existingIndex = list.findIndex(i => 
+    i.name === name && 
+    String(i.parentPath || '').replace(/^\/+/, '').replace(/\/+$/, '') === cleanParent
+  );
+  
+  const watchedItem = { 
+    name, 
+    parentPath: cleanParent, 
+    timestamp: Date.now(),
+    ...(tmdbData ? { tmdbData } : {}),
+    ...(showName ? { showName } : {}),
+    ...(showPath ? { showPath: String(showPath).replace(/^\/+/, '') } : {}),
+    ...(tmdbId ? { tmdbId } : {})
+  };
+
+  if (existingIndex >= 0) {
+    const existing = list[existingIndex];
+    list.splice(existingIndex, 1);
+    list.push({
+      ...existing,
+      ...watchedItem,
+      tmdbData: tmdbData || existing.tmdbData,
+      showName: showName || existing.showName,
+      showPath: showPath ? String(showPath).replace(/^\/+/, '') : existing.showPath,
+      tmdbId: tmdbId || existing.tmdbId,
+      timestamp: Date.now()
+    });
+  } else {
+    list.push(watchedItem);
+  }
+  
+  await saveUserWatched(user, list);
+  res.json({ success: true, watched: list });
 });
 
 app.post('/api/watched/bulk-toggle', async (req, res) => {

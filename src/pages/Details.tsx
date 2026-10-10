@@ -222,7 +222,7 @@ function IntentPlayerModal({
                     type="button"
                     onClick={() => {
                       if (url) {
-                        onExternalPlay(); onPlayWeb(url);
+                        onPlayWeb(url);
                         onClose();
                       }
                     }}
@@ -269,7 +269,7 @@ function IntentPlayerModal({
                     type="button"
                     onClick={() => {
                       if (url) {
-                        onExternalPlay(); onPlayWeb(url);
+                        onPlayWeb(url);
                         onClose();
                       }
                     }}
@@ -303,7 +303,7 @@ function IntentPlayerModal({
                     type="button"
                     onClick={() => {
                       if (url) {
-                        onExternalPlay(); onPlayWeb(url);
+                        onPlayWeb(url);
                         onClose();
                       }
                     }}
@@ -1449,6 +1449,56 @@ export default function Details() {
     }
   };
 
+  // Record that a media item was streamed / played
+  const recordWatched = async (itemName: string, itemPath: string, tmdbEpisode?: any) => {
+    if (!user || user === 'guest') return;
+
+    let resolvedShowName = name;
+    let resolvedShowPath = actualFolderOpenlistPath;
+
+    const isSeasonFolder = /^(season\s*\d+|s\d+|series\s*\d+|specials)$/i.test(name);
+    if (isSeasonFolder && pathParts.length >= 3) {
+      resolvedShowName = pathParts[pathParts.length - 2];
+      resolvedShowPath = pathParts.slice(0, pathParts.length - 1).join('/');
+    }
+
+    if (tmdb?.name || tmdb?.title) {
+      resolvedShowName = tmdb.name || tmdb.title;
+    }
+
+    const cleanItemPath = (itemPath || '').replace(/^\/+/, '');
+    const cleanShowPath = (resolvedShowPath || '').replace(/^\/+/, '');
+
+    const recordPayload = {
+      name: itemName,
+      parentPath: cleanItemPath,
+      showName: resolvedShowName,
+      showPath: cleanShowPath,
+      tmdbData: tmdb,
+      tmdbId: tmdb?.id
+    };
+
+    setWatchedItems(prev => {
+      const filtered = prev.filter(i => !(i.name === itemName && (i.parentPath || '').replace(/^\/+/, '') === cleanItemPath));
+      return [...filtered, {
+        ...recordPayload,
+        timestamp: Date.now()
+      }];
+    });
+
+    try {
+      const res = await axios.post('/api/watched/record', recordPayload, { 
+        headers: { Authorization: token, 'x-user': user } 
+      });
+      if (res.data?.success) {
+        queryClient.setQueryData(['watched-list', user], res.data.watched || []);
+        queryClient.invalidateQueries({ queryKey: ['watched-list', user] });
+      }
+    } catch (e) {
+      console.error('Failed to record watched status', e);
+    }
+  };
+
   // Toggle Watched Status for a File
   const toggleWatched = async (itemName: string, itemPath: string) => {
     if (user === 'guest') {
@@ -1456,16 +1506,32 @@ export default function Details() {
       setTimeout(() => setToast(''), 3000);
       return;
     }
+
+    let resolvedShowName = name;
+    let resolvedShowPath = actualFolderOpenlistPath;
+
+    const isSeasonFolder = /^(season\s*\d+|s\d+|series\s*\d+|specials)$/i.test(name);
+    if (isSeasonFolder && pathParts.length >= 3) {
+      resolvedShowName = pathParts[pathParts.length - 2];
+      resolvedShowPath = pathParts.slice(0, pathParts.length - 1).join('/');
+    }
+
+    if (tmdb?.name || tmdb?.title) {
+      resolvedShowName = tmdb.name || tmdb.title;
+    }
+
+    const cleanItemPath = (itemPath || '').replace(/^\/+/, '');
+    const cleanShowPath = (resolvedShowPath || '').replace(/^\/+/, '');
     
-    const isWatched = watchedItems.some(i => i.name === itemName && i.parentPath === itemPath);
+    const isWatched = watchedItems.some(i => i.name === itemName && (i.parentPath || '').replace(/^\/+/, '') === cleanItemPath);
     if (isWatched) {
-      setWatchedItems(prev => prev.filter(i => !(i.name === itemName && i.parentPath === itemPath)));
+      setWatchedItems(prev => prev.filter(i => !(i.name === itemName && (i.parentPath || '').replace(/^\/+/, '') === cleanItemPath)));
     } else {
       setWatchedItems(prev => [...prev, { 
         name: itemName, 
-        parentPath: itemPath,
-        showName: name,
-        showPath: actualFolderOpenlistPath,
+        parentPath: cleanItemPath, 
+        showName: resolvedShowName,
+        showPath: cleanShowPath,
         tmdbData: tmdb,
         tmdbId: tmdb?.id
       }]);
@@ -1474,12 +1540,12 @@ export default function Details() {
     try {
       const res = await axios.post('/api/watched/toggle', { 
         name: itemName, 
-        parentPath: itemPath,
-        showName: name,
-        showPath: actualFolderOpenlistPath,
+        parentPath: cleanItemPath, 
+        showName: resolvedShowName,
+        showPath: cleanShowPath,
         tmdbData: tmdb,
         tmdbId: tmdb?.id
-      }, { headers: { 'x-user': user } });
+      }, { headers: { Authorization: token, 'x-user': user } });
       if (res.data?.success) {
         queryClient.setQueryData(['watched-list', user], res.data.watched || []);
         queryClient.invalidateQueries({ queryKey: ['watched-list', user] });
@@ -2467,16 +2533,10 @@ export default function Details() {
             onPlayWeb={(url) => { 
               setPlayingUrl(url); 
               setPlayingItemData(intentModalData); 
-              const isWatched = watchedItems.some(i => i.name === intentModalData.item.name && i.parentPath === intentModalData.path);
-              if (!isWatched) {
-                toggleWatched(intentModalData.item.name, intentModalData.path);
-              }
+              recordWatched(intentModalData.item.name, intentModalData.path, intentModalData.tmdbEpisode);
             }}
             onExternalPlay={() => {
-              const isWatched = watchedItems.some(i => i.name === intentModalData.item.name && i.parentPath === intentModalData.path);
-              if (!isWatched) {
-                toggleWatched(intentModalData.item.name, intentModalData.path);
-              }
+              recordWatched(intentModalData.item.name, intentModalData.path, intentModalData.tmdbEpisode);
             }}
           />
         )}
