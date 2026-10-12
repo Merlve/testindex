@@ -68,16 +68,23 @@ export default function GenresCarousel() {
     ));
   }, [genres, navigate]);
 
-  // Restore scroll position
+  // Restore scroll position with multi-pass to guarantee layout stability
   useEffect(() => {
     if (scrollRef.current) {
       const savedScroll = sessionStorage.getItem('genresScroll');
       if (savedScroll) {
         const val = parseInt(savedScroll, 10);
         scrollRef.current.scrollLeft = val;
-        requestAnimationFrame(() => {
+        const rafId = requestAnimationFrame(() => {
           if (scrollRef.current) scrollRef.current.scrollLeft = val;
         });
+        const timerId = setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        }, 60);
+        return () => {
+          cancelAnimationFrame(rafId);
+          clearTimeout(timerId);
+        };
       }
     }
   }, [genres]);
@@ -118,7 +125,7 @@ export default function GenresCarousel() {
       <div 
         ref={scrollRef} 
         onScroll={handleScroll}
-        className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide"
+        className="flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain"
       >
         {renderedItems}
       </div>

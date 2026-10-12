@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, memo, useEffect } from 'react';
+import { useState, useMemo, memo, useEffect, useRef } from 'react';
 import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, Film } from 'lucide-react';
@@ -260,6 +260,9 @@ export default function LastWatchedCarousel() {
     const seen = new Set<string>();
     const uniqueList = [];
 
+    const isGenericCategory = (str: string) => 
+      ['movies', 'series', 'shows', 'anime', 'kdrama', 'adrama', 'tv', 'home'].includes((str || '').toLowerCase().trim());
+
     for (const item of reversed) {
       const parentClean = (item.parentPath || '').replace(/^\/+/, '');
       const isVideo = /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i.test(item.name || '');
@@ -299,19 +302,27 @@ export default function LastWatchedCarousel() {
           dedupeKey = targetPath;
       }
 
+      // If showPath is provided, only use it for grouping if it's deeper than a generic category root (e.g. home/SERIES/ShowName)
       if (item.showPath) {
-        targetPath = item.showPath.replace(/^\/+/, '');
-        dedupeKey = targetPath;
+        const cleanShow = item.showPath.replace(/^\/+/, '');
+        const showParts = cleanShow.split('/').filter(Boolean);
+        if (showParts.length > 2) {
+          targetPath = cleanShow;
+          dedupeKey = targetPath;
+        }
       }
-      if (item.showName) {
+
+      if (item.showName && !isGenericCategory(item.showName)) {
         targetName = item.showName;
       }
       
       dedupeKey = dedupeKey.replace(/\/+/g, '/').replace(/\/$/, '').toLowerCase();
 
-      // Skip if this series was dismissed and no newer episodes have been watched since
-      if (dismissedSeries[dedupeKey] && (!item.timestamp || item.timestamp <= dismissedSeries[dedupeKey])) {
+      // Only skip if explicitly dismissed by user AND no newer playback has occurred
+      if (dismissedSeries[dedupeKey] && !isGenericCategory(dedupeKey)) {
+        if (item.timestamp && item.timestamp <= dismissedSeries[dedupeKey]) {
           continue;
+        }
       }
 
       if (!seen.has(dedupeKey)) {
@@ -319,8 +330,8 @@ export default function LastWatchedCarousel() {
         uniqueList.push({ 
           ...item, 
           _dedupeKey: dedupeKey,
-          _targetName: item.showName || (item.tmdbData?.title || item.tmdbData?.name) || targetName,
-          _targetPath: item.showPath || targetPath,
+          _targetName: (item.tmdbData?.title || item.tmdbData?.name) || (item.showName && !isGenericCategory(item.showName) ? item.showName : targetName),
+          _targetPath: (item.showPath && item.showPath.replace(/^\/+/, '').split('/').filter(Boolean).length > 2) ? item.showPath : targetPath,
           _preselectSeason: preselectSeason
         });
       }
@@ -329,16 +340,23 @@ export default function LastWatchedCarousel() {
     return uniqueList;
   }, [watchedList, dismissedSeries]);
 
-  // Restore scroll position
+  // Restore scroll position with multi-pass to guarantee layout stability
   useEffect(() => {
     if (scrollRef.current) {
       const savedScroll = sessionStorage.getItem('lastWatchedScroll');
       if (savedScroll) {
         const val = parseInt(savedScroll, 10);
         scrollRef.current.scrollLeft = val;
-        requestAnimationFrame(() => {
+        const rafId = requestAnimationFrame(() => {
           if (scrollRef.current) scrollRef.current.scrollLeft = val;
         });
+        const timerId = setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        }, 60);
+        return () => {
+          cancelAnimationFrame(rafId);
+          clearTimeout(timerId);
+        };
       }
     }
   }, [recentWatched]);
@@ -375,7 +393,7 @@ export default function LastWatchedCarousel() {
       <div 
         ref={scrollRef} 
         onScroll={handleScroll}
-        className="flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide"
+        className="flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain"
       >
         {recentWatched.map((item, i) => (
           <LastWatchedCard key={item.name || i} item={item} onDismiss={handleDismissSeries} />

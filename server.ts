@@ -712,47 +712,232 @@ async function saveUserRecommendations(user: string, list: any[]) {
   await writeSQLiteJSON(`recommendations_${userKey}`, list);
 }
 
-// Watchlists storage
-async function loadUserWatchlist(user: string) {
-  const userKey = (user || 'guest').toLowerCase().trim();
-  const dbData = await readSQLiteJSON(`watchlist_${userKey}`);
-  if (dbData && Array.isArray(dbData)) return dbData;
+// Watchlists storage helpers
+function normalizeWatchlistPath(p: string | null | undefined): string {
+  if (!p || typeof p !== 'string') return '';
+  try {
+    p = decodeURIComponent(p);
+  } catch {}
+  return p
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/^home\//i, '')
+    .toLowerCase()
+    .trim();
+}
 
-  const filePaths = [
-    path.join(process.cwd(), 'data', 'watchlists', `${userKey}.json`),
-    path.join(process.cwd(), 'watchlists', `${userKey}.json`)
-  ];
-  for (const fp of filePaths) {
-    if (fs.existsSync(fp)) {
-      try {
-        const raw = fs.readFileSync(fp, 'utf8').trim();
-        if (raw) {
-          const list = JSON.parse(raw);
-          if (Array.isArray(list)) {
-            await writeSQLiteJSON(`watchlist_${userKey}`, list);
-            return list;
-          }
-        }
-      } catch(e) {}
+function cleanWatchlistTitle(name: string | null | undefined): string {
+  if (!name || typeof name !== 'string') return '';
+  try {
+    name = decodeURIComponent(name);
+  } catch {}
+  return name
+    .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i, '')
+    .replace(/[._\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
+
+function isWatchlistMatch(a: any, b: any): boolean {
+  if (!a || !b) return false;
+
+  // 1. Match by TMDb ID if present on both
+  const aTmdbId = a.tmdbData?.id || a.tmdb?.id || a.item?.tmdbData?.id || a.item?.tmdb?.id || a.id;
+  const bTmdbId = b.tmdbData?.id || b.tmdb?.id || b.item?.tmdbData?.id || b.item?.tmdb?.id || b.id;
+  if (aTmdbId && bTmdbId && String(aTmdbId) === String(bTmdbId)) {
+    return true;
+  }
+
+  const aName = a.item?.name || a.name || '';
+  const aParent = a.parentPath || a.item?.parent || a.parent || '';
+  const aRawPath = a.item?.path || a.path || (aParent ? `${aParent}/${aName}` : aName);
+  const aNormPath = normalizeWatchlistPath(aRawPath);
+
+  const bName = b.item?.name || b.name || '';
+  const bParent = b.parentPath || b.item?.parent || b.parent || '';
+  const bRawPath = b.item?.path || b.path || (bParent ? `${bParent}/${bName}` : bName);
+  const bNormPath = normalizeWatchlistPath(bRawPath);
+
+  // 2. Full normalized path exact match
+  if (aNormPath && bNormPath && aNormPath === bNormPath) {
+    return true;
+  }
+
+  // 3. Suffix path match (e.g. movies/animals.2026 vs home/movies/animals.2026)
+  if (aNormPath && bNormPath) {
+    if (aNormPath.endsWith('/' + bNormPath) || bNormPath.endsWith('/' + aNormPath)) {
+      return true;
     }
   }
 
-  return [];
+  // 4. File / folder title matching
+  if (aName && bName) {
+    const aClean = cleanWatchlistTitle(aName);
+    const bClean = cleanWatchlistTitle(bName);
+
+    if (aClean && bClean && aClean === bClean) {
+      const aNormParent = normalizeWatchlistPath(aParent);
+      const bNormParent = normalizeWatchlistPath(bParent);
+      if (!aNormParent || !bNormParent) {
+        return true;
+      }
+      if (aNormParent === bNormParent || aNormParent.endsWith(bNormParent) || bNormParent.endsWith(aNormParent)) {
+        return true;
+      }
+    }
+  }
+
+  // 5. Raw name exact match (case-insensitive)
+  if (aName && bName && aName.toLowerCase().trim() === bName.toLowerCase().trim()) {
+    const aNormParent = normalizeWatchlistPath(aParent);
+    const bNormParent = normalizeWatchlistPath(bParent);
+    if (!aNormParent || !bNormParent || aNormParent === bNormParent) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isWatchlistedEntry(entry: any): boolean {
+  if (!entry || typeof entry !== 'object') return false;
+
+  // Explicit unmark / removal flags
+  if (entry.watchlisted === false) return false;
+  if (entry.isWatchlisted === false) return false;
+  if (entry.inWatchlist === false) return false;
+  if (entry.unmarked === true) return false;
+  if (entry.removed === true) return false;
+  if (entry.deleted === true) return false;
+  if (entry.status === 'unmarked' || entry.status === 'removed' || entry.status === 'deleted') return false;
+
+  // Check nested item if present
+  if (entry.item && typeof entry.item === 'object') {
+    if (entry.item.watchlisted === false) return false;
+    if (entry.item.isWatchlisted === false) return false;
+    if (entry.item.inWatchlist === false) return false;
+    if (entry.item.unmarked === true) return false;
+    if (entry.item.removed === true) return false;
+    if (entry.item.deleted === true) return false;
+  }
+
+  // Must have some valid identifier
+  const name = entry.item?.name || entry.name;
+  const itemPath = entry.item?.path || entry.path || entry.parentPath;
+  const tmdbId = entry.tmdbData?.id || entry.tmdb?.id || entry.item?.tmdbData?.id || entry.item?.tmdb?.id;
+  if (!name && !itemPath && !tmdbId) return false;
+
+  return true;
+}
+
+// Watchlists storage
+async function loadUserWatchlist(user: string) {
+  const userKey = (user || 'guest').toLowerCase().trim();
+  let dbData = await readSQLiteJSON(`watchlist_${userKey}`);
+  let list: any[] = [];
+  if (dbData && Array.isArray(dbData)) {
+    list = dbData;
+  } else {
+    const filePaths = [
+      path.join(process.cwd(), 'data', 'watchlists', `${userKey}.json`),
+      path.join(process.cwd(), 'watchlists', `${userKey}.json`)
+    ];
+    for (const fp of filePaths) {
+      if (fs.existsSync(fp)) {
+        try {
+          const raw = fs.readFileSync(fp, 'utf8').trim();
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              list = parsed;
+              break;
+            }
+          }
+        } catch(e) {}
+      }
+    }
+  }
+
+  let modified = false;
+  const baseTime = Date.now();
+  const cleaned: any[] = [];
+
+  for (let idx = 0; idx < list.length; idx++) {
+    const entry = list[idx];
+    if (!isWatchlistedEntry(entry)) {
+      modified = true;
+      continue;
+    }
+
+    if (!entry.addedAt && !entry.timestamp) {
+      entry.addedAt = baseTime - (list.length - idx) * 3600000;
+      modified = true;
+    }
+
+    // Check for duplicate already in cleaned
+    const existingIdx = cleaned.findIndex(c => isWatchlistMatch(c, entry));
+    if (existingIdx >= 0) {
+      modified = true;
+      cleaned[existingIdx] = {
+        ...entry,
+        ...cleaned[existingIdx],
+        tmdbData: cleaned[existingIdx].tmdbData || entry.tmdbData,
+        addedAt: cleaned[existingIdx].addedAt || entry.addedAt || Date.now()
+      };
+    } else {
+      cleaned.push(entry);
+    }
+  }
+
+  if (modified || cleaned.length !== list.length) {
+    await writeSQLiteJSON(`watchlist_${userKey}`, cleaned);
+    try {
+      const dataDir = path.join(process.cwd(), 'data', 'watchlists');
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      fs.writeFileSync(path.join(dataDir, `${userKey}.json`), JSON.stringify(cleaned, null, 2), 'utf8');
+
+      const legacyDir = path.join(process.cwd(), 'watchlists');
+      if (!fs.existsSync(legacyDir)) fs.mkdirSync(legacyDir, { recursive: true });
+      fs.writeFileSync(path.join(legacyDir, `${userKey}.json`), JSON.stringify(cleaned, null, 2), 'utf8');
+    } catch(e) {}
+  }
+
+  return cleaned;
 }
 
 async function saveUserWatchlist(user: string, list: any[]) {
   const userKey = (user || 'guest').toLowerCase().trim();
-  await writeSQLiteJSON(`watchlist_${userKey}`, list);
+  const cleaned: any[] = [];
+
+  for (const entry of list) {
+    if (!isWatchlistedEntry(entry)) continue;
+    const existingIdx = cleaned.findIndex(c => isWatchlistMatch(c, entry));
+    if (existingIdx >= 0) {
+      cleaned[existingIdx] = {
+        ...entry,
+        ...cleaned[existingIdx],
+        tmdbData: cleaned[existingIdx].tmdbData || entry.tmdbData,
+        addedAt: cleaned[existingIdx].addedAt || entry.addedAt || Date.now()
+      };
+    } else {
+      cleaned.push(entry);
+    }
+  }
+
+  await writeSQLiteJSON(`watchlist_${userKey}`, cleaned);
 
   try {
     const dataDir = path.join(process.cwd(), 'data', 'watchlists');
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(path.join(dataDir, `${userKey}.json`), JSON.stringify(list, null, 2), 'utf8');
+    fs.writeFileSync(path.join(dataDir, `${userKey}.json`), JSON.stringify(cleaned, null, 2), 'utf8');
 
     const legacyDir = path.join(process.cwd(), 'watchlists');
     if (!fs.existsSync(legacyDir)) fs.mkdirSync(legacyDir, { recursive: true });
-    fs.writeFileSync(path.join(legacyDir, `${userKey}.json`), JSON.stringify(list, null, 2), 'utf8');
+    fs.writeFileSync(path.join(legacyDir, `${userKey}.json`), JSON.stringify(cleaned, null, 2), 'utf8');
   } catch(e) {}
+
+  return cleaned;
 }
 
 // Watched storage
@@ -1001,9 +1186,10 @@ app.post('/api/downloads/clear', adminMiddleware, async (req, res) => {
 
 app.get('/api/watchlist', async (req, res) => {
   try {
-    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    const user = getRequestUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    res.json(await loadUserWatchlist(user));
+    const list = await loadUserWatchlist(user);
+    res.json(list.filter(isWatchlistedEntry));
   } catch (err) {
     res.json([]);
   }
@@ -1011,55 +1197,156 @@ app.get('/api/watchlist', async (req, res) => {
 
 app.post('/api/watchlist/toggle', async (req, res) => {
   try {
-    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    const user = getRequestUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     
-    const { item, category, parentPath } = req.body;
-    const list = await loadUserWatchlist(user);
+    const { item, category, parentPath, action, watchlisted, inWatchlist, tmdbData, addedAt } = req.body;
+    let list = await loadUserWatchlist(user);
     
-    const existingIndex = list.findIndex(i => i.item?.name === item?.name && i.parentPath === parentPath);
-    
-    if (existingIndex >= 0) {
-      list.splice(existingIndex, 1);
-    } else {
-      list.push({ item, category, parentPath });
+    const targetObj = {
+      item,
+      name: item?.name || req.body.name,
+      path: item?.path || req.body.path,
+      parentPath: parentPath || item?.parent || '',
+      tmdbData: tmdbData || item?.tmdbData || req.body.tmdb,
+      category: category || item?.category
+    };
+
+    const isExplicitRemove = 
+      action === 'remove' || 
+      action === 'unmark' || 
+      action === 'delete' ||
+      watchlisted === false || 
+      inWatchlist === false ||
+      item?.watchlisted === false ||
+      item?.inWatchlist === false;
+
+    const isExplicitAdd = 
+      action === 'add' || 
+      watchlisted === true || 
+      inWatchlist === true;
+
+    const matchingCount = list.filter(i => isWatchlistMatch(i, targetObj)).length;
+
+    if (isExplicitRemove) {
+      list = list.filter(i => !isWatchlistMatch(i, targetObj));
+      await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: list, added: false, removed: true });
     }
-    
-    await saveUserWatchlist(user, list);
-    res.json({ success: true, watchlist: list, added: existingIndex < 0 });
+
+    if (isExplicitAdd) {
+      if (matchingCount === 0) {
+        list.push({
+          item,
+          category,
+          parentPath,
+          tmdbData,
+          addedAt: addedAt || Date.now()
+        });
+      }
+      await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: list, added: true });
+    }
+
+    // Toggle: if it already matches, remove ALL matching entries. If not, add it.
+    if (matchingCount > 0) {
+      list = list.filter(i => !isWatchlistMatch(i, targetObj));
+      await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: list, added: false, removed: true });
+    } else {
+      list.push({ 
+        item, 
+        category, 
+        parentPath,
+        tmdbData,
+        addedAt: addedAt || Date.now()
+      });
+      await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: list, added: true });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to update watchlist' });
   }
 });
 
+app.post('/api/watchlist/remove', async (req, res) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const { item, parentPath, path: queryPath, name } = req.body;
+    let list = await loadUserWatchlist(user);
+    const targetObj = {
+      item,
+      name: name || item?.name,
+      path: queryPath || item?.path,
+      parentPath: parentPath || item?.parent,
+      tmdbData: req.body.tmdbData || item?.tmdbData
+    };
+    list = list.filter(i => !isWatchlistMatch(i, targetObj));
+    await saveUserWatchlist(user, list);
+    res.json({ success: true, watchlist: list, removed: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to remove from watchlist' });
+  }
+});
+
+app.delete('/api/watchlist', async (req, res) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const { name, parentPath, path: queryPath, tmdbId } = req.query as any;
+    let list = await loadUserWatchlist(user);
+    const targetObj = {
+      name,
+      path: queryPath,
+      parentPath,
+      tmdbData: tmdbId ? { id: Number(tmdbId) } : undefined
+    };
+    list = list.filter(i => !isWatchlistMatch(i, targetObj));
+    await saveUserWatchlist(user, list);
+    res.json({ success: true, watchlist: list, removed: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to remove from watchlist' });
+  }
+});
+
 app.get('/api/watchlist/check', async (req, res) => {
   try {
-    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
-    const { name, parentPath, path: queryPath } = req.query as any;
+    const user = getRequestUser(req);
+    const { name, parentPath, path: queryPath, tmdbId } = req.query as any;
     if (!user) return res.json({ inWatchlist: false });
     const list = await loadUserWatchlist(user);
 
-    if (queryPath) {
-      const cleanTarget = String(queryPath).replace(/^\/+/, '');
-      const exists = list.some(i => {
-        const itemFullPath = (i.parentPath ? `${i.parentPath}/${i.item?.name}` : i.item?.name || '').replace(/^\/+/, '');
-        const cleanParent = (i.parentPath || '').replace(/^\/+/, '');
-        return itemFullPath === cleanTarget || cleanParent === cleanTarget || (i.item?.name && i.item.name === cleanTarget);
-      });
-      return res.json({ inWatchlist: exists });
-    }
+    const targetObj = {
+      name,
+      parentPath,
+      path: queryPath,
+      tmdbData: tmdbId ? { id: Number(tmdbId) } : undefined
+    };
 
-    if (!name || !parentPath) return res.json({ inWatchlist: false });
-    const exists = list.some(i => i.item?.name === name && i.parentPath === parentPath);
+    const exists = list.some(i => isWatchlistMatch(i, targetObj));
     res.json({ inWatchlist: exists });
   } catch (err) {
     res.json({ inWatchlist: false });
   }
 });
 
+function getRequestUser(req: any): string | null {
+  const rawUser = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  if (rawUser && typeof rawUser === 'string' && rawUser.trim()) {
+    return rawUser.trim();
+  }
+  if (req.headers.authorization) {
+    const token = String(req.headers.authorization).replace(/^Bearer\s+/i, '').trim();
+    const session = Object.values(activeUserSessions).find(s => s.token === token);
+    if (session && session.username) return session.username;
+  }
+  return null;
+}
+
 app.get('/api/watched', async (req, res) => {
   try {
-    const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+    const user = getRequestUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     res.json(await loadUserWatched(user));
   } catch (err) {
@@ -1068,7 +1355,7 @@ app.get('/api/watched', async (req, res) => {
 });
 
 app.post('/api/watched/toggle', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  const user = getRequestUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { name, parentPath, tmdbData, showName, showPath, tmdbId, action } = req.body;
@@ -1126,7 +1413,7 @@ app.post('/api/watched/toggle', async (req, res) => {
 });
 
 app.post('/api/watched/record', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  const user = getRequestUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { name, parentPath, tmdbData, showName, showPath, tmdbId } = req.body;
@@ -1171,7 +1458,7 @@ app.post('/api/watched/record', async (req, res) => {
 });
 
 app.post('/api/watched/bulk-toggle', async (req, res) => {
-  const user = Array.isArray(req.headers['x-user']) ? req.headers['x-user'][0] : req.headers['x-user'];
+  const user = getRequestUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   
   const { items } = req.body; // Array of { name, parentPath }
@@ -3516,6 +3803,27 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
           } catch(e) {}
         }
       } catch(e) {}
+    }
+    
+    // If still no results, try opposite media type (e.g. TV show searched as movie or vice versa)
+    if (data.results && data.results.length === 0) {
+      const oppType = searchType === 'tv' ? 'movie' : 'tv';
+      let oppUrl = `https://api.themoviedb.org/3/search/${oppType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
+      if (year && typeof year === 'string') {
+        oppUrl += oppType === 'movie' ? `&primary_release_year=${year}` : `&first_air_date_year=${year}`;
+      }
+      try {
+        const oppRes = await axios.get(oppUrl);
+        if (oppRes.data?.results?.length > 0) {
+          data = oppRes.data;
+        } else {
+          // Try oppType without year
+          const oppNoYearRes = await axios.get(`https://api.themoviedb.org/3/search/${oppType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`);
+          if (oppNoYearRes.data?.results?.length > 0) {
+            data = oppNoYearRes.data;
+          }
+        }
+      } catch (e) {}
     }
     
     if (data.results && data.results.length > 0) {

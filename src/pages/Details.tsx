@@ -96,6 +96,7 @@ function IntentPlayerModal({
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      onExternalPlay();
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
       const textArea = document.createElement("textarea");
@@ -105,6 +106,7 @@ function IntentPlayerModal({
       document.execCommand('copy');
       document.body.removeChild(textArea);
       setCopied(true);
+      onExternalPlay();
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -157,6 +159,25 @@ function IntentPlayerModal({
             <div className={`grid gap-2.5 ${os === 'macos' ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {os === 'ios' && (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (url) {
+                        onPlayWeb(url);
+                        onClose();
+                      }
+                    }}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                      <Play size={14} fill="currentColor" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Play Here</div>
+                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                    </div>
+                  </button>
+
                   <a onClick={() => { onExternalPlay(); }}
                     href={`vlc://${url}`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
@@ -182,16 +203,37 @@ function IntentPlayerModal({
               )}
 
               {os === 'macos' && (
-                <a onClick={() => { onExternalPlay(); }}
-                  href={`iina://weblink?url=${encodeURIComponent(url)}`}
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs flex items-center justify-center shrink-0">IINA</div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold truncate">IINA Player</div>
-                    <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
-                  </div>
-                </a>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (url) {
+                        onPlayWeb(url);
+                        onClose();
+                      }
+                    }}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                      <Play size={14} fill="currentColor" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Play Here</div>
+                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                    </div>
+                  </button>
+
+                  <a onClick={() => { onExternalPlay(); }}
+                    href={`iina://weblink?url=${encodeURIComponent(url)}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs flex items-center justify-center shrink-0">IINA</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">IINA Player</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
+                    </div>
+                  </a>
+                </>
               )}
 
               {os === 'android' && (
@@ -1386,14 +1428,23 @@ export default function Details() {
     const nextState = !inWatchlist;
     setInWatchlist(nextState);
     try {
-      await axios.post('/api/watchlist/toggle', {
+      const res = await axios.post('/api/watchlist/toggle', {
         item: {
           path: actualOpenlistPath,
           name,
           tmdbData: tmdb,
           category
-        }
+        },
+        action: nextState ? 'add' : 'remove',
+        watchlisted: nextState,
+        parentPath: actualOpenlistPath.substring(0, actualOpenlistPath.lastIndexOf('/')) || undefined,
+        category,
+        tmdbData: tmdb
       }, { headers: { 'x-user': user } });
+      if (res.data?.watchlist) {
+        queryClient.setQueryData(['watchlist', user], res.data.watchlist);
+      }
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
       setToast(nextState ? 'Added to Watchlist' : 'Removed from Watchlist');
       setTimeout(() => setToast(''), 2500);
     } catch (e) {
@@ -1453,6 +1504,9 @@ export default function Details() {
   const recordWatched = async (itemName: string, itemPath: string, tmdbEpisode?: any) => {
     if (!user || user === 'guest') return;
 
+    const isGenericCat = (s: string) => ['movies', 'series', 'shows', 'anime', 'kdrama', 'adrama', 'tv', 'home'].includes((s || '').toLowerCase().trim());
+
+    const effectiveTmdb = tmdb || location.state?.tmdbData;
     let resolvedShowName = name;
     let resolvedShowPath = actualFolderOpenlistPath;
 
@@ -1462,20 +1516,30 @@ export default function Details() {
       resolvedShowPath = pathParts.slice(0, pathParts.length - 1).join('/');
     }
 
-    if (tmdb?.name || tmdb?.title) {
-      resolvedShowName = tmdb.name || tmdb.title;
+    if (effectiveTmdb?.custom_title || effectiveTmdb?.title || effectiveTmdb?.name) {
+      resolvedShowName = effectiveTmdb.custom_title || effectiveTmdb.title || effectiveTmdb.name;
     }
 
     const cleanItemPath = (itemPath || '').replace(/^\/+/, '');
-    const cleanShowPath = (resolvedShowPath || '').replace(/^\/+/, '');
+    let cleanShowPath = (resolvedShowPath || '').replace(/^\/+/, '');
+
+    // For direct video files in category root (/home/MOVIES/Movie.mkv), preserve the movie item path
+    const showParts = cleanShowPath.split('/').filter(Boolean);
+    if (showParts.length <= 2) {
+      cleanShowPath = cleanItemPath.endsWith(itemName) ? cleanItemPath : `${cleanItemPath}/${itemName}`;
+    }
+
+    if (isGenericCat(resolvedShowName)) {
+      resolvedShowName = parseMediaName(itemName).cleanName || itemName;
+    }
 
     const recordPayload = {
       name: itemName,
       parentPath: cleanItemPath,
       showName: resolvedShowName,
       showPath: cleanShowPath,
-      tmdbData: tmdb,
-      tmdbId: tmdb?.id
+      tmdbData: effectiveTmdb,
+      tmdbId: effectiveTmdb?.id
     };
 
     setWatchedItems(prev => {
@@ -1507,6 +1571,9 @@ export default function Details() {
       return;
     }
 
+    const isGenericCat = (s: string) => ['movies', 'series', 'shows', 'anime', 'kdrama', 'adrama', 'tv', 'home'].includes((s || '').toLowerCase().trim());
+
+    const effectiveTmdb = tmdb || location.state?.tmdbData;
     let resolvedShowName = name;
     let resolvedShowPath = actualFolderOpenlistPath;
 
@@ -1516,12 +1583,21 @@ export default function Details() {
       resolvedShowPath = pathParts.slice(0, pathParts.length - 1).join('/');
     }
 
-    if (tmdb?.name || tmdb?.title) {
-      resolvedShowName = tmdb.name || tmdb.title;
+    if (effectiveTmdb?.custom_title || effectiveTmdb?.title || effectiveTmdb?.name) {
+      resolvedShowName = effectiveTmdb.custom_title || effectiveTmdb.title || effectiveTmdb.name;
     }
 
     const cleanItemPath = (itemPath || '').replace(/^\/+/, '');
-    const cleanShowPath = (resolvedShowPath || '').replace(/^\/+/, '');
+    let cleanShowPath = (resolvedShowPath || '').replace(/^\/+/, '');
+
+    const showParts = cleanShowPath.split('/').filter(Boolean);
+    if (showParts.length <= 2) {
+      cleanShowPath = cleanItemPath.endsWith(itemName) ? cleanItemPath : `${cleanItemPath}/${itemName}`;
+    }
+
+    if (isGenericCat(resolvedShowName)) {
+      resolvedShowName = parseMediaName(itemName).cleanName || itemName;
+    }
     
     const isWatched = watchedItems.some(i => i.name === itemName && (i.parentPath || '').replace(/^\/+/, '') === cleanItemPath);
     if (isWatched) {
@@ -1532,8 +1608,9 @@ export default function Details() {
         parentPath: cleanItemPath, 
         showName: resolvedShowName,
         showPath: cleanShowPath,
-        tmdbData: tmdb,
-        tmdbId: tmdb?.id
+        tmdbData: effectiveTmdb,
+        tmdbId: effectiveTmdb?.id,
+        timestamp: Date.now()
       }]);
     }
     

@@ -9,7 +9,6 @@ import { useAuth } from '../context/AuthContext';
 export default function DigitalReleasesCarousel({ categories }: { categories: any[] }) {
   const { user } = useAuth();
   const isGuest = user === 'guest';
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchDigitalReleases = async () => {
     const now = new Date();
@@ -110,19 +109,28 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
     return [];
   }, [data.items, data.tmdbData, isGuest]);
 
-  // Restore scroll position
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Restore scroll position with multi-pass to guarantee layout stability
   useEffect(() => {
     if (scrollRef.current) {
       const savedScroll = sessionStorage.getItem('digitalReleasesScroll');
       if (savedScroll) {
         const val = parseInt(savedScroll, 10);
         scrollRef.current.scrollLeft = val;
-        requestAnimationFrame(() => {
+        const rafId = requestAnimationFrame(() => {
           if (scrollRef.current) scrollRef.current.scrollLeft = val;
         });
+        const timerId = setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        }, 60);
+        return () => {
+          cancelAnimationFrame(rafId);
+          clearTimeout(timerId);
+        };
       }
     }
-  }, [data.items]); // Run when items load
+  }, [data.items]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     sessionStorage.setItem('digitalReleasesScroll', e.currentTarget.scrollLeft.toString());
@@ -174,7 +182,7 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
         <div 
           ref={scrollRef}
           onScroll={handleScroll}
-          className={`flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide ${
+          className={`flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain ${
             isGuest ? 'filter blur-[7px] sm:blur-[9px] pointer-events-none select-none opacity-45 dark:opacity-35' : ''
           }`}
         >

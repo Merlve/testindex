@@ -40,16 +40,23 @@ export default function RecentlyAddedCarousel() {
     }
   });
 
-  // Restore scroll position
+  // Restore scroll position with multi-pass to guarantee layout stability
   useEffect(() => {
     if (scrollRef.current) {
       const savedScroll = sessionStorage.getItem('recentlyAddedScroll');
       if (savedScroll) {
         const val = parseInt(savedScroll, 10);
         scrollRef.current.scrollLeft = val;
-        requestAnimationFrame(() => {
+        const rafId = requestAnimationFrame(() => {
           if (scrollRef.current) scrollRef.current.scrollLeft = val;
         });
+        const timerId = setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = val;
+        }, 60);
+        return () => {
+          cancelAnimationFrame(rafId);
+          clearTimeout(timerId);
+        };
       }
     }
   }, [items]);
@@ -134,7 +141,7 @@ export default function RecentlyAddedCarousel() {
         <div 
           ref={scrollRef}
           onScroll={handleScroll}
-          className={`flex overflow-x-auto gap-4 snap-x snap-mandatory scroll-p-4 pb-2 scrollbar-hide ${
+          className={`flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain ${
             isGuest ? 'filter blur-[7px] sm:blur-[9px] pointer-events-none select-none opacity-45 dark:opacity-35' : ''
           }`}
         >

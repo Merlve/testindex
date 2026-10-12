@@ -2,12 +2,29 @@ import { softRefreshMediaCaches } from '../utils/cacheManager';
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Link } from 'react-router';
 import axios from 'axios';
-import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Cloud } from 'lucide-react';
+import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Cloud, Star, Clock, ChevronRight } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 import { isImageLoaded, markImageLoaded } from '../utils/imageCache';
 import { prefetchItemDetails } from '../utils/detailsPrefetch';
+
+function formatAddedDate(timestamp?: number | string): string {
+  if (!timestamp) return '';
+  const date = new Date(typeof timestamp === 'string' ? timestamp : Number(timestamp));
+  if (isNaN(date.getTime())) return '';
+  
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: string | null, lowResSrc?: string | null, alt: string, className?: string, fallbackText?: string }) => {
   const getCacheBustUrl = (url?: string | null) => {
@@ -73,7 +90,23 @@ const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: s
   );
 };
 
-const ItemCard = function ItemCard({ item, category, parentPath, className, viewMode = 'grid', tmdbData }: { item: any, category: string, parentPath: string, className?: string, viewMode?: 'grid' | 'list', tmdbData?: any }) {
+const ItemCard = function ItemCard({ 
+  item, 
+  category, 
+  parentPath, 
+  className, 
+  viewMode = 'grid', 
+  tmdbData,
+  addedAt 
+}: { 
+  item: any, 
+  category: string, 
+  parentPath: string, 
+  className?: string, 
+  viewMode?: 'grid' | 'list', 
+  tmdbData?: any,
+  addedAt?: number | string 
+}) {
   const [tmdb, setTmdb] = useState<any>(tmdbData || null);
   const { user, token } = useAuth();
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -92,28 +125,6 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     enabled: !!user && user !== 'guest',
   });
 
-  const inWatchlist = watchlistData?.some((i: any) => i.item.name === item.name && i.parentPath === parentPath) || false;
-
-  const handleToggleWatchlist = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (user === 'guest') {
-      alert('Sign up for the website plan to use this feature');
-      return;
-    }
-    try {
-      await axios.post('/api/watchlist/toggle', {
-        item: { name: item.name, is_dir: item.is_dir, parent: parentPath },
-        category,
-        parentPath,
-        tmdbData: tmdb
-      }, { headers: { 'x-user': user } });
-      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
-    } catch (err) {
-      console.error(err);
-      alert('Failed to update watchlist');
-    }
-  };
 
   const { data: watchedList = [] } = useQuery<any[]>({
     queryKey: ['watched-list', user],
@@ -209,15 +220,217 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
   });
 
   const displayTmdb = tmdbData || fetchedTmdb || tmdb;
+
+  const inWatchlist = watchlistData?.some((i: any) => {
+    // TMDb ID match
+    const iTmdbId = i.tmdbData?.id || i.tmdb?.id || i.item?.tmdbData?.id || i.item?.tmdb?.id;
+    const curTmdbId = displayTmdb?.id || tmdb?.id || item.tmdbData?.id || item.tmdb?.id;
+    if (iTmdbId && curTmdbId && String(iTmdbId) === String(curTmdbId)) return true;
+
+    const listName = i.item?.name || i.name || '';
+    const listParent = i.parentPath || i.item?.parent || i.parent || '';
+    const listPath = (i.item?.path || i.path || (listParent ? `${listParent}/${listName}` : listName) || '')
+      .replace(/\\/g, '/')
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/^home\//i, '')
+      .toLowerCase();
+    const currentPath = (item.path || (parentPath ? `${parentPath}/${item.name}` : item.name) || '')
+      .replace(/\\/g, '/')
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/^home\//i, '')
+      .toLowerCase();
+
+    if (listPath && currentPath && listPath === currentPath) return true;
+    if (listPath && currentPath && (listPath.endsWith('/' + currentPath) || currentPath.endsWith('/' + listPath))) return true;
+
+    if (listName && item.name) {
+      const cleanListName = listName.replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i, '').replace(/[._\-]+/g, ' ').toLowerCase().trim();
+      const cleanItemName = item.name.replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|ts|m2ts)$/i, '').replace(/[._\-]+/g, ' ').toLowerCase().trim();
+      if (cleanListName && cleanItemName && cleanListName === cleanItemName) {
+        const normListParent = (listParent || '').replace(/^\/+|\/+$/g, '').replace(/^home\//i, '').toLowerCase();
+        const normParent = (parentPath || '').replace(/^\/+|\/+$/g, '').replace(/^home\//i, '').toLowerCase();
+        if (!normListParent || !normParent || normListParent === normParent) return true;
+      }
+    }
+    return false;
+  }) || false;
+
+  const handleToggleWatchlist = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (user === 'guest') {
+      alert('Sign up for the website plan to use this feature');
+      return;
+    }
+    try {
+      const res = await axios.post('/api/watchlist/toggle', {
+        item: { name: item.name, is_dir: item.is_dir, parent: parentPath, path: item.path || (parentPath ? `${parentPath}/${item.name}` : item.name) },
+        category,
+        parentPath,
+        action: inWatchlist ? 'remove' : 'add',
+        watchlisted: !inWatchlist,
+        tmdbData: tmdb || displayTmdb
+      }, { headers: { 'x-user': user } });
+      if (res.data?.watchlist) {
+        queryClient.setQueryData(['watchlist', user], res.data.watchlist);
+      }
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update watchlist');
+    }
+  };
+
   const currentMetaVer = localStorage.getItem('meta_version') || '1';
 
 
   const sanitizedPath = `${parentPath}/${item.name}`.replace(/\/\//g, '/').replace(/^\//, '');
   const fullPath = `/${sanitizedPath}`;
 
-    const innerContent = (
+  const cleanMedia = parseMediaName(item.name);
+  const displayTitle = item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle || displayTmdb?.title || displayTmdb?.name || cleanMedia.cleanName || item.name;
+  
+  const releaseYear = displayTmdb?.release_date 
+    ? displayTmdb.release_date.substring(0, 4) 
+    : displayTmdb?.first_air_date 
+    ? displayTmdb.first_air_date.substring(0, 4) 
+    : (searchYear || (item.year ? String(item.year) : (cleanMedia.year || '')));
+
+  const renderListContent = (
+    <div className="flex items-center gap-3 sm:gap-4 w-full">
+      {/* Poster Thumbnail */}
+      <div className="w-16 sm:w-20 md:w-24 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate shrink-0 shadow-md">
+        <MoviePoster 
+          src={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}` : null}
+          lowResSrc={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w92${displayTmdb.poster_path}` : null}
+          alt={item.name} 
+          className="absolute inset-0 w-full h-full z-0" 
+          fallbackText={item.name}
+        />
+        {item._digital_release && (item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) ? (
+          <div className="absolute bottom-1 left-1 right-1 px-1 py-0.5 rounded bg-blue-600/95 text-white font-extrabold text-[8px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md truncate">
+            <span className="truncate">{new Date((item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </div>
+        ) : isWatched ? (
+          <div className="absolute bottom-1 left-1 right-1 px-1 py-0.5 rounded bg-purple-600 text-white font-extrabold text-[8px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md truncate">
+            <CheckCircle size={8} className="fill-current text-white flex-shrink-0" />
+            <span className="truncate">Watched</span>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Middle Details Block */}
+      <div className="flex-1 min-w-0 flex flex-col justify-center py-1">
+        <div className="flex items-center gap-2">
+          <h3 className="font-bold text-sm sm:text-base md:text-lg text-black dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+            {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-1.5 align-middle font-bold">REC</span>}
+            {displayTitle}
+          </h3>
+        </div>
+
+        {item._jf?.addedText && (
+          <p className="font-bold text-yellow-500 truncate text-xs mb-1">
+            {item._jf.addedText}
+          </p>
+        )}
+
+        {/* Badges / metadata */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
+          {category && (
+            <span className="px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/20 shrink-0">
+              {category}
+            </span>
+          )}
+
+          {releaseYear && (
+            <span className="px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-medium bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-300 border border-black/5 dark:border-white/5 shrink-0">
+              {releaseYear}
+            </span>
+          )}
+
+          {displayTmdb?.vote_average && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+              <Star size={11} className="fill-amber-400 text-amber-400" />
+              {Number(displayTmdb.vote_average).toFixed(1)}
+            </span>
+          )}
+
+          {addedAt && (
+            <span className="hidden xs:inline-flex items-center gap-1 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">
+              <Clock size={11} className="text-gray-400 shrink-0" />
+              <span>Added {formatAddedDate(addedAt)}</span>
+            </span>
+          )}
+
+          {user === 'admin' && displayTmdb?._synced && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-sky-500/15 text-sky-500 border border-sky-500/20" title="Metadata synced in database (Cached)">
+              <Cloud size={10} className="fill-sky-400/20 text-sky-400" /> Cached
+            </span>
+          )}
+        </div>
+
+        {/* Synopsis Overview */}
+        {displayTmdb?.overview ? (
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 line-clamp-1 sm:line-clamp-2 leading-relaxed max-w-3xl">
+            {displayTmdb.overview}
+          </p>
+        ) : (
+          <p className="text-[11px] sm:text-xs text-gray-400 dark:text-gray-500 mt-1 truncate">
+            {item._rec ? 'Not in local library' : parentPath ? `${parentPath}` : ''}
+          </p>
+        )}
+      </div>
+
+      {/* Right Actions */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-1 sm:ml-3">
+        {/* Watched Toggle */}
+        <button
+          type="button"
+          onClick={handleToggleWatched}
+          className={`p-2 sm:p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${
+            isWatched 
+              ? 'bg-purple-600/15 text-purple-600 dark:text-purple-400 border-purple-500/40 hover:bg-purple-600 hover:text-white' 
+              : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-gray-400 border-black/10 dark:border-white/10 hover:text-black dark:hover:text-white hover:bg-black/10 dark:hover:bg-white/10'
+          }`}
+          title={isWatched ? "Mark as unwatched" : "Mark as watched"}
+        >
+          {isWatched ? <Eye size={16} className="text-purple-500 dark:text-purple-400 fill-purple-400/20" /> : <EyeOff size={16} />}
+        </button>
+
+        {/* Watchlist Toggle */}
+        <button
+          type="button"
+          onClick={handleToggleWatchlist}
+          className={`p-2 sm:p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${
+            inWatchlist 
+              ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/30 hover:bg-purple-700' 
+              : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-gray-400 border-black/10 dark:border-white/10 hover:text-black dark:hover:text-white hover:bg-black/10 dark:hover:bg-white/10'
+          }`}
+          title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+        >
+          {inWatchlist ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+        </button>
+
+        {/* Admin Override */}
+        {item._jf && user === 'admin' && (
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowOverrideModal(true); }}
+            className="p-2 sm:p-2.5 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 hover:bg-purple-600 hover:text-white transition-all cursor-pointer"
+            title="Fix Metadata Override"
+          >
+            <Edit3 size={15} />
+          </button>
+        )}
+
+        <ChevronRight size={18} className="text-gray-400 dark:text-gray-500 group-hover:text-purple-500 group-hover:translate-x-0.5 transition-all hidden md:block" />
+      </div>
+    </div>
+  );
+
+  const renderGridContent = (
     <>
-      <div className={`${viewMode === 'list' ? 'w-16 sm:w-24' : ''} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 ${viewMode === 'grid' ? 'sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98]' : ''} flex-shrink-0`}>
+      <div className="w-full aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98] flex-shrink-0">
         <MoviePoster 
           src={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}` : null}
           lowResSrc={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w92${displayTmdb.poster_path}` : null}
@@ -227,13 +440,13 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
         />
         
         {displayTmdb?.vote_average && (
-          <div className={`absolute top-1 right-1 ${viewMode === 'grid' ? 'sm:top-2 sm:right-2' : ''} px-1 sm:px-1.5 py-0.5 bg-black/85  rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20`}>
+          <div className="absolute top-1 right-1 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 bg-black/85 rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20">
             {Number(displayTmdb.vote_average).toFixed(1)}
           </div>
         )}
         {user === 'admin' && displayTmdb?._synced && (
           <div 
-            className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} ${viewMode === 'grid' ? (displayTmdb?.vote_average ? 'sm:top-2 sm:right-11' : 'sm:top-2 sm:right-2') : ''} p-1 rounded-md bg-black/85  text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
+            className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} sm:top-2 ${displayTmdb?.vote_average ? 'sm:right-11' : 'sm:right-2'} p-1 rounded-md bg-black/85 text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
             title="Metadata synced in database (Cached)"
           >
             <Cloud size={11} className="sm:w-3 sm:h-3 fill-sky-400/20 text-sky-400" />
@@ -241,7 +454,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
         )}
         <button
           onClick={handleToggleWatchlist}
-          className={`absolute top-1 left-1 ${viewMode === 'grid' ? 'sm:top-2 sm:left-2' : ''} p-1 sm:p-1.5 rounded-full bg-black/85  z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+          className={`absolute top-1 left-1 sm:top-2 sm:left-2 p-1 sm:p-1.5 rounded-full bg-black/85 z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
           title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
         >
           {inWatchlist ? <BookmarkCheck size={12} className="sm:w-3.5 sm:h-3.5" /> : <Bookmark size={12} className="sm:w-3.5 sm:h-3.5" />}
@@ -249,7 +462,7 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
 
         <button
           onClick={handleToggleWatched}
-          className={`absolute top-1 left-7 ${viewMode === 'grid' ? 'sm:top-2 sm:left-9' : ''} p-1 sm:p-1.5 rounded-full bg-black/85  z-30 transition-all hover:scale-110 ${isWatched ? 'text-purple-400 bg-purple-950/80 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'text-white/70 hover:text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+          className={`absolute top-1 left-7 sm:top-2 sm:left-9 p-1 sm:p-1.5 rounded-full bg-black/85 z-30 transition-all hover:scale-110 ${isWatched ? 'text-purple-400 bg-purple-950/80 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'text-white/70 hover:text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
           title={isWatched ? "Mark as unwatched" : "Mark as watched"}
         >
           {isWatched ? <Eye size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400 fill-purple-400/20" /> : <EyeOff size={12} className="sm:w-3.5 sm:h-3.5" />}
@@ -260,47 +473,39 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
             <span className="truncate">{new Date((item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
           </div>
         ) : isWatched ? (
-          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600  text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
+          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600 text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
             <CheckCircle size={9} className="fill-current text-white flex-shrink-0" />
             <span className="truncate">Watched</span>
           </div>
         ) : null}
       </div>
-      <div className={viewMode === 'list' ? 'flex flex-col justify-center overflow-hidden pr-2 flex-1' : ''}>
-        <h3 className={`font-semibold truncate text-black dark:text-white ${viewMode === 'list' ? 'text-sm sm:text-base mb-1' : 'text-[11px] sm:text-xs'}`}>
-            {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle">REC</span>}
-            {item.customTitle || displayTmdb?.custom_title || displayTmdb?._customTitle || displayTmdb?.title || displayTmdb?.name || item.name}
+      <div>
+        <h3 className="font-semibold truncate text-black dark:text-white text-[11px] sm:text-xs">
+          {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle font-bold">REC</span>}
+          {displayTitle}
         </h3>
         {item._jf?.addedText && (
-            <p className={`font-bold text-yellow-500 truncate ${viewMode === 'list' ? 'text-xs mb-1' : 'text-[10px] sm:text-xs'}`}>
-                {item._jf.addedText}
-            </p>
-        )}
-        {viewMode === 'list' ? (
-          <>
-            <p className="uppercase tracking-wider font-bold mb-0.5 text-[10px] sm:text-xs text-purple-400">{category}</p>
-            <p className="truncate text-[10px] sm:text-xs text-gray-500">{item._rec ? 'Not in library' : fullPath}</p>
-            {displayTmdb?.overview && (
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-2 hidden sm:-webkit-box sm:block" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{displayTmdb.overview}</p>
-            )}
-          </>
-        ) : (
-          <p className="truncate text-[10px] text-gray-600 dark:text-gray-400">
-             {!item._jf?.addedText && (displayTmdb?.release_date ? displayTmdb.release_date.substring(0, 4) : displayTmdb?.first_air_date ? displayTmdb.first_air_date.substring(0, 4) : '')}
+          <p className="font-bold text-yellow-500 truncate text-[10px] sm:text-xs">
+            {item._jf.addedText}
           </p>
         )}
+        <p className="truncate text-[10px] text-gray-600 dark:text-gray-400">
+          {!item._jf?.addedText && releaseYear}
+        </p>
       </div>
       {item._jf && user === 'admin' && (
-         <button
-            onClick={(e) => { e.preventDefault(); setShowOverrideModal(true); }}
-            className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 p-1.5 rounded-xl bg-purple-500/15 dark:bg-purple-500/20 hover:bg-purple-600 dark:hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white dark:hover:text-white border border-purple-500/30 hover:border-purple-600 shadow-sm  z-30 transition-all hover:scale-110 cursor-pointer"
-            title="Fix Metadata Override"
-         >
-            <Edit3 size={14} />
-         </button>
+        <button
+          onClick={(e) => { e.preventDefault(); setShowOverrideModal(true); }}
+          className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 p-1.5 rounded-xl bg-purple-500/15 dark:bg-purple-500/20 hover:bg-purple-600 dark:hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white dark:hover:text-white border border-purple-500/30 hover:border-purple-600 shadow-sm z-30 transition-all hover:scale-110 cursor-pointer"
+          title="Fix Metadata Override"
+        >
+          <Edit3 size={14} />
+        </button>
       )}
     </>
   );
+
+  const innerContent = viewMode === 'list' ? renderListContent : renderGridContent;
 
   const prefetchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -332,7 +537,9 @@ const ItemCard = function ItemCard({ item, category, parentPath, className, view
     };
   }, []);
 
-  const cardClasses = `snap-start group relative transition-transform duration-300 transform-gpu backface-hidden ${viewMode === 'list' ? 'flex flex-row items-center gap-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full' : `flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`}`;
+  const cardClasses = viewMode === 'list' 
+    ? 'group relative flex flex-row items-center bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-2.5 sm:p-3.5 border border-black/5 dark:border-white/5 hover:border-purple-500/30 transition-all duration-200 w-full cursor-pointer shadow-sm hover:shadow-md'
+    : `snap-start group relative transition-transform duration-300 transform-gpu backface-hidden flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`;
 
   return (
     <>

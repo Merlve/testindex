@@ -265,13 +265,19 @@ export default function Collection() {
   // Add Item to Watchlist
   const handleAddToWatchlist = async (item: CollectionItem) => {
     try {
-      await axios.post('/api/watchlist/toggle', {
+      const res = await axios.post('/api/watchlist/toggle', {
         item: { name: item.name },
         category: item.category || 'Movies',
-        parentPath: item.parentPath || `/home/${item.category || 'Movies'}`
+        parentPath: item.parentPath || `/home/${item.category || 'Movies'}`,
+        action: 'add',
+        watchlisted: true
       }, {
         headers: { Authorization: token, 'x-user': user }
       });
+      if (res.data?.watchlist) {
+        queryClient.setQueryData(['watchlist', user], res.data.watchlist);
+      }
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
       alert(`Added "${item.title || item.name}" to your Watchlist!`);
     } catch (err) {
       console.error('Failed to update watchlist', err);
