@@ -548,7 +548,7 @@ const ItemCard = function ItemCard({
 
   const cardClasses = viewMode === 'list' 
     ? 'group relative flex flex-row items-center bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-2.5 sm:p-3.5 border border-black/5 dark:border-white/5 hover:border-purple-500/30 transition-all duration-200 w-full cursor-pointer shadow-sm hover:shadow-md'
-    : `snap-start group relative transition-transform duration-300 transform-gpu backface-hidden flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`;
+    : `group relative transition-transform duration-300 transform-gpu backface-hidden flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`;
 
   return (
     <>

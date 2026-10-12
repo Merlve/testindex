@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Category from './pages/Category';
 import RecentlyAddedPage from './pages/RecentlyAddedPage';
+import DigitalReleasesPage from './pages/DigitalReleasesPage';
 import Recommendations from "./pages/Recommendations";
 import Details from './pages/Details';
 import Admin from './pages/Admin';
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="genres" element={<GenresList />} />
             <Route path="collections" element={<CollectionsPage />} />
             <Route path="recently-added" element={<RecentlyAddedPage />} />
+            <Route path="digital-releases" element={<DigitalReleasesPage />} />
             <Route path="watchlist" element={<Watchlist />} />
             <Route path="recommendations" element={<Recommendations />} />
             <Route path="profile" element={<Profile />} />

@@ -1,77 +1,21 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
 import { Link } from 'react-router';
 import ItemCard from './ItemCard';
 import { MonitorPlay, Lock, Film } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { fetchDigitalReleases, DigitalReleasesData } from '../services/digitalReleases';
 
-export default function DigitalReleasesCarousel({ categories }: { categories: any[] }) {
+export default function DigitalReleasesCarousel({ categories }: { categories?: any[] }) {
   const { user } = useAuth();
   const isGuest = user === 'guest';
 
-  const fetchDigitalReleases = async () => {
-    const now = new Date();
-    // Get the first and last day of the current month
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const firstDayStr = `${firstDay.getFullYear()}-${pad(firstDay.getMonth() + 1)}-${pad(firstDay.getDate())}`;
-    const lastDayStr = `${lastDay.getFullYear()}-${pad(lastDay.getMonth() + 1)}-${pad(lastDay.getDate())}`;
-
-    const params = new URLSearchParams({
-      gte: firstDayStr,
-      lte: lastDayStr
-    });
-    
-    let results: any[] = [];
-    try {
-      const res = await axios.get(`/api/meta/digital-releases-strict?${params.toString()}`);
-      results = res.data?.results || [];
-    } catch (e) {}
-    const configRes = await axios.get('/api/config').catch(() => null);
-    const digitalReleasePaths = configRes?.data?.digitalReleasePaths || {};
-    
-    const displayItems = results.map((tmdbItem: any) => {
-      const digitalDate = tmdbItem.digital_release_date;
-      const releaseDate = digitalDate || tmdbItem.release_date || tmdbItem.first_air_date || '';
-      const tmdbYear = releaseDate ? releaseDate.substring(0, 4) : '';
-
-      const cleanTitleForPath = (tmdbItem.title || tmdbItem.name || '').replace(/'/g, '').replace(/[^a-zA-Z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
-      const predictedName = `${cleanTitleForPath}.${tmdbYear || now.getFullYear()}`;
-      const manualPath = digitalReleasePaths[tmdbItem.id];
-      const finalName = manualPath ? manualPath.split('/').pop() : predictedName;
-      const finalParent = manualPath ? '/' + manualPath.split('/').slice(0, -1).join('/').replace(/^\//, '') : `/home/MOVIES`;
-
-      return {
-        id: tmdbItem.id,
-        name: finalName,
-        is_dir: true,
-        _rec: false,
-        _digital_release: true,
-        releaseDate: digitalDate || tmdbItem.release_date,
-        digitalReleaseDate: digitalDate,
-        digital_release_date: digitalDate,
-        parentPath: finalParent,
-        openlist_path: manualPath ? `/${manualPath.replace(/^\//, '')}` : undefined
-      };
-    });
-
-    try {
-      localStorage.setItem('digital_releases_cache_v3', JSON.stringify({ items: displayItems, tmdbData: results }));
-    } catch (e) {}
-
-    return { items: displayItems, tmdbData: results };
-  };
-
-  const { data = { items: [], tmdbData: [] }, isLoading: loading } = useQuery({
+  const { data = { items: [], tmdbData: [] }, isLoading: loading } = useQuery<DigitalReleasesData>({
     queryKey: ['digitalReleasesMonth'],
     queryFn: fetchDigitalReleases,
-    enabled: categories.length > 0,
+    enabled: categories ? categories.length > 0 : true,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    
     placeholderData: () => {
       try {
         const cached = localStorage.getItem('digital_releases_cache_v3');
@@ -91,7 +35,7 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
           item={item} 
           category={item.category || "MOVIES"} 
           parentPath={item.parentPath || `/home/MOVIES`} 
-          tmdbData={data.tmdbData[i]} 
+          tmdbData={item.tmdbData || data.tmdbData[i]} 
         />
       ));
     }
@@ -142,39 +86,46 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
 
   return (
     <div className="relative">
-      <div className="flex justify-between items-end mb-2">
+      <div className="flex justify-between items-center mb-2">
         <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
            <MonitorPlay className="text-blue-500" size={20} />
-           Digital Releases {currentMonthName}
+           Releases in {currentMonthName}
         </h3>
-        {isGuest ? (
+        <div className="flex items-center gap-4">
           <Link 
-            to="/login" 
+            to={isGuest ? "/login" : "/digital-releases"} 
             className="text-xs text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors"
           >
-            <Lock size={12} className="text-purple-400" />
-            Sign In
+            {isGuest ? (
+              <>
+                <Lock size={12} className="text-purple-400" />
+                Sign In
+              </>
+            ) : (
+              'View All'
+            )}
           </Link>
-        ) : (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => scrollRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
-              className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
-              aria-label="Scroll left"
-            >
-              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
-              className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
-              aria-label="Scroll right"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-            </button>
-          </div>
-        )}
+          {!isGuest && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => scrollRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
+                className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
+                aria-label="Scroll left"
+              >
+                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
+                className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center hover:bg-black/5 dark:bg-white/5 cursor-pointer text-black dark:text-white transition-colors"
+                aria-label="Scroll right"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Carousel Track Container */}
@@ -182,7 +133,7 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
         <div 
           ref={scrollRef}
           onScroll={handleScroll}
-          className={`flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain ${
+          className={`flex overflow-x-auto gap-4 carousel-track pb-2 scrollbar-hide overscroll-x-contain ${
             isGuest ? 'filter blur-[7px] sm:blur-[9px] pointer-events-none select-none opacity-45 dark:opacity-35' : ''
           }`}
         >
@@ -197,10 +148,10 @@ export default function DigitalReleasesCarousel({ categories }: { categories: an
                 <Lock size={22} className="stroke-[2.5]" />
               </div>
               <h4 className="text-base sm:text-lg font-bold text-black dark:text-white mb-1.5 tracking-tight">
-                Sign In to View Digital Releases
+                Sign In to View Releases in {currentMonthName}
               </h4>
               <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
-                Please sign in with your account to see the digital release items and explore more.
+                Please sign in with your account to see the release items and explore more.
               </p>
               <Link
                 to="/login"

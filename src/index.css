@@ -35,12 +35,6 @@
 .carousel-track {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
-  scroll-padding-inline: 1rem;
-}
-.carousel-track > * {
-  scroll-snap-align: start;
-  scroll-snap-stop: normal;
 }
 
 body {

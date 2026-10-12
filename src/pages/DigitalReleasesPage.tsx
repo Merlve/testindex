@@ -1,0 +1,267 @@
+import { useEffect, useState, useMemo } from 'react';
+import { Link } from 'react-router';
+import { useAuth } from '../context/AuthContext';
+import ItemCard from '../components/ItemCard';
+import { RefreshCw, MonitorPlay, Lock } from 'lucide-react';
+import { motion } from 'motion/react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchDigitalReleases, DigitalReleasesData } from '../services/digitalReleases';
+
+const ALPHABET = ['#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+
+const DigitalReleasesSkeleton = () => (
+  <div className="animate-pulse p-4 sm:p-12 min-h-screen pb-20">
+    <div className="flex flex-col mb-6 sm:mb-8 gap-4">
+      <div className="flex justify-between items-center">
+        <div className="w-48 sm:w-64 h-8 sm:h-10 bg-black/10 dark:bg-white/10 rounded-xl"></div>
+        <div className="w-24 h-9 sm:h-10 bg-black/10 dark:bg-white/10 rounded-xl"></div>
+      </div>
+      <div className="flex gap-2 overflow-hidden">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => (
+          <div key={i} className="min-w-[36px] sm:min-w-[40px] h-8 sm:h-9 bg-black/10 dark:bg-white/10 rounded-lg"></div>
+        ))}
+      </div>
+    </div>
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
+      {[...Array(18)].map((_, i) => (
+        <div key={i} className="w-full aspect-[2/3] bg-black/5 dark:bg-white/5 rounded-2xl"></div>
+      ))}
+    </div>
+  </div>
+);
+
+export default function DigitalReleasesPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const ITEMS_PER_PAGE = 50;
+
+  const currentMonthName = new Date().toLocaleString('default', { month: 'long' });
+  const currentYear = new Date().getFullYear();
+
+  const getInitialState = () => {
+    const storageKey = 'digital_releases_state';
+    const saved = sessionStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          page: parsed.page || 1,
+          filterLetter: parsed.filterLetter || null
+        };
+      } catch (e) {}
+    }
+    return { page: 1, filterLetter: null };
+  };
+
+  const initialState = useMemo(getInitialState, []);
+  const [page, setPage] = useState(initialState.page);
+  const [filterLetter, setFilterLetter] = useState<string | null>(initialState.filterLetter);
+
+  useEffect(() => {
+    const storageKey = 'digital_releases_state';
+    sessionStorage.setItem(storageKey, JSON.stringify({ page, filterLetter }));
+  }, [page, filterLetter]);
+
+  const { data = { items: [], tmdbData: [] }, isLoading, isError, error, isFetching, refetch } = useQuery<DigitalReleasesData>({
+    queryKey: ['digitalReleasesMonth'],
+    queryFn: fetchDigitalReleases,
+    staleTime: 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    placeholderData: () => {
+      try {
+        const cached = localStorage.getItem('digital_releases_cache_v3');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
+    }
+  });
+
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setToastMsg(null);
+    try {
+      localStorage.removeItem('digital_releases_cache_v3');
+      await queryClient.invalidateQueries({ queryKey: ['digitalReleasesMonth'] });
+      const res = await refetch();
+      const count = res.data?.items?.length || 0;
+      setToastMsg(`Successfully updated digital releases (${count} titles found)`);
+    } catch (e: any) {
+      console.error('[Digital Releases] Refresh error:', e);
+      setToastMsg('Failed to refresh digital releases');
+    } finally {
+      setIsRefreshing(false);
+      setTimeout(() => setToastMsg(null), 4000);
+    }
+  };
+
+  const filteredItems = useMemo(() => {
+    let result = [...(data?.items || [])];
+    if (filterLetter) {
+      result = result.filter((item: any) => {
+        const itemName = (item.tmdbData?.title || item.tmdbData?.name || item.name || '').trim();
+        const firstChar = itemName.charAt(0).toUpperCase();
+        if (filterLetter === '#') {
+          return /^[0-9]/.test(firstChar) || /^[^A-Z0-9]/.test(firstChar);
+        }
+        return firstChar === filterLetter;
+      });
+    }
+    return result;
+  }, [data?.items, filterLetter]);
+
+  const displayedItems = filteredItems.slice(0, page * ITEMS_PER_PAGE);
+
+  if (isLoading && (!data?.items || data.items.length === 0)) {
+    return <DigitalReleasesSkeleton />;
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center px-4">
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-4 rounded-xl mb-4 max-w-lg">
+          <p className="font-bold mb-2">Error loading digital releases</p>
+          <p className="text-sm opacity-80">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
+        </div>
+        <button 
+          onClick={() => refetch()} 
+          className="flex items-center gap-2 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 text-black dark:text-white px-5 py-2.5 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm transition-all hover:scale-105 cursor-pointer"
+        >
+          <RefreshCw size={18} /> Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="p-4 sm:p-12 min-h-screen pb-20"
+    >
+      <div className="flex flex-col mb-6 sm:mb-8 gap-4">
+        {toastMsg && (
+          <div className="px-4 py-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs sm:text-sm rounded-xl backdrop-blur-md transition-all">
+            {toastMsg}
+          </div>
+        )}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-2xl sm:text-3xl font-bold text-black dark:text-white flex items-center gap-2 tracking-tight">
+              <MonitorPlay className="text-blue-500" size={28} />
+              Releases in {currentMonthName}
+            </h2>
+            <span className="text-xs sm:text-sm font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1 rounded-full">
+              {currentYear}
+            </span>
+            {filteredItems.length > 0 && (
+              <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                ({filteredItems.length} titles)
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {user && user !== 'guest' && (
+              <button 
+                onClick={handleRefresh} 
+                disabled={isFetching || isRefreshing} 
+                className="flex items-center gap-2 text-sm text-black dark:text-white transition-all bg-white/10 dark:bg-black/10 px-3 py-2 sm:px-4 sm:py-2 rounded-full border border-white/20 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] backdrop-blur-sm hover:bg-white/20 dark:hover:bg-black/20 hover:scale-105 shrink-0 disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw size={16} className={(isFetching || isRefreshing) ? 'animate-spin text-purple-400' : ''} /> 
+                <span className="hidden sm:inline">{(isFetching || isRefreshing) ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Alphabet Filter Bar */}
+        <div className="flex overflow-x-auto pb-2 scrollbar-hide gap-1 sm:gap-2 w-full max-w-full">
+          <button
+            onClick={() => { setFilterLetter(null); setPage(1); }}
+            className={`px-3 py-1.5 flex-shrink-0 text-xs sm:text-sm font-semibold rounded-lg transition-all cursor-pointer ${
+              filterLetter === null
+                ? 'bg-purple-600 text-black dark:text-white shadow-lg shadow-purple-500/50'
+                : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/10 dark:bg-white/10 border border-black/5 dark:border-white/5'
+            }`}
+          >
+            All
+          </button>
+          {ALPHABET.map(letter => (
+            <button
+              key={letter}
+              onClick={() => {
+                setFilterLetter(letter === filterLetter ? null : letter);
+                setPage(1);
+              }}
+              className={`min-w-[36px] sm:min-w-[40px] px-2 py-1.5 flex-shrink-0 text-xs sm:text-sm font-semibold rounded-lg transition-all cursor-pointer ${
+                filterLetter === letter 
+                  ? 'bg-purple-600 text-black dark:text-white shadow-lg shadow-purple-500/50' 
+                  : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/10 dark:bg-white/10 border border-black/5 dark:border-white/5'
+              }`}
+            >
+              {letter}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="relative rounded-2xl overflow-hidden min-h-[400px]">
+        {filteredItems.length === 0 ? (
+          <div className="text-gray-600 dark:text-gray-400 text-center py-20 text-sm">
+            No digital releases found for this filter.
+          </div>
+        ) : (
+          <div className={user === 'guest' ? 'filter blur-[7px] sm:blur-[9px] pointer-events-none select-none opacity-45 dark:opacity-35' : ''}>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-5">
+              {displayedItems.map((item: any, i: number) => (
+                <ItemCard 
+                  key={`${item.id || item.name}-${i}`} 
+                  item={item} 
+                  category={item.category || "MOVIES"} 
+                  parentPath={item.parentPath || `/home/MOVIES`} 
+                  tmdbData={item.tmdbData}
+                  className="w-full" 
+                />
+              ))}
+            </div>
+            {user !== 'guest' && filteredItems.length > displayedItems.length && (
+              <div className="flex justify-center mt-8">
+                <button 
+                  onClick={() => setPage(p => p + 1)} 
+                  className="px-6 py-2 bg-purple-600 rounded-full text-black dark:text-white font-semibold hover:bg-purple-500 transition cursor-pointer"
+                >
+                  View More
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {user === 'guest' && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 bg-black/10 dark:bg-black/30 backdrop-blur-[2px] rounded-2xl">
+            <div className="flex flex-col items-center text-center max-w-sm sm:max-w-md mx-auto p-6 sm:p-8 rounded-2xl bg-white/50 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-[180%] border border-white/60 dark:border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.15)]">
+              <div className="w-14 h-14 rounded-full bg-purple-600/15 dark:bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mb-4 text-purple-600 dark:text-purple-400 shadow-inner">
+                <Lock size={26} className="stroke-[2.5]" />
+              </div>
+              <h4 className="text-lg sm:text-xl font-bold text-black dark:text-white mb-2 tracking-tight">
+                Sign In to View Releases in {currentMonthName}
+              </h4>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-5 leading-relaxed">
+                Please sign in with your account to see the full list of release titles and explore more.
+              </p>
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full text-sm font-semibold text-white bg-purple-600 hover:bg-purple-500 active:scale-[0.98] shadow-lg shadow-purple-600/30 hover:scale-[1.02] transition-all cursor-pointer"
+              >
+                Sign In
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}

@@ -393,7 +393,7 @@ export default function LastWatchedCarousel() {
       <div 
         ref={scrollRef} 
         onScroll={handleScroll}
-        className="flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain"
+        className="flex overflow-x-auto gap-4 carousel-track pb-2 scrollbar-hide overscroll-x-contain"
       >
         {recentWatched.map((item, i) => (
           <LastWatchedCard key={item.name || i} item={item} onDismiss={handleDismissSeries} />

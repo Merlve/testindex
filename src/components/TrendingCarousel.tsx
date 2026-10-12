@@ -136,7 +136,7 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
       <div 
         ref={scrollRef} 
         onScroll={handleScroll}
-        className="flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain"
+        className="flex overflow-x-auto gap-4 carousel-track pb-2 scrollbar-hide overscroll-x-contain"
       >
          {renderedItems}
       </div>

@@ -101,7 +101,7 @@ const CategoryCarouselRow = memo(function CategoryCarouselRow({ cat }: { cat: an
         id={`carousel-${cat.name}`} 
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex overflow-x-auto gap-4 snap-x snap-proximity carousel-track scroll-p-4 pb-2 scrollbar-hide overscroll-x-contain"
+        className="flex overflow-x-auto gap-4 carousel-track pb-2 scrollbar-hide overscroll-x-contain"
       >
          {cat.items.slice(0, 10).map((item: any, i: number) => (
            <ItemCard key={item.id || i} item={item} category={cat.name} parentPath={`/home/${cat.name}`} />
