@@ -224,7 +224,10 @@ export default function Watchlist() {
               return (
                 <ItemCard 
                   key={itemObj.path || `${parentPath}/${itemObj.name}` || itemObj.name || index}
-                  item={itemObj}
+                  item={{
+                    ...itemObj,
+                    tmdbData: tmdbData || itemObj.tmdbData
+                  }}
                   category={category}
                   parentPath={parentPath}
                   viewMode={viewMode}

@@ -192,6 +192,9 @@ const ItemCard = function ItemCard({
   const { cleanName, year } = parseMediaName(searchName);
   const searchYear = jfYear || year;
 
+  const existingTmdb = tmdbData || item.tmdbData || item.tmdb || tmdb;
+  const hasValidTmdb = Boolean(existingTmdb && (existingTmdb.id || existingTmdb.poster_path || existingTmdb.title || existingTmdb.name));
+
   const { data: fetchedTmdb } = useQuery({
     queryKey: ['tmdb', item.name, category, parentPath, item._jf?.tmdbId],
     queryFn: async () => {
@@ -213,13 +216,12 @@ const ItemCard = function ItemCard({
         return null;
       }
     },
-    enabled: !tmdbData,
+    enabled: !hasValidTmdb,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
-    
   });
 
-  const displayTmdb = tmdbData || fetchedTmdb || tmdb;
+  const displayTmdb = hasValidTmdb ? existingTmdb : (fetchedTmdb || existingTmdb);
 
   const inWatchlist = watchlistData?.some((i: any) => {
     // TMDb ID match
@@ -262,14 +264,21 @@ const ItemCard = function ItemCard({
       alert('Sign up for the website plan to use this feature');
       return;
     }
+    const tmdbToSave = displayTmdb || existingTmdb || tmdb || tmdbData;
     try {
       const res = await axios.post('/api/watchlist/toggle', {
-        item: { name: item.name, is_dir: item.is_dir, parent: parentPath, path: item.path || (parentPath ? `${parentPath}/${item.name}` : item.name) },
+        item: { 
+          name: item.name, 
+          is_dir: item.is_dir, 
+          parent: parentPath, 
+          path: item.path || (parentPath ? `${parentPath}/${item.name}` : item.name),
+          tmdbData: tmdbToSave
+        },
         category,
         parentPath,
         action: inWatchlist ? 'remove' : 'add',
         watchlisted: !inWatchlist,
-        tmdbData: tmdb || displayTmdb
+        tmdbData: tmdbToSave
       }, { headers: { 'x-user': user } });
       if (res.data?.watchlist) {
         queryClient.setQueryData(['watchlist', user], res.data.watchlist);

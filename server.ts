@@ -742,19 +742,29 @@ function cleanWatchlistTitle(name: string | null | undefined): string {
 function isWatchlistMatch(a: any, b: any): boolean {
   if (!a || !b) return false;
 
-  // 1. Match by TMDb ID if present on both
+  // 1. Match by TMDb ID if present on both: if both have TMDb IDs, they match IF AND ONLY IF their IDs match
   const aTmdbId = a.tmdbData?.id || a.tmdb?.id || a.item?.tmdbData?.id || a.item?.tmdb?.id || a.id;
   const bTmdbId = b.tmdbData?.id || b.tmdb?.id || b.item?.tmdbData?.id || b.item?.tmdb?.id || b.id;
-  if (aTmdbId && bTmdbId && String(aTmdbId) === String(bTmdbId)) {
-    return true;
+  if (aTmdbId && bTmdbId) {
+    return String(aTmdbId) === String(bTmdbId);
   }
 
   const aName = a.item?.name || a.name || '';
+  const bName = b.item?.name || b.name || '';
+
+  // Strict year mismatch safeguard: If release years differ by more than 1 year, they are different movies
+  const aYear = String((a.tmdbData?.release_date || a.tmdbData?.first_air_date || a.item?.year || parseMediaName(aName).year || '')).substring(0, 4);
+  const bYear = String((b.tmdbData?.release_date || b.tmdbData?.first_air_date || b.item?.year || parseMediaName(bName).year || '')).substring(0, 4);
+  if (aYear && bYear && /^\d{4}$/.test(aYear) && /^\d{4}$/.test(bYear)) {
+    if (Math.abs(Number(aYear) - Number(bYear)) > 1) {
+      return false;
+    }
+  }
+
   const aParent = a.parentPath || a.item?.parent || a.parent || '';
   const aRawPath = a.item?.path || a.path || (aParent ? `${aParent}/${aName}` : aName);
   const aNormPath = normalizeWatchlistPath(aRawPath);
 
-  const bName = b.item?.name || b.name || '';
   const bParent = b.parentPath || b.item?.parent || b.parent || '';
   const bRawPath = b.item?.path || b.path || (bParent ? `${bParent}/${bName}` : bName);
   const bNormPath = normalizeWatchlistPath(bRawPath);
@@ -870,6 +880,15 @@ async function loadUserWatchlist(user: string) {
       continue;
     }
 
+    // Ensure TMDb data is preserved and synchronized on both entry and entry.item
+    const entryTmdb = entry.tmdbData || entry.item?.tmdbData || entry.tmdb || entry.item?.tmdb;
+    if (entryTmdb) {
+      entry.tmdbData = entryTmdb;
+      if (entry.item && typeof entry.item === 'object') {
+        entry.item.tmdbData = entryTmdb;
+      }
+    }
+
     if (!entry.addedAt && !entry.timestamp) {
       entry.addedAt = baseTime - (list.length - idx) * 3600000;
       modified = true;
@@ -879,10 +898,16 @@ async function loadUserWatchlist(user: string) {
     const existingIdx = cleaned.findIndex(c => isWatchlistMatch(c, entry));
     if (existingIdx >= 0) {
       modified = true;
+      const bestTmdb = entry.tmdbData || cleaned[existingIdx].tmdbData;
       cleaned[existingIdx] = {
-        ...entry,
         ...cleaned[existingIdx],
-        tmdbData: cleaned[existingIdx].tmdbData || entry.tmdbData,
+        ...entry,
+        tmdbData: bestTmdb,
+        item: {
+          ...(cleaned[existingIdx].item || {}),
+          ...(entry.item || {}),
+          tmdbData: bestTmdb
+        },
         addedAt: cleaned[existingIdx].addedAt || entry.addedAt || Date.now()
       };
     } else {
@@ -912,12 +937,27 @@ async function saveUserWatchlist(user: string, list: any[]) {
 
   for (const entry of list) {
     if (!isWatchlistedEntry(entry)) continue;
+
+    const entryTmdb = entry.tmdbData || entry.item?.tmdbData || entry.tmdb || entry.item?.tmdb;
+    if (entryTmdb) {
+      entry.tmdbData = entryTmdb;
+      if (entry.item && typeof entry.item === 'object') {
+        entry.item.tmdbData = entryTmdb;
+      }
+    }
+
     const existingIdx = cleaned.findIndex(c => isWatchlistMatch(c, entry));
     if (existingIdx >= 0) {
+      const bestTmdb = entry.tmdbData || cleaned[existingIdx].tmdbData;
       cleaned[existingIdx] = {
-        ...entry,
         ...cleaned[existingIdx],
-        tmdbData: cleaned[existingIdx].tmdbData || entry.tmdbData,
+        ...entry,
+        tmdbData: bestTmdb,
+        item: {
+          ...(cleaned[existingIdx].item || {}),
+          ...(entry.item || {}),
+          tmdbData: bestTmdb
+        },
         addedAt: cleaned[existingIdx].addedAt || entry.addedAt || Date.now()
       };
     } else {
@@ -1203,12 +1243,34 @@ app.post('/api/watchlist/toggle', async (req, res) => {
     const { item, category, parentPath, action, watchlisted, inWatchlist, tmdbData, addedAt } = req.body;
     let list = await loadUserWatchlist(user);
     
+    const targetTmdbData = tmdbData || item?.tmdbData || item?.tmdb || req.body.tmdb;
+    let finalTmdb = targetTmdbData;
+    if (!finalTmdb) {
+      const itemClean = (item?.name || req.body.name || '').toLowerCase();
+      const rawItemPath = item?.path || req.body.path || (parentPath ? `${parentPath}/${item?.name}` : '');
+      const pathK = rawItemPath ? `path-/${rawItemPath.replace(/^\/+/, '')}` : null;
+      if (pathK && tmdbCache[pathK]) {
+        finalTmdb = tmdbCache[pathK];
+      } else {
+        const cat = (category || item?.category || 'MOVIES').toLowerCase();
+        const baseK = `${cat}-${itemClean}`;
+        if (tmdbCache[baseK]) {
+          finalTmdb = tmdbCache[baseK];
+        }
+      }
+    }
+
+    const itemToStore = {
+      ...(item || {}),
+      tmdbData: finalTmdb || item?.tmdbData
+    };
+
     const targetObj = {
-      item,
+      item: itemToStore,
       name: item?.name || req.body.name,
       path: item?.path || req.body.path,
       parentPath: parentPath || item?.parent || '',
-      tmdbData: tmdbData || item?.tmdbData || req.body.tmdb,
+      tmdbData: finalTmdb,
       category: category || item?.category
     };
 
@@ -1230,39 +1292,39 @@ app.post('/api/watchlist/toggle', async (req, res) => {
 
     if (isExplicitRemove) {
       list = list.filter(i => !isWatchlistMatch(i, targetObj));
-      await saveUserWatchlist(user, list);
-      return res.json({ success: true, watchlist: list, added: false, removed: true });
+      const saved = await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: saved, added: false, removed: true });
     }
 
     if (isExplicitAdd) {
       if (matchingCount === 0) {
         list.push({
-          item,
+          item: itemToStore,
           category,
           parentPath,
-          tmdbData,
+          tmdbData: finalTmdb,
           addedAt: addedAt || Date.now()
         });
       }
-      await saveUserWatchlist(user, list);
-      return res.json({ success: true, watchlist: list, added: true });
+      const saved = await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: saved, added: true });
     }
 
     // Toggle: if it already matches, remove ALL matching entries. If not, add it.
     if (matchingCount > 0) {
       list = list.filter(i => !isWatchlistMatch(i, targetObj));
-      await saveUserWatchlist(user, list);
-      return res.json({ success: true, watchlist: list, added: false, removed: true });
+      const saved = await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: saved, added: false, removed: true });
     } else {
       list.push({ 
-        item, 
+        item: itemToStore, 
         category, 
         parentPath,
-        tmdbData,
+        tmdbData: finalTmdb,
         addedAt: addedAt || Date.now()
       });
-      await saveUserWatchlist(user, list);
-      return res.json({ success: true, watchlist: list, added: true });
+      const saved = await saveUserWatchlist(user, list);
+      return res.json({ success: true, watchlist: saved, added: true });
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to update watchlist' });
@@ -3784,12 +3846,23 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
         if (prevRes.data?.results?.length > 0) {
           data = prevRes.data;
         } else {
-          // STILL failing, try entirely WITHOUT a year!
+          // STILL failing, try entirely WITHOUT a year but only accept candidates close to requested year!
           let urlNoYear = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`;
           try {
             const noYearRes = await axios.get(urlNoYear);
             if (noYearRes.data?.results?.length > 0) {
-               data = noYearRes.data;
+              if (year && typeof year === 'string') {
+                const reqYear = parseInt(year);
+                const matchingResults = noYearRes.data.results.filter((cand: any) => {
+                  const candYear = parseInt((cand.release_date || cand.first_air_date || '').substring(0, 4));
+                  return candYear && Math.abs(candYear - reqYear) <= 1;
+                });
+                if (matchingResults.length > 0) {
+                  data = { results: matchingResults };
+                }
+              } else {
+                data = noYearRes.data;
+              }
             } else {
                 let altQuery = null;
                 if (query.includes('&')) altQuery = query.replace(/&/g, 'and');
@@ -3797,7 +3870,18 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
                 if (altQuery) {
                   let altUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${tmdbKey}&query=${encodeURIComponent(altQuery)}`;
                   const altPrevRes = await axios.get(altUrl);
-                  if (altPrevRes.data?.results?.length > 0) data = altPrevRes.data;
+                  if (altPrevRes.data?.results?.length > 0) {
+                    if (year && typeof year === 'string') {
+                      const reqYear = parseInt(year);
+                      const matchingAlt = altPrevRes.data.results.filter((cand: any) => {
+                        const candYear = parseInt((cand.release_date || cand.first_air_date || '').substring(0, 4));
+                        return candYear && Math.abs(candYear - reqYear) <= 1;
+                      });
+                      if (matchingAlt.length > 0) data = { results: matchingAlt };
+                    } else {
+                      data = altPrevRes.data;
+                    }
+                  }
                 }
             }
           } catch(e) {}
@@ -3820,7 +3904,16 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
           // Try oppType without year
           const oppNoYearRes = await axios.get(`https://api.themoviedb.org/3/search/${oppType}?api_key=${tmdbKey}&query=${encodeURIComponent(query)}`);
           if (oppNoYearRes.data?.results?.length > 0) {
-            data = oppNoYearRes.data;
+            if (year && typeof year === 'string') {
+              const reqYear = parseInt(year);
+              const matchingOpp = oppNoYearRes.data.results.filter((cand: any) => {
+                const candYear = parseInt((cand.release_date || cand.first_air_date || '').substring(0, 4));
+                return candYear && Math.abs(candYear - reqYear) <= 1;
+              });
+              if (matchingOpp.length > 0) data = { results: matchingOpp };
+            } else {
+              data = oppNoYearRes.data;
+            }
           }
         }
       } catch (e) {}
