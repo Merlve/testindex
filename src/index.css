@@ -31,10 +31,16 @@
   overscroll-behavior-x: contain;
 }
 
-/* Horizontal carousel smooth momentum swiping on touch devices */
+/* Horizontal carousel smooth momentum swiping on touch devices with GPU acceleration */
 .carousel-track {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
 }
 
 body {
@@ -44,23 +50,51 @@ body {
   background-color: #08080a;
 }
 
-/* Performance Optimizations */
+/* Device Hardware Acceleration & Compositor Optimizations */
 html {
   -webkit-overflow-scrolling: touch;
   touch-action: manipulation;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+}
+
+/* Hardware accelerated scroll containers */
+main,
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* GPU Hardware Composite Layers for smooth 60/120fps scrolling & transforms */
+.gpu-accelerated,
+.gpu-layer {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Optimize image rasterization pipeline and offscreen paint */
+img {
+  content-visibility: auto;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .swiper-wrapper {
   will-change: transform;
-  transform: translateZ(0);
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
 }
 
 .swiper-slide {
-  transform: translateZ(0);
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
