@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Archive, Folder, Download, Loader2, CheckCircle2, ShieldCheck, FolderArchive } from 'lucide-react';
+import { X, Archive, Folder, Download, Loader2, CheckCircle2, ShieldCheck, FolderArchive, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 import { formatBytes } from '../utils/nameParser';
@@ -42,6 +42,7 @@ export default function ZipDownloadModal({
   user
 }: ZipDownloadModalProps) {
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [dirSizes, setDirSizes] = useState<Record<string, SizeInfo>>({});
 
@@ -188,6 +189,37 @@ export default function ZipDownloadModal({
     }, 1500);
   };
 
+  const handleCopyLink = async (dir: DirectoryOption) => {
+    if (!token || user === 'guest') {
+      alert('Please log in with your account to copy the download link.');
+      return;
+    }
+
+    const downloadUrl = `${window.location.origin}/api/webdav/download-zip?path=${encodeURIComponent(dir.path)}&token=${encodeURIComponent(token)}`;
+
+    try {
+      await navigator.clipboard.writeText(downloadUrl);
+    } catch (err) {
+      const textArea = document.createElement('textarea');
+      textArea.value = downloadUrl;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+
+    setCopiedPath(dir.path);
+    setSuccessMsg(`Download link for ${dir.zipFilename} copied! Ready for downloader app.`);
+    setTimeout(() => {
+      setCopiedPath(null);
+      setTimeout(() => {
+        setSuccessMsg(null);
+      }, 3000);
+    }, 2000);
+  };
+
   // Helper to format button label without overflowing narrow screens
   const getButtonLabel = (dir: DirectoryOption) => {
     if (dir.isEntireFolder) {
@@ -268,6 +300,7 @@ export default function ZipDownloadModal({
 
             {directories.map((dir) => {
               const isCurrentDownloading = downloadingPath === dir.path;
+              const isCopied = copiedPath === dir.path;
 
               const sizeInfo =
                 dir.isEntireFolder && seasonItems && seasonItems.length > 0
@@ -281,7 +314,7 @@ export default function ZipDownloadModal({
                   key={dir.id}
                   className="p-3 sm:p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/10 transition flex items-center justify-between gap-2.5 sm:gap-3 overflow-hidden group"
                 >
-                  {/* Left Side: Icon & Details with strict min-w-0 flex-1 to prevent button overlap */}
+                  {/* Left Side: Icon & Details */}
                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 overflow-hidden">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
                       dir.isEntireFolder 
@@ -318,28 +351,56 @@ export default function ZipDownloadModal({
                     </div>
                   </div>
 
-                  {/* Right Side: Download Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(dir)}
-                    disabled={isCurrentDownloading}
-                    className="shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-purple-600 hover:bg-purple-500 active:scale-95 text-white shadow-md shadow-purple-600/25 transition cursor-pointer disabled:opacity-60 whitespace-nowrap"
-                    title={`Download ${dir.zipFilename}`}
-                  >
-                    {isCurrentDownloading ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin shrink-0" />
-                        <span>Starting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download size={13} className="shrink-0" />
-                        <span className="truncate max-w-[120px] sm:max-w-[180px]">
-                          {getButtonLabel(dir)}
-                        </span>
-                      </>
-                    )}
-                  </button>
+                  {/* Right Side: Action Buttons (Copy Link & Download) */}
+                  <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
+                    {/* Copy Link Button for Downloader Apps */}
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(dir)}
+                      className={`p-2 sm:px-2.5 sm:py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                        isCopied
+                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shadow-sm'
+                          : 'bg-black/5 dark:bg-white/5 hover:bg-purple-500/10 text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 border-black/10 dark:border-white/10 hover:border-purple-500/30'
+                      }`}
+                      title={`Copy link for ${dir.zipFilename} to use in downloader apps (1DM, ADM, aria2, IDM, etc.)`}
+                      aria-label={`Copy link for ${dir.zipFilename}`}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check size={14} className="text-emerald-500 shrink-0" />
+                          <span className="hidden sm:inline text-[11px] font-bold">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} className="shrink-0" />
+                          <span className="hidden sm:inline text-[11px]">Copy</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Download ZIP Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(dir)}
+                      disabled={isCurrentDownloading}
+                      className="shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-purple-600 hover:bg-purple-500 active:scale-95 text-white shadow-md shadow-purple-600/25 transition cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                      title={`Download ${dir.zipFilename}`}
+                    >
+                      {isCurrentDownloading ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin shrink-0" />
+                          <span>Starting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download size={13} className="shrink-0" />
+                          <span className="truncate max-w-[100px] sm:max-w-[170px]">
+                            {getButtonLabel(dir)}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
             })}
