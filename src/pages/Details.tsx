@@ -6,12 +6,13 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle, Archive
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
 import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
+import ZipDownloadModal from '../components/ZipDownloadModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { extractDominantColor, BackdropColorPalette, getCachedPalette } from '../utils/colorExtractor';
 import { markImageLoaded, isImageLoaded } from '../utils/imageCache';
@@ -50,9 +51,12 @@ function IntentPlayerModal({
       const platform = (navigator as any).userAgentData?.platform || navigator.platform || '';
       const maxTouchPoints = navigator.maxTouchPoints || 0;
 
-      if (/iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && maxTouchPoints > 1)) {
+      const isAppleMobile = /iPad|iPhone|iPod/.test(ua) || ((platform === 'MacIntel' || /Macintosh/i.test(ua)) && maxTouchPoints > 1);
+      const isAppleMac = !isAppleMobile && (/Macintosh|MacIntel|MacPPC|Mac68K/.test(platform) || /Mac OS X|macOS/i.test(ua));
+
+      if (isAppleMobile) {
         setOs('ios');
-      } else if (/Macintosh|MacIntel|MacPPC|Mac68K/.test(platform) || /Mac OS X|macOS/i.test(ua)) {
+      } else if (isAppleMac) {
         setOs('macos');
       } else if (/android/i.test(ua)) {
         setOs('android');
@@ -156,28 +160,9 @@ function IntentPlayerModal({
           </div>
         ) : (
           <div className="space-y-3">
-            <div className={`grid gap-2.5 ${os === 'macos' ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            <div className="grid gap-2.5 grid-cols-2">
               {os === 'ios' && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (url) {
-                        onPlayWeb(url);
-                        onClose();
-                      }
-                    }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
-                      <Play size={14} fill="currentColor" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">Play Here</div>
-                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
-                    </div>
-                  </button>
-
                   <a onClick={() => { onExternalPlay(); }}
                     href={`vlc://${url}`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
@@ -204,25 +189,6 @@ function IntentPlayerModal({
 
               {os === 'macos' && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (url) {
-                        onPlayWeb(url);
-                        onClose();
-                      }
-                    }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
-                      <Play size={14} fill="currentColor" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">Play Here</div>
-                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
-                    </div>
-                  </button>
-
                   <a onClick={() => { onExternalPlay(); }}
                     href={`iina://weblink?url=${encodeURIComponent(url)}`}
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
@@ -230,6 +196,17 @@ function IntentPlayerModal({
                     <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs flex items-center justify-center shrink-0">IINA</div>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold truncate">IINA Player</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
+                    </div>
+                  </a>
+
+                  <a onClick={() => { onExternalPlay(); }}
+                    href={`vlc://${url}`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">VLC</div>
                       <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
                     </div>
                   </a>
@@ -764,6 +741,9 @@ export default function Details() {
   const [loadingFiles, setLoadingFiles] = useState(() => !initialFolderFiles && user !== 'guest');
   const [inWatchlist, setInWatchlist] = useState(false);
   const [toast, setToast] = useState('');
+  const [showZipModal, setShowZipModal] = useState(false);
+  const isZipCategory = ['ANIME', 'SERIES', 'KDRAMA'].includes(category) || 
+                        ['ANIMES', 'SHOWS', 'KOREAN_DRAMA', 'ASIAN_DRAMA'].includes(category);
 
   const initialSeasonIdx = useMemo(() => {
     if (!initialFolderFiles?.seasonFolders?.length) return null;
@@ -2373,6 +2353,26 @@ export default function Details() {
           </div>
         </div>
 
+        {/* Download Folder as ZIP Button (ANIME, SERIES, KDRAMA) */}
+        {isZipCategory && (
+          <div className="pt-3 pb-1 flex items-center justify-center w-full">
+            <button
+              type="button"
+              onClick={() => {
+                if (!token || user === 'guest') {
+                  alert('Please sign in to download folder as zip');
+                  return;
+                }
+                setShowZipModal(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 font-bold text-xs sm:text-sm tracking-wide transition-all duration-200 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Archive size={16} className="text-purple-500" />
+              <span>DOWNLOAD FOLDER AS ZIP</span>
+            </button>
+          </div>
+        )}
+
         {/* Files Display */}
         {loadingFiles || loadingSeasonFiles ? (
           <div className="flex items-center justify-center py-12 text-gray-500 gap-3">
@@ -3083,6 +3083,20 @@ export default function Details() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* WebDAV Directory Zip Download Modal */}
+      {showZipModal && (
+        <ZipDownloadModal
+          isOpen={showZipModal}
+          onClose={() => setShowZipModal(false)}
+          category={category}
+          title={cleanName || name}
+          showFolderPath={actualFolderOpenlistPath}
+          seasonItems={seasonItems}
+          token={token}
+          user={user}
+        />
+      )}
     </div>
   );
 }

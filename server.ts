@@ -359,9 +359,11 @@ let appConfig: Record<string, any> = {
 };
 
 
-// Ensure env variables take precedence over saved config if provided
 const getOpenlistUrl = () => process.env.OPENLIST_SERVER_URL || appConfig.openlistUrl;
 const getOpenlistApiKey = () => process.env.OPENLIST_API_KEY;
+const getWebdavHost = () => (process.env.WEBDAV_HOST || 'https://zip.shutter.dpdns.org').replace(/\/+$/, '');
+const getWebdavUser = () => process.env.WEBDAV_USER || 'admin';
+const getWebdavPass = () => process.env.WEBDAV_PASS || 'bento';
 
 const adminRoleCache = new Map<string, { role: number, expiry: number }>();
 
@@ -1222,6 +1224,135 @@ app.post('/api/downloads/clear', adminMiddleware, async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// WebDAV ZIP folder download endpoint
+app.get('/api/webdav/download-zip', async (req, res) => {
+  try {
+    const rawToken = req.headers.authorization || (req.query.token as string);
+    const token = typeof rawToken === 'string' ? rawToken.replace(/^Bearer\s+/i, '').trim() : '';
+
+    if (!token || isValidGuest(token) || token === 'null' || token === 'undefined') {
+      return res.status(401).json({ error: 'Unauthorized: Valid account required to download folder as ZIP' });
+    }
+
+    const masterApiKey = getOpenlistApiKey();
+    let isAuthorized = false;
+
+    if (masterApiKey && token === masterApiKey) {
+      isAuthorized = true;
+    } else {
+      const cached = adminRoleCache.get(token);
+      if (cached && Date.now() < cached.expiry) {
+        isAuthorized = true;
+      } else {
+        try {
+          const checkUrl = `${getOpenlistUrl().replace(/\/$/, '')}/api/me`;
+          const response = await axios.get(checkUrl, { headers: { Authorization: token }, timeout: 8000 });
+          const role = response.data?.data?.role;
+          if (response.data?.code === 200 && role !== undefined) {
+            adminRoleCache.set(token, { role, expiry: Date.now() + 5 * 60 * 1000 });
+            isAuthorized = true;
+          }
+        } catch (authErr) {
+          console.warn('[WebDAV ZIP] Token validation error:', (authErr as any)?.message);
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({ error: 'Unauthorized: Please log in to download folder as ZIP' });
+    }
+
+    let folderPath = (req.query.path as string || '').trim();
+    if (!folderPath) {
+      return res.status(400).json({ error: 'Path parameter is required' });
+    }
+
+    // Normalize path: decode, remove backslashes, strip leading /home or home/
+    try {
+      folderPath = decodeURIComponent(folderPath);
+    } catch (e) {}
+
+    folderPath = folderPath.replace(/\\/g, '/');
+    folderPath = folderPath.replace(/^\/+/, '').replace(/\/+$/, '');
+
+    // Notice: in the WebDAV url path, there is no /home, but just the path that follows after
+    if (folderPath.toLowerCase().startsWith('home/')) {
+      folderPath = folderPath.substring(5);
+    } else if (folderPath.toLowerCase() === 'home') {
+      return res.status(400).json({ error: 'Cannot download root home folder' });
+    }
+    folderPath = folderPath.replace(/^\/+/, '').replace(/\/+$/, '');
+
+    if (!folderPath) {
+      return res.status(400).json({ error: 'Valid directory path is required' });
+    }
+
+    const segments = folderPath.split('/').filter(Boolean);
+    const encodedPath = segments.map(s => encodeURIComponent(s)).join('/');
+    const folderName = segments[segments.length - 1] || 'download';
+    const zipFilename = folderName.endsWith('.zip') ? folderName : `${folderName}.zip`;
+
+    // WebDAV folder zip download url format: https://zip.shutter.dpdns.org/PATH/?download=zip
+    const webdavUrl = `${getWebdavHost()}/${encodedPath}/?download=zip`;
+    console.log(`[WebDAV ZIP] Proxying download for "${folderPath}" via "${webdavUrl}"`);
+
+    const authHeader = 'Basic ' + Buffer.from(`${getWebdavUser()}:${getWebdavPass()}`).toString('base64');
+    const parsed = new URL(webdavUrl);
+
+    const clientReq = https.request({
+      hostname: parsed.hostname,
+      port: parsed.port || 443,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: {
+        'Authorization': authHeader,
+        'User-Agent': 'ShutterApp/1.0',
+        'Accept': '*/*'
+      }
+    }, (webdavRes) => {
+      const statusCode = webdavRes.statusCode || 200;
+      if (statusCode >= 400) {
+        console.error(`[WebDAV ZIP] Upstream returned status ${statusCode} for ${webdavUrl}`);
+        return res.status(statusCode).json({ error: `WebDAV server returned error code ${statusCode}` });
+      }
+
+      res.setHeader('Content-Type', webdavRes.headers['content-type'] || 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFilename)}"; filename*=UTF-8''${encodeURIComponent(zipFilename)}`);
+      if (webdavRes.headers['content-length']) {
+        res.setHeader('Content-Length', webdavRes.headers['content-length']);
+      }
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+      webdavRes.pipe(res);
+    });
+
+    clientReq.on('error', (err) => {
+      console.error('[WebDAV ZIP] Upstream connection error:', err);
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Failed to connect to WebDAV server' });
+      }
+    });
+
+    res.on('close', () => {
+      clientReq.destroy();
+    });
+
+    clientReq.end();
+  } catch (err: any) {
+    console.error('[WebDAV ZIP] Error handling download:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process ZIP download' });
+    }
+  }
+});
+
+app.get('/api/webdav/status', (req, res) => {
+  res.json({
+    enabled: Boolean(getWebdavHost()),
+    host: getWebdavHost()
+  });
 });
 
 app.get('/api/watchlist', async (req, res) => {
