@@ -1,5 +1,6 @@
 import { softRefreshMediaCaches } from '../utils/cacheManager';
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import axios from 'axios';
 import { Film, Edit3, Bookmark, BookmarkCheck, Eye, EyeOff, CheckCircle, Cloud, Star, Clock, ChevronRight } from 'lucide-react';
@@ -112,6 +113,16 @@ const ItemCard = function ItemCard({
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overridePath, setOverridePath] = useState(`${parentPath}/${item.name}`);
   const [overrideCat, setOverrideCat] = useState(category);
+
+  const handleOpenOverrideModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const effectiveParent = item._parent || parentPath || '';
+    const initialPath = effectiveParent ? `${effectiveParent}/${item.name}`.replace(/\/\//g, '/') : item.name;
+    setOverridePath(initialPath);
+    setOverrideCat(item._cat || category || '');
+    setShowOverrideModal(true);
+  };
 
   const queryClient = useQueryClient();
   
@@ -424,7 +435,7 @@ const ItemCard = function ItemCard({
         {item._jf && user === 'admin' && (
           <button
             type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowOverrideModal(true); }}
+            onClick={handleOpenOverrideModal}
             className="p-2 sm:p-2.5 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 hover:bg-purple-600 hover:text-white transition-all cursor-pointer"
             title="Fix Metadata Override"
           >
@@ -504,7 +515,8 @@ const ItemCard = function ItemCard({
       </div>
       {item._jf && user === 'admin' && (
         <button
-          onClick={(e) => { e.preventDefault(); setShowOverrideModal(true); }}
+          type="button"
+          onClick={handleOpenOverrideModal}
           className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 p-1.5 rounded-xl bg-purple-500/15 dark:bg-purple-500/20 hover:bg-purple-600 dark:hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white dark:hover:text-white border border-purple-500/30 hover:border-purple-600 shadow-sm z-30 transition-all hover:scale-110 cursor-pointer"
           title="Fix Metadata Override"
         >
@@ -583,49 +595,68 @@ const ItemCard = function ItemCard({
           </Link>
       )}
 
-      {showOverrideModal && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 " onClick={() => setShowOverrideModal(false)}>
-            <div className="bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-black dark:text-white mb-4">Override Jellyfin Link</h3>
-                <div className="mb-4 text-xs text-gray-600 dark:text-gray-400">
-                   Jellyfin Name: <span className="text-black dark:text-white">{item._jf_name || item.name}</span>
-                </div>
-                <div className="mb-4">
-                    <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2">Openlist Path (e.g. /home/SERIES/My Show)</label>
-                    <input 
-                        className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50" 
-                        value={overridePath}
-                        onChange={e => setOverridePath(e.target.value)}
-                    />
-                </div>
-                <div className="mb-6">
-                    <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2">Category</label>
-                    <input 
-                        className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50" 
-                        value={overrideCat}
-                        onChange={e => setOverrideCat(e.target.value)}
-                    />
-                </div>
-                <div className="flex gap-3 justify-end">
-                    <button onClick={() => setShowOverrideModal(false)} className="px-4 py-2 text-black dark:text-white bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:bg-white/20 rounded-lg">Cancel</button>
-                    <button
-                        onClick={async () => {
-                           try {
-                               await axios.post('/api/jellyfin/override', {
-                                   jfName: item._jf_name || item.name,
-                                   openlistPath: overridePath,
-                                   category: overrideCat
-                               }, { headers: { Authorization: token } });
-                               setShowOverrideModal(false);
-                               try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} localStorage.setItem('meta_version', String(Date.now())); softRefreshMediaCaches(queryClient);
-                           } catch(e) {
-                               alert('Failed to save override');
-                           }
-                       }}
-                       className="px-4 py-2 text-black dark:text-white bg-purple-600 hover:bg-purple-700 rounded-lg">Save Override</button>
-                </div>
+      {showOverrideModal && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" 
+          onClick={() => setShowOverrideModal(false)}
+        >
+          <div 
+            className="bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/10 dark:border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl text-left" 
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-black dark:text-white mb-4">Override Jellyfin Link</h3>
+            <div className="mb-4 text-xs text-gray-600 dark:text-gray-400">
+               Jellyfin Name: <span className="text-black dark:text-white font-semibold">{item._jf_name || item.name}</span>
             </div>
-        </div>
+            <div className="mb-4">
+                <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2">Openlist Path (e.g. /home/SERIES/My Show)</label>
+                <input 
+                    className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50" 
+                    value={overridePath}
+                    onChange={e => setOverridePath(e.target.value)}
+                />
+            </div>
+            <div className="mb-6">
+                <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2">Category</label>
+                <input 
+                    className="w-full bg-[#fffcf9] dark:bg-[#08080a] border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:border-purple-600/50" 
+                    value={overrideCat}
+                    onChange={e => setOverrideCat(e.target.value)}
+                />
+            </div>
+            <div className="flex gap-3 justify-end">
+                <button 
+                  type="button" 
+                  onClick={() => setShowOverrideModal(false)} 
+                  className="px-4 py-2 text-black dark:text-white bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:bg-white/20 rounded-lg cursor-pointer transition font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                    type="button"
+                    onClick={async () => {
+                       try {
+                           await axios.post('/api/jellyfin/override', {
+                               jfName: item._jf_name || item.name,
+                               openlistPath: overridePath,
+                               category: overrideCat
+                           }, { headers: { Authorization: token } });
+                           setShowOverrideModal(false);
+                           try { await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } }); } catch(e) {} 
+                           localStorage.setItem('meta_version', String(Date.now())); 
+                           softRefreshMediaCaches(queryClient);
+                       } catch(e) {
+                           alert('Failed to save override');
+                       }
+                   }}
+                   className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 rounded-lg cursor-pointer transition font-medium shadow-md shadow-purple-600/20"
+                >
+                  Save Override
+                </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </>
   );
