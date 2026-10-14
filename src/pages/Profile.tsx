@@ -289,7 +289,7 @@ export default function Profile() {
     }
   };
 
-  const [episodeTmdbMap, setEpisodeTmdbMap] = useState<Record<string, { episodes: any[]; poster_path?: string }>>({});
+  const [episodeTmdbMap, setEpisodeTmdbMap] = useState<Record<string, { episodes: any[]; poster_path?: string; backdrop_path?: string }>>({});
 
   const classifiedWatchedList = useMemo(() => {
     if (!Array.isArray(watchedList)) return [];
@@ -467,7 +467,8 @@ export default function Profile() {
               ...prev,
               [key]: {
                 episodes: seasonRes.data.episodes,
-                poster_path: seasonRes.data.poster_path || showObj.poster_path
+                poster_path: seasonRes.data.poster_path || showObj.poster_path,
+                backdrop_path: showObj.backdrop_path || seasonRes.data.backdrop_path
               }
             }));
           }
@@ -488,6 +489,8 @@ export default function Profile() {
         epTmdb = seasonTmdb.episodes[item.episodeInfo.episodeNum - 1];
       }
 
+      const landscapePoster = seasonTmdb?.backdrop_path || item.tmdbData?.backdrop_path || item.backdropPath || item.backdrop_path || seasonTmdb?.poster_path;
+
       if (epTmdb) {
         const epNumStr = item.episodeInfo.episodeNum ? `E${item.episodeInfo.episodeNum < 10 ? '0' : ''}${item.episodeInfo.episodeNum}` : '';
         const seasonNumStr = item.episodeInfo.seasonNum !== null ? `S${item.episodeInfo.seasonNum < 10 ? '0' : ''}${item.episodeInfo.seasonNum}` : '';
@@ -495,24 +498,50 @@ export default function Profile() {
 
         const episodeTitle = epTmdb.name ? (codePrefix ? `${codePrefix} - ${epTmdb.name}` : epTmdb.name) : item.title;
 
+        const resolvedStillUrl = epTmdb.still_path 
+          ? `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w300${epTmdb.still_path}`)}` 
+          : (landscapePoster 
+              ? `/api/image-proxy?url=${encodeURIComponent(landscapePoster.startsWith('http') ? landscapePoster : `https://image.tmdb.org/t/p/w300${landscapePoster}`)}` 
+              : null);
+
         return {
           ...item,
           displayTitle: episodeTitle,
           displaySubtitle: `${item.episodeInfo.showTitle}${item.episodeInfo.seasonNum !== null ? ` • Season ${item.episodeInfo.seasonNum}` : ''}`,
-          stillUrl: epTmdb.still_path ? `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w500${epTmdb.still_path}`)}` : (seasonTmdb?.poster_path ? `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w500${seasonTmdb.poster_path}`)}` : null),
+          stillUrl: resolvedStillUrl,
           overview: epTmdb.overview || null,
           airDate: epTmdb.air_date || null,
           hasTmdbMeta: true
+        };
+      } else if (landscapePoster) {
+        // Episode belongs to season/show but does not have individual TMDB episode metadata yet
+        const epNumStr = item.episodeInfo.episodeNum ? `E${item.episodeInfo.episodeNum < 10 ? '0' : ''}${item.episodeInfo.episodeNum}` : '';
+        const seasonNumStr = item.episodeInfo.seasonNum !== null ? `S${item.episodeInfo.seasonNum < 10 ? '0' : ''}${item.episodeInfo.seasonNum}` : '';
+        const codePrefix = seasonNumStr && epNumStr ? `${seasonNumStr}${epNumStr}` : (epNumStr || seasonNumStr);
+
+        return {
+          ...item,
+          displayTitle: codePrefix ? `${codePrefix} - ${item.title}` : item.title,
+          displaySubtitle: `${item.episodeInfo.showTitle}${item.episodeInfo.seasonNum !== null ? ` • Season ${item.episodeInfo.seasonNum}` : ''}`,
+          stillUrl: `/api/image-proxy?url=${encodeURIComponent(landscapePoster.startsWith('http') ? landscapePoster : `https://image.tmdb.org/t/p/w300${landscapePoster}`)}`,
+          overview: null,
+          airDate: null,
+          hasTmdbMeta: false
         };
       }
     }
 
     // Fallback if no TMDB metadata or for non-episodes
+    const rawFallbackPoster = item.type === 'episode' ? (item.tmdbData?.backdrop_path || item.backdropPath || item.backdrop_path) : null;
+    const fallbackStillUrl = rawFallbackPoster
+      ? `/api/image-proxy?url=${encodeURIComponent(rawFallbackPoster.startsWith('http') ? rawFallbackPoster : `https://image.tmdb.org/t/p/w300${rawFallbackPoster}`)}`
+      : null;
+
     return {
       ...item,
       displayTitle: item.type === 'episode' ? item.rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "") : item.title,
       displaySubtitle: item.subtitle,
-      stillUrl: null,
+      stillUrl: fallbackStillUrl,
       overview: null,
       airDate: null,
       hasTmdbMeta: false

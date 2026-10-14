@@ -449,7 +449,8 @@ const FileRowItem = memo(function FileRowItem({
   toggleSelection,
   tmdbEpisode,
   showToast,
-  isTvMedia
+  isTvMedia,
+  fallbackLandscapePoster
 }: {
   file: any;
   itemPath: string;
@@ -464,9 +465,29 @@ const FileRowItem = memo(function FileRowItem({
   tmdbEpisode?: any;
   showToast?: (msg: string) => void;
   isTvMedia?: boolean;
+  fallbackLandscapePoster?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const [actionLoading, setActionLoading] = useState<'copy' | 'download' | null>(null);
+
+  // Helper to format TMDB / external image URLs with w300 resolution
+  const getThumbnailUrl = (pathOrUrl: string | undefined | null) => {
+    if (!pathOrUrl) return null;
+    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+      return `/api/image-proxy?url=${encodeURIComponent(pathOrUrl)}`;
+    }
+    const cleanPath = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
+    return `/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w300${cleanPath}`)}`;
+  };
+
+  const episodeStillPath = tmdbEpisode?.still_path;
+  const primaryThumbUrl = episodeStillPath ? getThumbnailUrl(episodeStillPath) : null;
+  const fallbackThumbUrl = fallbackLandscapePoster ? getThumbnailUrl(fallbackLandscapePoster) : null;
+  const [thumbSrc, setThumbSrc] = useState<string | null>(primaryThumbUrl || fallbackThumbUrl);
+
+  useEffect(() => {
+    setThumbSrc(primaryThumbUrl || fallbackThumbUrl);
+  }, [primaryThumbUrl, fallbackThumbUrl]);
 
   const getUrl = async () => {
     if (file.url) return file.url;
@@ -560,17 +581,22 @@ const FileRowItem = memo(function FileRowItem({
           {isSelected ? <CheckSquare size={19} /> : <Square size={19} />}
         </button>
 
-        {/* Thumbnail on All Devices (Mobile, Tablet, Desktop) */}
-        {(tmdbEpisode && tmdbEpisode.still_path && isTvMedia) ? (
+        {/* Thumbnail on All Devices (Mobile, Tablet, Desktop) - Uses episode still or falls back to show landscape poster for uniform layout & resolution */}
+        {(isTvMedia && (thumbSrc || fallbackThumbUrl)) ? (
           <div className="relative shrink-0 rounded-xl overflow-hidden bg-black/10 dark:bg-white/10 w-24 h-14 sm:w-32 sm:h-16 md:w-36 md:h-20 self-start sm:self-center shadow-sm">
             <img 
-              src={`/api/image-proxy?url=${encodeURIComponent(`https://image.tmdb.org/t/p/w300${tmdbEpisode.still_path}`)}`} 
-              alt={tmdbEpisode.name || 'Episode thumbnail'} 
+              src={thumbSrc || fallbackThumbUrl || ''} 
+              alt={tmdbEpisode?.name || fallbackTitle || file.name || 'Episode thumbnail'} 
               loading="lazy"
               referrerPolicy="no-referrer"
+              onError={() => {
+                if (fallbackThumbUrl && thumbSrc !== fallbackThumbUrl) {
+                  setThumbSrc(fallbackThumbUrl);
+                }
+              }}
               className={`w-full h-full object-cover transition ${isWatched ? 'opacity-50 grayscale hover:grayscale-0 hover:opacity-100' : ''}`}
             />
-            {typeof tmdbEpisode.vote_average === 'number' && tmdbEpisode.vote_average > 0 && (
+            {typeof tmdbEpisode?.vote_average === 'number' && tmdbEpisode.vote_average > 0 && (
               <span className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 backdrop-blur-sm text-amber-400 font-bold text-[9px] sm:text-[10px] rounded leading-none flex items-center gap-0.5">
                 ★ {tmdbEpisode.vote_average.toFixed(1)}
               </span>
@@ -1842,6 +1868,20 @@ export default function Details() {
     return '';
   }, [tmdb]);
 
+  // Fallback landscape poster for episodes lacking individual TMDB episode thumbnails
+  const fallbackLandscapePoster = useMemo(() => {
+    const rawPath = tmdb?.backdrop_path || 
+      initialTmdb?.backdrop_path || 
+      location.state?.item?.backdropPath || 
+      location.state?.item?.backdrop_path || 
+      location.state?.tmdbData?.backdrop_path || 
+      location.state?.tmdbData?.backdropPath || 
+      tmdb?.poster_path || 
+      initialTmdb?.poster_path || 
+      location.state?.item?.posterPath;
+    return typeof rawPath === 'string' ? rawPath : null;
+  }, [tmdb, initialTmdb, location.state]);
+
   // Extract Status Text
   const statusText = useMemo(() => {
     if (tmdb?.status) return tmdb.status;
@@ -2458,6 +2498,7 @@ export default function Details() {
                         tmdbEpisode={tmdbEpisode}
                         showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
                         isTvMedia={isTvMedia}
+                        fallbackLandscapePoster={fallbackLandscapePoster || seasonData?.poster_path}
                       />
                     );
                   })}
@@ -2510,6 +2551,7 @@ export default function Details() {
                       tmdbEpisode={tmdbEpisode}
                       showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
                       isTvMedia={isTvMedia}
+                      fallbackLandscapePoster={fallbackLandscapePoster || seasonData?.poster_path}
                     />
                   );
                 })}
