@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle, Archive
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle, Archive, Subtitles
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue } from 'motion/react';
 import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
@@ -30,7 +30,12 @@ function IntentPlayerModal({
   config, 
   onClose, 
   onPlayWeb,
-  onExternalPlay
+  onExternalPlay,
+  user,
+  tmdb,
+  tmdbEpisode,
+  showToast,
+  isTvMedia
 }: { 
   item: any; 
   itemPath: string; 
@@ -39,9 +44,15 @@ function IntentPlayerModal({
   onClose: () => void; 
   onPlayWeb: (url: string) => void; 
   onExternalPlay: () => void;
+  user?: string | null;
+  tmdb?: any;
+  tmdbEpisode?: any;
+  showToast?: (msg: string) => void;
+  isTvMedia?: boolean;
 }) {
   const [url, setUrl] = useState(item.url || '');
   const [loading, setLoading] = useState(!item.url);
+  const [subLoading, setSubLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [os, setOs] = useState<'unknown' | 'android' | 'ios' | 'macos' | 'windows'>('unknown');
 
@@ -112,6 +123,90 @@ function IntentPlayerModal({
       setCopied(true);
       onExternalPlay();
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleDownloadSubtitleModal = async () => {
+    if (!token || user === 'guest') {
+      if (showToast) showToast('Please sign in to download subtitles');
+      return;
+    }
+
+    const effectiveTmdbId = tmdb?.id;
+    if (!effectiveTmdbId) {
+      if (showToast) showToast('Media metadata not loaded yet. Please try again.');
+      return;
+    }
+
+    setSubLoading(true);
+    try {
+      const isEp = Boolean(isTvMedia);
+      const meta = extractFileMetadata(item.name, item.size);
+      const season = meta.seasonNum !== null ? meta.seasonNum : (tmdbEpisode?.season_number ?? 1);
+      const epNum = meta.episodeNum !== null ? meta.episodeNum : (tmdbEpisode?.episode_number ?? 1);
+
+      const params = new URLSearchParams({
+        tmdb_id: String(effectiveTmdbId),
+        type: isEp ? 'episode' : 'movie',
+        filename: item.name,
+        language: 'en'
+      });
+      if (isEp) {
+        params.append('season', String(season));
+        params.append('episode', String(epNum));
+      }
+
+      const res = await axios.get(`/api/subtitles/download?${params.toString()}`, {
+        headers: {
+          Authorization: token,
+          'x-user': user || ''
+        },
+        responseType: 'blob'
+      });
+
+      let downloadFilename = '';
+      const headerFilename = res.headers['x-subtitle-filename'];
+      if (headerFilename) {
+        downloadFilename = decodeURIComponent(headerFilename);
+      } else {
+        const baseName = item.name.replace(/\.[^/.]+$/, '') || item.name;
+        downloadFilename = `${baseName}.srt`;
+      }
+
+      const remainingHeader = res.headers['x-subtitles-remaining'];
+      const remainingInfo = remainingHeader && remainingHeader !== 'unlimited' 
+        ? ` (${remainingHeader}/20 left today)` 
+        : '';
+
+      const blob = new Blob([res.data], { type: 'application/x-subrip;charset=utf-8' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = downloadFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      if (showToast) {
+        showToast(`Subtitle downloaded: ${downloadFilename}${remainingInfo}`);
+      }
+    } catch (err: any) {
+      let errorMsg = 'Failed to download subtitle';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          if (json.error) errorMsg = json.error;
+        } catch {
+          // ignore
+        }
+      } else if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      }
+      if (showToast) showToast(errorMsg);
+    } finally {
+      setSubLoading(false);
     }
   };
 
@@ -342,6 +437,16 @@ function IntentPlayerModal({
 
             <div className="flex flex-col gap-2 w-full mt-3">
               <button
+                type="button"
+                onClick={handleDownloadSubtitleModal}
+                disabled={subLoading}
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-xs font-semibold text-purple-600 dark:text-purple-400 transition cursor-pointer disabled:opacity-50"
+              >
+                {subLoading ? <Loader2 size={14} className="animate-spin" /> : <Subtitles size={14} />}
+                <span>Download Subtitle (SUB)</span>
+              </button>
+
+              <button
                 onClick={copyToClipboard}
                 className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer"
               >
@@ -450,7 +555,10 @@ const FileRowItem = memo(function FileRowItem({
   tmdbEpisode,
   showToast,
   isTvMedia,
-  fallbackLandscapePoster
+  fallbackLandscapePoster,
+  user,
+  tmdb,
+  initialTmdb
 }: {
   file: any;
   itemPath: string;
@@ -466,9 +574,12 @@ const FileRowItem = memo(function FileRowItem({
   showToast?: (msg: string) => void;
   isTvMedia?: boolean;
   fallbackLandscapePoster?: string | null;
+  user?: string | null;
+  tmdb?: any;
+  initialTmdb?: any;
 }) {
   const [copied, setCopied] = useState(false);
-  const [actionLoading, setActionLoading] = useState<'copy' | 'download' | null>(null);
+  const [actionLoading, setActionLoading] = useState<'copy' | 'download' | 'sub' | null>(null);
 
   // Helper to format TMDB / external image URLs with w300 resolution
   const getThumbnailUrl = (pathOrUrl: string | undefined | null) => {
@@ -536,6 +647,91 @@ const FileRowItem = memo(function FileRowItem({
     a.click();
     document.body.removeChild(a);
     setActionLoading(null);
+  };
+
+  const handleDownloadSubtitle = async () => {
+    if (!token || user === 'guest') {
+      if (showToast) showToast('Please sign in to download subtitles');
+      return;
+    }
+
+    const effectiveTmdbId = tmdb?.id || initialTmdb?.id;
+    if (!effectiveTmdbId) {
+      if (showToast) showToast('Media metadata not loaded yet. Please try again.');
+      return;
+    }
+
+    setActionLoading('sub');
+    try {
+      const isEp = Boolean(isTvMedia);
+      const season = meta.seasonNum !== null ? meta.seasonNum : (tmdbEpisode?.season_number ?? 1);
+      const epNum = meta.episodeNum !== null ? meta.episodeNum : (tmdbEpisode?.episode_number ?? 1);
+
+      const params = new URLSearchParams({
+        tmdb_id: String(effectiveTmdbId),
+        type: isEp ? 'episode' : 'movie',
+        filename: file.name,
+        language: 'en'
+      });
+      if (isEp) {
+        params.append('season', String(season));
+        params.append('episode', String(epNum));
+      }
+
+      const res = await axios.get(`/api/subtitles/download?${params.toString()}`, {
+        headers: {
+          Authorization: token,
+          'x-user': user || ''
+        },
+        responseType: 'blob'
+      });
+
+      // Extract filename from response header or compute
+      let downloadFilename = '';
+      const headerFilename = res.headers['x-subtitle-filename'];
+      if (headerFilename) {
+        downloadFilename = decodeURIComponent(headerFilename);
+      } else {
+        const baseName = file.name.replace(/\.[^/.]+$/, '') || file.name;
+        downloadFilename = `${baseName}.srt`;
+      }
+
+      // Check daily remaining
+      const remainingHeader = res.headers['x-subtitles-remaining'];
+      const remainingInfo = remainingHeader && remainingHeader !== 'unlimited' 
+        ? ` (${remainingHeader}/20 left today)` 
+        : '';
+
+      const blob = new Blob([res.data], { type: 'application/x-subrip;charset=utf-8' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = downloadFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      if (showToast) {
+        showToast(`Subtitle downloaded: ${downloadFilename}${remainingInfo}`);
+      }
+    } catch (err: any) {
+      let errorMsg = 'Failed to download subtitle';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          if (json.error) errorMsg = json.error;
+        } catch {
+          // ignore
+        }
+      } else if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      }
+      if (showToast) showToast(errorMsg);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   let fallbackTitle = file.name;
@@ -651,13 +847,15 @@ const FileRowItem = memo(function FileRowItem({
           {isWatched ? <Check size={16} /> : <Eye size={16} />}
         </button>
 
+        {/* SUB Button for downloading movies and shows subtitles */}
         <button
-          onClick={handleDownload}
-          disabled={actionLoading === 'download'}
-          className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition flex items-center justify-center cursor-pointer disabled:opacity-50"
-          title="Download File"
+          onClick={handleDownloadSubtitle}
+          disabled={actionLoading === 'sub'}
+          className="px-2.5 sm:px-3 py-2 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95 shadow-sm shrink-0"
+          title="Download English Subtitles (SUB)"
         >
-          {actionLoading === 'download' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+          {actionLoading === 'sub' ? <Loader2 size={14} className="animate-spin text-purple-600 dark:text-purple-400" /> : <Subtitles size={14} className="text-purple-600 dark:text-purple-400" />}
+          <span>SUB</span>
         </button>
 
         <button
@@ -667,6 +865,15 @@ const FileRowItem = memo(function FileRowItem({
           title="Copy Direct Link"
         >
           {actionLoading === 'copy' ? <Loader2 size={16} className="animate-spin" /> : copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+        </button>
+
+        <button
+          onClick={handleDownload}
+          disabled={actionLoading === 'download'}
+          className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+          title="Download File"
+        >
+          {actionLoading === 'download' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
         </button>
 
         <button
@@ -2499,6 +2706,9 @@ export default function Details() {
                         showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
                         isTvMedia={isTvMedia}
                         fallbackLandscapePoster={fallbackLandscapePoster || seasonData?.poster_path}
+                        user={user}
+                        tmdb={tmdb}
+                        initialTmdb={initialTmdb}
                       />
                     );
                   })}
@@ -2552,6 +2762,9 @@ export default function Details() {
                       showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
                       isTvMedia={isTvMedia}
                       fallbackLandscapePoster={fallbackLandscapePoster || seasonData?.poster_path}
+                      user={user}
+                      tmdb={tmdb}
+                      initialTmdb={initialTmdb}
                     />
                   );
                 })}
@@ -2657,6 +2870,11 @@ export default function Details() {
             onExternalPlay={() => {
               recordWatched(intentModalData.item.name, intentModalData.path, intentModalData.tmdbEpisode);
             }}
+            user={user}
+            tmdb={tmdb || initialTmdb}
+            tmdbEpisode={intentModalData.tmdbEpisode}
+            showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
+            isTvMedia={isTvMedia}
           />
         )}
       </AnimatePresence>

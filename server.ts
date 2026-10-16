@@ -1180,6 +1180,231 @@ app.get('/api/subtitles', async (req, res) => {
   }
 });
 
+// --- SUBTITLE DOWNLOAD & MATCHING LOGIC (Wyzie API) ---
+let subtitleDownloadsDaily: Record<string, { date: string; count: number; timestamps: number[] }> = {};
+
+function detectSourceTag(filename: string): 'WEBRIP' | 'WEB-DL' | 'BLURAY' | null {
+  const clean = String(filename || '').toLowerCase();
+  if (/web[-._]?rip/i.test(clean)) return 'WEBRIP';
+  if (/web[-._]?dl|webdl|\bweb\b/i.test(clean)) return 'WEB-DL';
+  if (/blu[-._]?ray|bluray|bd[-._]?rip|bdrip|br[-._]?rip|brrip|uhd[-._]?rip/i.test(clean)) return 'BLURAY';
+  return null;
+}
+
+function findBestEnglishSubtitle(subtitles: any[], filename: string): any | null {
+  if (!Array.isArray(subtitles) || subtitles.length === 0) return null;
+
+  // 1. Filter for English subtitles
+  const englishSubs = subtitles.filter(s => {
+    const lang = String(s.language || '').toLowerCase().trim();
+    const disp = String(s.display || '').toLowerCase().trim();
+    return lang === 'en' || lang.startsWith('en') || disp.includes('english');
+  });
+
+  const candidates = englishSubs.length > 0 ? englishSubs : subtitles;
+  const targetTag = detectSourceTag(filename);
+
+  const scored = candidates.map(sub => {
+    let score = 0;
+    const allText = [
+      sub.origin || '',
+      sub.release || '',
+      Array.isArray(sub.releases) ? sub.releases.join(' ') : '',
+      sub.fileName || ''
+    ].join(' ').toLowerCase();
+
+    // Tag matching: WEB-DL, BLURAY, WEBRIP based on openlist filename tag
+    if (targetTag === 'WEBRIP') {
+      if (/web[-._]?rip/i.test(allText)) {
+        score += 150;
+      } else if (/web[-._]?dl|webdl|\bweb\b/i.test(allText) || (sub.origin && /web/i.test(sub.origin))) {
+        score += 50;
+      }
+    } else if (targetTag === 'WEB-DL') {
+      if (/web[-._]?dl|webdl/i.test(allText)) {
+        score += 150;
+      } else if (sub.origin && /web/i.test(sub.origin)) {
+        score += 80;
+      } else if (/web[-._]?rip/i.test(allText)) {
+        score += 50;
+      }
+    } else if (targetTag === 'BLURAY') {
+      if (/blu[-._]?ray|bluray|bd[-._]?rip|bdrip|br[-._]?rip|brrip/i.test(allText) || (sub.origin && /bluray/i.test(sub.origin))) {
+        score += 150;
+      }
+    }
+
+    // Resolution bonus
+    const resMatch = filename.match(/\b(2160p|4k|1080p|720p|480p)\b/i);
+    if (resMatch) {
+      const resVal = resMatch[1].toLowerCase();
+      if (allText.includes(resVal)) score += 30;
+    }
+
+    // Codec bonus
+    const codecMatch = filename.match(/\b(x264|h264|x265|h265|hevc|av1)\b/i);
+    if (codecMatch) {
+      const codecVal = codecMatch[1].toLowerCase();
+      if (allText.includes(codecVal)) score += 15;
+    }
+
+    // Release group bonus (e.g. SPARKS, YTS, PSA, GECKOS, ION10, etc.)
+    const groupMatch = filename.match(/-([a-zA-Z0-9]+)(?:\.[a-zA-Z0-9]{2,4})?$/);
+    if (groupMatch && groupMatch[1] && groupMatch[1].length >= 3) {
+      if (allText.includes(groupMatch[1].toLowerCase())) {
+        score += 40;
+      }
+    }
+
+    // Prefer non-hearing impaired unless requested
+    if (!sub.isHearingImpaired) {
+      score += 5;
+    }
+
+    // Downloads tie-breaker
+    if (typeof sub.downloadCount === 'number' && sub.downloadCount > 0) {
+      score += Math.min(20, Math.log10(sub.downloadCount + 1) * 3);
+    }
+
+    return { sub, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0]?.sub || candidates[0];
+}
+
+// Check Subtitle Daily Quota
+app.get('/api/subtitles/quota', async (req, res) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user || user === 'guest') {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const isAdmin = await isUserAdmin(user);
+    const today = new Date().toISOString().slice(0, 10);
+    const normUser = user.trim().toLowerCase();
+    const userRec = subtitleDownloadsDaily[normUser];
+    const used = (userRec && userRec.date === today) ? (userRec.count || 0) : 0;
+    const limit = 20;
+    const remaining = isAdmin ? 999999 : Math.max(0, limit - used);
+
+    return res.json({
+      username: user,
+      isAdmin,
+      limit: isAdmin ? 'unlimited' : limit,
+      used,
+      remaining: isAdmin ? 'unlimited' : remaining
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Download Subtitle matched to tag with daily user limit (20 daily, admins exempt)
+app.get('/api/subtitles/download', async (req, res) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user || user === 'guest') {
+      return res.status(401).json({ error: 'Please sign in to download subtitles' });
+    }
+
+    const isAdmin = await isUserAdmin(user);
+    const today = new Date().toISOString().slice(0, 10);
+    const normUser = user.trim().toLowerCase();
+    const userRec = subtitleDownloadsDaily[normUser];
+    const currentCount = (userRec && userRec.date === today) ? (userRec.count || 0) : 0;
+
+    // Daily limit: 20 per day (admins exempt)
+    if (!isAdmin && currentCount >= 20) {
+      return res.status(429).json({
+        error: 'Daily subtitle download limit reached (20/20). Please try again tomorrow.',
+        limit: 20,
+        used: currentCount,
+        remaining: 0
+      });
+    }
+
+    const { tmdb_id, type, season, episode, language = 'en', filename = '' } = req.query;
+    if (!tmdb_id) {
+      return res.status(400).json({ error: 'tmdb_id is required' });
+    }
+
+    const apiKey = process.env.WYZIE_API_KEY || '';
+    let searchUrl = `https://sub.wyzie.io/search?id=${tmdb_id}&language=${language}`;
+    if (apiKey) searchUrl += `&key=${apiKey}`;
+    if (type === 'episode' || type === 'tv') {
+      if (season !== undefined && season !== null && season !== '') searchUrl += `&season=${season}`;
+      if (episode !== undefined && episode !== null && episode !== '') searchUrl += `&episode=${episode}`;
+    }
+
+    const searchResponse = await fetch(searchUrl);
+    if (!searchResponse.ok) {
+      return res.status(502).json({ error: 'Wyzie API search failed' });
+    }
+
+    const searchData = await searchResponse.json();
+    if (!Array.isArray(searchData) || searchData.length === 0) {
+      return res.status(404).json({ error: 'No English subtitles found for this media' });
+    }
+
+    // Match to WEB-DL, BLURAY, or WEBRIP depending on filename tag
+    const bestSub = findBestEnglishSubtitle(searchData, String(filename || ''));
+    if (!bestSub || !bestSub.url) {
+      return res.status(404).json({ error: 'No matching English subtitle found' });
+    }
+
+    // Fetch subtitle file content from Wyzie CDN
+    const subRes = await fetch(bestSub.url);
+    if (!subRes.ok) {
+      return res.status(502).json({ error: 'Failed to download subtitle file from provider' });
+    }
+
+    const subText = await subRes.text();
+
+    // Deduct quota / record usage for non-admin users
+    if (!isAdmin) {
+      if (!subtitleDownloadsDaily[normUser] || subtitleDownloadsDaily[normUser].date !== today) {
+        subtitleDownloadsDaily[normUser] = {
+          date: today,
+          count: 1,
+          timestamps: [Date.now()]
+        };
+      } else {
+        subtitleDownloadsDaily[normUser].count += 1;
+        subtitleDownloadsDaily[normUser].timestamps.push(Date.now());
+      }
+      writeSQLiteJSON('subtitle_downloads_daily', subtitleDownloadsDaily).catch(() => {});
+    }
+
+    // Activity log
+    addLog('subtitle_download', user, `Downloaded English subtitle for "${filename || tmdb_id}" (tag match: ${detectSourceTag(String(filename)) || 'standard'}, origin: ${bestSub.origin || 'unknown'})`);
+
+    // Determine downloaded filename: rename subtitle to the filename on openlist (don't rename extension)
+    const rawFilename = String(filename || '').trim();
+    let baseName = rawFilename;
+    if (baseName) {
+      baseName = baseName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, '');
+    } else {
+      baseName = `Subtitle-${tmdb_id}`;
+    }
+
+    const subExt = bestSub.format ? `.${bestSub.format.replace(/^\./, '')}` : (path.extname(bestSub.fileName || '') || '.srt');
+    const finalFilename = `${baseName}${subExt}`;
+
+    const remainingCount = isAdmin ? 'unlimited' : String(Math.max(0, 20 - (currentCount + 1)));
+
+    res.setHeader('Content-Type', 'application/x-subrip; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(finalFilename)}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
+    res.setHeader('X-Subtitle-Filename', encodeURIComponent(finalFilename));
+    res.setHeader('X-Subtitles-Remaining', remainingCount);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Subtitle-Filename, X-Subtitles-Remaining');
+    return res.send(subText);
+  } catch (err: any) {
+    console.error('[Subtitle Download] Error:', err);
+    return res.status(500).json({ error: err.message || 'Internal subtitle download error' });
+  }
+});
+
 app.get('/api/image-proxy', async (req, res) => {
   try {
     const imageUrl = req.query.url as string;
@@ -5729,6 +5954,7 @@ export async function initSQLiteState() {
     downloadTracker = (await readSQLiteJSON('download_tracker')) || {};
     tmdbSeasonCache = (await readSQLiteJSON('tmdb_season_cache')) || {};
     activeUserSessions = (await readSQLiteJSON('active_user_sessions')) || {};
+    subtitleDownloadsDaily = (await readSQLiteJSON('subtitle_downloads_daily')) || {};
     const savedInvalidated = (await readSQLiteJSON('invalidated_tokens')) || [];
     savedInvalidated.forEach((t: string) => invalidatedTokens.add(t));
   } catch (err) {
