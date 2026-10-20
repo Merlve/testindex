@@ -192,17 +192,29 @@ function IntentPlayerModal({
         showToast(`Subtitle downloaded: ${downloadFilename}${remainingInfo}`);
       }
     } catch (err: any) {
-      let errorMsg = 'Failed to download subtitle';
-      if (err.response?.data instanceof Blob) {
+      let errorMsg = 'no subtitles available';
+      if (err.response?.status === 429) {
+        errorMsg = 'Daily subtitle download limit reached (20/20). Try again tomorrow.';
+      } else if (err.response?.data instanceof Blob) {
         try {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
-          if (json.error) errorMsg = json.error;
+          if (json.error) {
+            if (/limit|quota/i.test(json.error) || err.response?.status === 429) {
+              errorMsg = json.error;
+            } else {
+              errorMsg = 'no subtitles available';
+            }
+          }
         } catch {
-          // ignore
+          errorMsg = 'no subtitles available';
         }
       } else if (err.response?.data?.error) {
-        errorMsg = err.response.data.error;
+        if (/limit|quota/i.test(err.response.data.error) || err.response?.status === 429) {
+          errorMsg = err.response.data.error;
+        } else {
+          errorMsg = 'no subtitles available';
+        }
       }
       if (showToast) showToast(errorMsg);
     } finally {
@@ -716,17 +728,29 @@ const FileRowItem = memo(function FileRowItem({
         showToast(`Subtitle downloaded: ${downloadFilename}${remainingInfo}`);
       }
     } catch (err: any) {
-      let errorMsg = 'Failed to download subtitle';
-      if (err.response?.data instanceof Blob) {
+      let errorMsg = 'no subtitles available';
+      if (err.response?.status === 429) {
+        errorMsg = 'Daily subtitle download limit reached (20/20). Try again tomorrow.';
+      } else if (err.response?.data instanceof Blob) {
         try {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
-          if (json.error) errorMsg = json.error;
+          if (json.error) {
+            if (/limit|quota/i.test(json.error) || err.response?.status === 429) {
+              errorMsg = json.error;
+            } else {
+              errorMsg = 'no subtitles available';
+            }
+          }
         } catch {
-          // ignore
+          errorMsg = 'no subtitles available';
         }
       } else if (err.response?.data?.error) {
-        errorMsg = err.response.data.error;
+        if (/limit|quota/i.test(err.response.data.error) || err.response?.status === 429) {
+          errorMsg = err.response.data.error;
+        } else {
+          errorMsg = 'no subtitles available';
+        }
       }
       if (showToast) showToast(errorMsg);
     } finally {
@@ -924,7 +948,7 @@ export default function Details() {
   const cleanName = parsed.cleanName || name;
   const parsedYear = parsed.year || '';
 
-  const tmdbId = location.state?.item?._jf?.tmdbId || location.state?.item?.tmdbId || location.state?.tmdbData?.id || null;
+  const tmdbId = location.state?.item?._jf?.tmdbId || (location.state?.tmdbData?.id ? location.state.tmdbData.id : null);
 
   const rawOpenlistPath = actualPathOverride || (location.state?.tmdbData?.id ? config?.digitalReleasePaths?.[location.state.tmdbData.id] : null) || location.state?.item?.openlist_path || location.state?.item?.path || fullPath;
   const actualItemOpenlistPath = rawOpenlistPath.startsWith('/') ? rawOpenlistPath : `/${rawOpenlistPath}`;
@@ -1877,7 +1901,30 @@ export default function Details() {
       setShowMetadataModal(false);
       setToast('Metadata updated globally');
       setTimeout(() => setToast(''), 2000);
-      localStorage.setItem('meta_version', String(Date.now()));
+      const newMetaVer = String(Date.now());
+      localStorage.setItem('meta_version', newMetaVer);
+
+      // Immediately synchronize React Query cache across all keys for this item
+      queryClient.setQueryData(tmdbQueryKey, updatedData);
+      queryClient.setQueryData(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, undefined], updatedData);
+      queryClient.setQueryData(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, selected.id], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, location.state?.item?.parentPath], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, `/home/${category}`], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, undefined], updatedData);
+
+      try {
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          window.history.replaceState({
+            ...window.history.state,
+            usr: {
+              ...(window.history.state?.usr || {}),
+              tmdbData: updatedData,
+              metaVer: newMetaVer,
+            }
+          }, '');
+        }
+      } catch (e) {}
+
       softRefreshMediaCaches(queryClient);
     } catch (e: any) {
       console.error(e);
@@ -1901,13 +1948,34 @@ export default function Details() {
         currentData: tmdb
       }, { headers: { Authorization: token } });
       
-      if (res.data && res.data.data) {
-        setTmdb(res.data.data);
-      }
+      const updatedData = res.data?.data || { ...(tmdb || {}), title: customTitle.trim(), name: customTitle.trim() };
+      setTmdb(updatedData);
       setShowMetadataModal(false);
       setToast('Custom metadata saved');
       setTimeout(() => setToast(''), 2000);
-      localStorage.setItem('meta_version', String(Date.now()));
+      const newMetaVer = String(Date.now());
+      localStorage.setItem('meta_version', newMetaVer);
+
+      // Immediately synchronize React Query cache across all keys for this item
+      queryClient.setQueryData(tmdbQueryKey, updatedData);
+      queryClient.setQueryData(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, undefined], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, location.state?.item?.parentPath], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, `/home/${category}`], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, undefined], updatedData);
+
+      try {
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          window.history.replaceState({
+            ...window.history.state,
+            usr: {
+              ...(window.history.state?.usr || {}),
+              tmdbData: updatedData,
+              metaVer: newMetaVer,
+            }
+          }, '');
+        }
+      } catch (e) {}
+
       softRefreshMediaCaches(queryClient);
     } catch (e: any) {
       console.error(e);

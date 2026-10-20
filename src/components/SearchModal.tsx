@@ -226,7 +226,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
             {loading ? (
               <div className="p-8 flex flex-col items-center justify-center text-gray-600 dark:text-gray-400">
                 <Loader2 className="w-8 h-8 animate-spin mb-4 text-purple-400" />
-                <span className="text-sm">Searching Openlist...</span>
+                <span className="text-sm">Searching...</span>
               </div>
             ) : suggestions.length > 0 ? (
               <div className="py-2">

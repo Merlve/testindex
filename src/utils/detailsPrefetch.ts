@@ -341,7 +341,7 @@ export function prefetchItemDetails(
   }
   prefetchedPaths.set(actualItemOpenlistPath, now);
 
-  const tmdbId = item?._jf?.tmdbId || item?.tmdbId || tmdbData?.id;
+  const tmdbId = item?._jf?.tmdbId || (tmdbData?.id ? tmdbData.id : null);
 
   // 1. Prefetch full metadata into QueryClient
   queryClient.prefetchQuery({

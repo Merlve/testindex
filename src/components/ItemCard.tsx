@@ -565,7 +565,7 @@ const ItemCard = function ItemCard({
   return (
     <>
       {item._rec ? (
-          <a href={`https://www.themoviedb.org/${displayTmdb?.media_type || (category === 'SERIES' || category === 'ANIME' ? 'tv' : 'movie')}/${displayTmdb?.id || item._jf?.tmdbId || item.id || ''}`} target="_blank" rel="noopener noreferrer" className={cardClasses}>
+          <a href={`https://www.themoviedb.org/${displayTmdb?.media_type || (category === 'SERIES' || category === 'ANIME' ? 'tv' : 'movie')}/${displayTmdb?.id || item._jf?.tmdbId || ''}`} target="_blank" rel="noopener noreferrer" className={cardClasses}>
               {innerContent}
           </a>
       ) : (
@@ -583,7 +583,7 @@ const ItemCard = function ItemCard({
                 ...displayTmdb,
                 digital_release_date: displayTmdb.digital_release_date || item.digitalReleaseDate || item.digital_release_date || (item._digital_release ? item.releaseDate : undefined)
               } : displayTmdb, 
-              metaVer: currentMetaVer 
+              metaVer: localStorage.getItem('meta_version') || currentMetaVer 
             }}
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}

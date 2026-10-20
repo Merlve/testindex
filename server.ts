@@ -431,20 +431,28 @@ const adminMiddleware = async (req: express.Request, res: express.Response, next
 function parseMediaName(rawName: string) {
   const baseName = rawName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i, "");
   let cleanName = baseName;
-  cleanName = cleanName.replace(/[\(\[].*?[\)\]]/g, " ");
-  
-  const yearRegex = /[._\-\s](19\d{2}|20\d{2})(?=[._\-\s]|$)/g;
+
+  // Strip common season/episode patterns so they don't break TMDB search
+  const seMatch = cleanName.match(/(?:^|[._\-\s])([sS]\d{1,2}[eE]\d{1,3}|[sS]\d{1,2}[\s\-]*(?:[eE][pP]?)?\s*\d{1,3}|[eE]\d{1,3}(?:-[eE]?\d{1,3})?|[eE][pP]?(?:isode)?\s*\d{1,3}|[sS]eason\s*\d{1,2})(?:[._\-\s]|$)/i);
+  if (seMatch && seMatch.index !== undefined && seMatch.index > 0) {
+    cleanName = cleanName.substring(0, seMatch.index);
+  } else {
+    cleanName = cleanName.replace(/(?:^|[._\-\s])([sS]\d{1,2}[eE]\d{1,3}|[sS]\d{1,2}[\s\-]*(?:[eE][pP]?)?\s*\d{1,3}|[eE]\d{1,3}(?:-[eE]?\d{1,3})?|[eE][pP]?(?:isode)?\s*\d{1,3}|[sS]eason\s*\d{1,2})(?:[._\-\s]|$)/gi, " ");
+  }
+
+  const yearRegex = /(?:[._\-\s\(\[])(19\d{2}|20\d{2})(?=[._\-\s\)\]]|$)/g;
   let match;
   let lastMatch = null;
   while ((match = yearRegex.exec(cleanName)) !== null) {
     lastMatch = match;
   }
   let year = '';
-  if (lastMatch) {
+  if (lastMatch && lastMatch.index > 0) {
     year = lastMatch[1];
     cleanName = cleanName.substring(0, lastMatch.index);
   }
   
+  cleanName = cleanName.replace(/[\(\[].*?[\)\]]/g, " ");
   cleanName = cleanName.replace(/\b(720p|1080p|1080i|2160p|4k|8k|webdl|web-dl|webrip|hdrip|bluray|x264|x265|hevc|aac|dts|hdtv|remux)\b/gi, " ");
   cleanName = cleanName.replace(/[._\-\s]+/g, " ").trim();
   
@@ -593,41 +601,56 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
 
   // 1. EXACT PATH MATCH (HIGHEST PRIORITY - Strictly unique per Openlist item)
   if (itemPath && !isGenericCategoryRoot(itemPath)) {
-    const cleanP = itemPath.replace(/^\/+/, '');
-    const p1 = `path-${cleanP}`;
-    const p2 = `path-/${cleanP}`;
-    if (cache[p1]?._overridden) return p1;
-    if (cache[p2]?._overridden) return p2;
+    const cleanP = itemPath.replace(/^\/+/, '').replace(/\/+$/, '');
+    const cleanWithoutHome = cleanP.replace(/^home\//i, '');
+    const cleanWithHome = `home/${cleanWithoutHome}`;
+    const pathCandidates = [
+      `path-${cleanP}`,
+      `path-/${cleanP}`,
+      `path-${cleanWithoutHome}`,
+      `path-/${cleanWithoutHome}`,
+      `path-${cleanWithHome}`,
+      `path-/${cleanWithHome}`
+    ];
+    for (const p of pathCandidates) {
+      if (cache[p]?._overridden) return p;
+    }
   }
 
   // 2. EXACT YEAR MATCH: ${type}-${baseQuery}-${year}
   const cleanYearStr = year ? String(year).trim() : null;
-  if (cleanYearStr && baseQuery) {
-    for (const t of typesToCheck) {
-      if (!t) continue;
-      const cacheKey = `${t}-${baseQuery}-${cleanYearStr}`;
-      const candidate = cache[cacheKey];
-      if (candidate?._overridden) {
-        // Confirm candidate release year matches requested year
-        const candYear = (candidate.release_date || candidate.first_air_date || '').substring(0, 4);
-        if (!candYear || candYear === cleanYearStr) {
-          return cacheKey;
+  const parsed = parseMediaName(baseQuery);
+  const queryCandidates = Array.from(new Set([
+    baseQuery,
+    (parsed.cleanName || '').toLowerCase().trim()
+  ].filter(Boolean)));
+
+  if (cleanYearStr && queryCandidates.length > 0) {
+    for (const q of queryCandidates) {
+      for (const t of typesToCheck) {
+        if (!t) continue;
+        const cacheKey = `${t}-${q}-${cleanYearStr}`;
+        const candidate = cache[cacheKey];
+        if (candidate?._overridden) {
+          const candYear = (candidate.release_date || candidate.first_air_date || '').substring(0, 4);
+          if (!candYear || candYear === cleanYearStr) {
+            return cacheKey;
+          }
         }
       }
     }
-    // CRITICAL: If a year was provided, NEVER fall back to non-year keys or different years!
-    // A 2015 movie must NEVER inherit a 2023 movie's metadata!
-    return null;
   }
 
-  // 3. NO YEAR SPECIFIED: Fall back to non-year key ONLY if !cleanYearStr
-  if (!cleanYearStr && baseQuery) {
-    for (const t of typesToCheck) {
-      if (!t) continue;
-      const baseKey = `${t}-${baseQuery}`;
-      const candidate = cache[baseKey];
-      if (candidate?._overridden) {
-        return baseKey;
+  // 3. NO YEAR SPECIFIED: Fall back to non-year key
+  if (queryCandidates.length > 0) {
+    for (const q of queryCandidates) {
+      for (const t of typesToCheck) {
+        if (!t) continue;
+        const baseKey = `${t}-${q}`;
+        const candidate = cache[baseKey];
+        if (candidate?._overridden) {
+          return baseKey;
+        }
       }
     }
   }
@@ -1337,26 +1360,36 @@ app.get('/api/subtitles/download', async (req, res) => {
       if (episode !== undefined && episode !== null && episode !== '') searchUrl += `&episode=${episode}`;
     }
 
-    const searchResponse = await fetch(searchUrl);
-    if (!searchResponse.ok) {
-      return res.status(502).json({ error: 'Wyzie API search failed' });
+    let searchResponse: any = null;
+    try {
+      searchResponse = await fetch(searchUrl);
+    } catch (e) {
+      return res.status(404).json({ error: 'no subtitles available' });
+    }
+    if (!searchResponse || !searchResponse.ok) {
+      return res.status(404).json({ error: 'no subtitles available' });
     }
 
-    const searchData = await searchResponse.json();
+    const searchData = await searchResponse.json().catch(() => null);
     if (!Array.isArray(searchData) || searchData.length === 0) {
-      return res.status(404).json({ error: 'No English subtitles found for this media' });
+      return res.status(404).json({ error: 'no subtitles available' });
     }
 
     // Match to WEB-DL, BLURAY, or WEBRIP depending on filename tag
     const bestSub = findBestEnglishSubtitle(searchData, String(filename || ''));
     if (!bestSub || !bestSub.url) {
-      return res.status(404).json({ error: 'No matching English subtitle found' });
+      return res.status(404).json({ error: 'no subtitles available' });
     }
 
     // Fetch subtitle file content from Wyzie CDN
-    const subRes = await fetch(bestSub.url);
-    if (!subRes.ok) {
-      return res.status(502).json({ error: 'Failed to download subtitle file from provider' });
+    let subRes: any = null;
+    try {
+      subRes = await fetch(bestSub.url);
+    } catch (e) {
+      return res.status(404).json({ error: 'no subtitles available' });
+    }
+    if (!subRes || !subRes.ok) {
+      return res.status(404).json({ error: 'no subtitles available' });
     }
 
     const subText = await subRes.text();
@@ -1401,7 +1434,7 @@ app.get('/api/subtitles/download', async (req, res) => {
     return res.send(subText);
   } catch (err: any) {
     console.error('[Subtitle Download] Error:', err);
-    return res.status(500).json({ error: err.message || 'Internal subtitle download error' });
+    return res.status(404).json({ error: 'no subtitles available' });
   }
 });
 
@@ -3176,7 +3209,8 @@ app.post('/api/fs/remove', async (req, res) => {
 });
 
 // Helper: Parse IMDb or TMDB external IDs from search inputs or URLs
-function parseExternalIds(input: string | any) {
+// CRITICAL: Pure numbers like 1883, 1923, 2012 are titles/years, NOT TMDB IDs!
+function parseExternalIds(input: string | any, allowPureNumbers: boolean = false) {
   if (!input || typeof input !== 'string') return null;
   const q = input.trim();
 
@@ -3199,8 +3233,9 @@ function parseExternalIds(input: string | any) {
     return { type: 'tmdb' as const, id: Number(tmdbPrefixMatch[1]) };
   }
 
-  // 4. Pure numeric digits: e.g. 1022789 or 278
-  if (/^\d{1,9}$/.test(q)) {
+  // 4. Pure numeric digits: only allowed when allowPureNumbers is explicitly true (search/fix metadata),
+  // and ONLY for 5+ digits (to avoid hijacking shows/movies titled 1883, 1923, 2012, 300, 1917, 1408, etc.)
+  if (allowPureNumbers && /^\d{5,9}$/.test(q)) {
     return { type: 'tmdb' as const, id: Number(q) };
   }
 
@@ -3397,7 +3432,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
           const getUniqId = (item: any) => '/' + (item.parent || '').replace(/^\/+/, '') + '/' + item.name;
           const seen = new Set(content.map(getUniqId));
           for (const item of libIndex) {
-            const itemTmdbId = item._jf?.tmdbId || item.tmdbId || item.id;
+            const itemTmdbId = item._jf?.tmdbId || item.tmdbId;
             if (itemTmdbId && Number(itemTmdbId) === Number(resolvedTmdbId)) {
               let itemParent = item.parent;
               if (!itemParent && item.openlist_path) {
@@ -3488,7 +3523,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
           const entry = tmdbCache[key];
           if (!entry) return false;
           
-          if (/^\d+$/.test(q) && String(entry.id) === q) return true;
+          if (resolvedTmdbId && Number(entry.id) === Number(resolvedTmdbId)) return true;
           
           const title = cleanStr(entry.title || '');
           const name = cleanStr(entry.name || '');
@@ -3515,7 +3550,7 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
             }
           }
 
-          if (keywords && typeof keywords === 'string' && keywords.length >= 3 && !/^\d+$/.test(keywords.trim()) && process.env.TMDB_API_KEY) {
+          if (keywords && typeof keywords === 'string' && keywords.length >= 2 && process.env.TMDB_API_KEY) {
              try {
                 const multiRes = await axios.get(`https://api.themoviedb.org/3/search/multi?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(keywords.trim())}`);
                 if (multiRes.data && multiRes.data.results) {
@@ -3760,8 +3795,8 @@ app.get('/api/meta/search_all', cacheMiddleware(3600, true), async (req, res) =>
        searchType = forceType;
     }
     
-    // Check if query is an IMDb ID or TMDB ID
-    const parsedExt = parseExternalIds(String(query || ''));
+    // Check if query is an IMDb ID or TMDB ID (in search/fix metadata)
+    const parsedExt = parseExternalIds(String(query || ''), true);
     if (parsedExt) {
       if (parsedExt.type === 'imdb') {
         try {
@@ -4106,8 +4141,8 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     cacheKeyToUpdate = baseKey;
   }
 
-  // Strict year mismatch safeguard: If caller requested a specific year and cachedItem has a contradicting year, discard cachedItem!
-  if (cachedItem && year) {
+  // Strict year mismatch safeguard: If caller requested a specific year and non-overridden cachedItem has a contradicting year, discard cachedItem!
+  if (cachedItem && !cachedItem._overridden && year) {
     const candYear = (cachedItem.release_date || cachedItem.first_air_date || '').substring(0, 4);
     if (candYear && candYear !== String(year).trim()) {
       cachedItem = null;
@@ -4132,9 +4167,10 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
 
   try {
     let data: any = { results: [] };
-    const parsedExt = parseExternalIds(query);
-    const targetTmdbId = tmdbId || (parsedExt?.type === 'tmdb' ? parsedExt.id : null);
-    if (targetTmdbId) {
+    // Openlist folder names must ONLY be matched by title, NEVER parsed as TMDB or IMDb IDs!
+    // tmdbId is only used when explicitly passed via query parameter (e.g. from Jellyfin or manual path override)
+    const targetTmdbId = tmdbId ? Number(tmdbId) : null;
+    if (targetTmdbId && !isNaN(targetTmdbId)) {
         try {
             const idRes = await axios.get(`https://api.themoviedb.org/3/${searchType}/${targetTmdbId}?api_key=${tmdbKey}`);
             if (idRes.data) {
@@ -4149,16 +4185,6 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
               }
             } catch (e2) {}
         }
-    } else if (parsedExt?.type === 'imdb') {
-        try {
-          const findRes = await axios.get(`https://api.themoviedb.org/3/find/${parsedExt.id}?api_key=${tmdbKey}&external_source=imdb_id`);
-          const movieResults = findRes.data?.movie_results || [];
-          const tvResults = findRes.data?.tv_results || [];
-          const combined = searchType === 'tv' ? [...tvResults, ...movieResults] : [...movieResults, ...tvResults];
-          if (combined.length > 0) {
-            data = { results: combined };
-          }
-        } catch (e) {}
     }
     
     if (data.results.length === 0) {
@@ -5328,30 +5354,58 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
     const setOverriddenDataInCache = (dataToStore: any) => {
       dataToStore._overridden = true;
       dataToStore._synced = true;
-      tmdbCache[cacheKey] = dataToStore;
       
-      if (!year && !cleanPath) {
-        tmdbCache[baseKey] = dataToStore;
-      }
-      
-      if (pathKey1) tmdbCache[pathKey1] = dataToStore;
-      if (pathKey2) tmdbCache[pathKey2] = dataToStore;
+      const parsedMedia = parseMediaName(query);
+      const cleanQ = (parsedMedia.cleanName || query).toLowerCase().trim();
+      const rawQ = query.toLowerCase().trim();
+      const qYear = year ? String(year).trim() : (parsedMedia.year ? String(parsedMedia.year).trim() : '');
 
-      // Clean up any stale generic baseKey that might leak across different years/movies
-      if ((year || cleanPath) && tmdbCache[baseKey] && tmdbCache[baseKey]._overridden) {
-        delete tmdbCache[baseKey];
-      }
+      const tmdbReleaseYear = (dataToStore.release_date || dataToStore.first_air_date || '').substring(0, 4);
 
-      // Update any other existing keys in tmdbCache that match cleanPath
+      const keysToSet = new Set<string>();
+      keysToSet.add(cacheKey);
+      if (qYear) {
+        keysToSet.add(`${typeStr}-${cleanQ}-${qYear}`);
+        keysToSet.add(`${typeStr}-${rawQ}-${qYear}`);
+      }
+      if (tmdbReleaseYear) {
+        keysToSet.add(`${typeStr}-${cleanQ}-${tmdbReleaseYear}`);
+        keysToSet.add(`${typeStr}-${rawQ}-${tmdbReleaseYear}`);
+      }
+      keysToSet.add(`${typeStr}-${cleanQ}`);
+      keysToSet.add(`${typeStr}-${rawQ}`);
+
       if (cleanPath) {
-        for (const k of Object.keys(tmdbCache)) {
-          if (!year && !cleanPath && k === baseKey) {
-            tmdbCache[k] = dataToStore;
+        const withoutHome = cleanPath.replace(/^home\//i, '');
+        const withHome = `home/${withoutHome}`;
+        keysToSet.add(`path-${cleanPath}`);
+        keysToSet.add(`path-/${cleanPath}`);
+        keysToSet.add(`path-${withoutHome}`);
+        keysToSet.add(`path-/${withoutHome}`);
+        keysToSet.add(`path-${withHome}`);
+        keysToSet.add(`path-/${withHome}`);
+
+        const folderName = cleanPath.split('/').pop() || '';
+        if (folderName) {
+          const folderLower = folderName.toLowerCase();
+          const folderParsed = parseMediaName(folderName);
+          const folderClean = (folderParsed.cleanName || folderName).toLowerCase();
+          const folderYear = folderParsed.year || qYear;
+          if (folderYear) {
+            keysToSet.add(`${typeStr}-${folderClean}-${folderYear}`);
+            keysToSet.add(`${typeStr}-${folderLower}-${folderYear}`);
           }
-          if (k === `path-${cleanPath}` || k === `path-/${cleanPath}`) {
-            tmdbCache[k] = dataToStore;
+          if (tmdbReleaseYear) {
+            keysToSet.add(`${typeStr}-${folderClean}-${tmdbReleaseYear}`);
+            keysToSet.add(`${typeStr}-${folderLower}-${tmdbReleaseYear}`);
           }
+          keysToSet.add(`${typeStr}-${folderClean}`);
+          keysToSet.add(`${typeStr}-${folderLower}`);
         }
+      }
+
+      for (const k of keysToSet) {
+        tmdbCache[k] = dataToStore;
       }
     };
 

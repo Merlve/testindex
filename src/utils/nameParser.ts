@@ -13,8 +13,8 @@ export function parseMediaName(rawName: string) {
       cleanName = cleanName.replace(/(?:^|[._\-\s])([sS]\d{1,2}[eE]\d{1,3}|[sS]\d{1,2}[\s\-]*(?:[eE][pP]?)?\s*\d{1,3}|[eE]\d{1,3}(?:-[eE]?\d{1,3})?|[eE][pP]?(?:isode)?\s*\d{1,3}|[sS]eason\s*\d{1,2})(?:[._\-\s]|$)/gi, " ");
   }
 
-  // Extract year FIRST
-  const yearRegex = /(?:^|[._\-\s\(])(19\d{2}|20\d{2})(?:[._\-\s\)]|$)/g;
+  // Extract year: Look for (19xx|20xx) preceded by a separator or inside parens/brackets, using lookahead for the following separator
+  const yearRegex = /(?:[._\-\s\(\[])(19\d{2}|20\d{2})(?=[._\-\s\)\]]|$)/g;
   let match;
   let lastMatch = null;
   while ((match = yearRegex.exec(cleanName)) !== null) {
@@ -22,7 +22,7 @@ export function parseMediaName(rawName: string) {
   }
   
   let year = '';
-  if (lastMatch) {
+  if (lastMatch && lastMatch.index > 0) {
     year = lastMatch[1];
     cleanName = cleanName.substring(0, lastMatch.index);
   }
