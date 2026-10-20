@@ -51,6 +51,14 @@ export default function ZipDownloadModal({
   // Clean base path without leading /home or home/
   // e.g. /home/ANIME/365.Days.to.the.Wedding.2024 -> ANIME/365.Days.to.the.Wedding.2024
   let cleanBasePath = (showFolderPath || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  try {
+    while (cleanBasePath.includes('%')) {
+      const decoded = decodeURIComponent(cleanBasePath);
+      if (decoded === cleanBasePath) break;
+      cleanBasePath = decoded;
+    }
+  } catch (e) {}
+
   if (cleanBasePath.toLowerCase().startsWith('home/')) {
     cleanBasePath = cleanBasePath.substring(5);
   } else if (cleanBasePath.toLowerCase() === 'home') {
@@ -70,7 +78,10 @@ export default function ZipDownloadModal({
   // 1. Season / Sub-directory folders
   if (seasonItems && seasonItems.length > 0) {
     seasonItems.forEach((season) => {
-      const folderName = season.name;
+      let folderName = season.name;
+      try {
+        if (folderName.includes('%')) folderName = decodeURIComponent(folderName);
+      } catch (e) {}
       const fullWebdavPath = `${cleanBasePath}/${folderName}`;
       const fullOpenlistPath = `${cleanOpenlistBase}/${folderName}`;
       directories.push({
@@ -168,9 +179,15 @@ export default function ZipDownloadModal({
     setDownloadingPath(dir.path);
     setSuccessMsg(`Preparing ${dir.zipFilename} download...`);
 
-    // Build the authenticated server-side proxy route:
-    // Notice: in the WebDAV path, there is no /home, but just the path that follows after
-    const downloadUrl = `/api/webdav/download-zip?path=${encodeURIComponent(dir.path)}&token=${encodeURIComponent(token)}`;
+    const safeZipName = encodeURIComponent(dir.zipFilename)
+      .replace(/\(/g, '%28')
+      .replace(/\)/g, '%29')
+      .replace(/\[/g, '%5B')
+      .replace(/\]/g, '%5D')
+      .replace(/'/g, '%27');
+
+    // Build the authenticated server-side proxy route with filename in path:
+    const downloadUrl = `/api/webdav/download-zip/${safeZipName}?path=${encodeURIComponent(dir.path)}&token=${encodeURIComponent(token)}`;
 
     // Trigger browser native download
     const link = document.createElement('a');
@@ -195,7 +212,14 @@ export default function ZipDownloadModal({
       return;
     }
 
-    const downloadUrl = `${window.location.origin}/api/webdav/download-zip?path=${encodeURIComponent(dir.path)}&token=${encodeURIComponent(token)}`;
+    const safeZipName = encodeURIComponent(dir.zipFilename)
+      .replace(/\(/g, '%28')
+      .replace(/\)/g, '%29')
+      .replace(/\[/g, '%5B')
+      .replace(/\]/g, '%5D')
+      .replace(/'/g, '%27');
+
+    const downloadUrl = `${window.location.origin}/api/webdav/download-zip/${safeZipName}?path=${encodeURIComponent(dir.path)}&token=${encodeURIComponent(token)}`;
 
     try {
       await navigator.clipboard.writeText(downloadUrl);

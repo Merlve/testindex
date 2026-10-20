@@ -1485,7 +1485,7 @@ app.post('/api/downloads/clear', adminMiddleware, async (req, res) => {
 });
 
 // WebDAV ZIP folder download endpoint
-app.get('/api/webdav/download-zip', async (req, res) => {
+app.get(['/api/webdav/download-zip', '/api/webdav/download-zip/:filename'], async (req, res) => {
   try {
     const rawToken = req.headers.authorization || (req.query.token as string);
     const token = typeof rawToken === 'string' ? rawToken.replace(/^Bearer\s+/i, '').trim() : '';
@@ -1527,15 +1527,19 @@ app.get('/api/webdav/download-zip', async (req, res) => {
       return res.status(400).json({ error: 'Path parameter is required' });
     }
 
-    // Normalize path: decode, remove backslashes, strip leading /home or home/
+    // Fully decode path in case it was encoded once or multiple times
     try {
-      folderPath = decodeURIComponent(folderPath);
+      let prev = '';
+      while (folderPath !== prev && folderPath.includes('%')) {
+        prev = folderPath;
+        folderPath = decodeURIComponent(folderPath);
+      }
     } catch (e) {}
 
     folderPath = folderPath.replace(/\\/g, '/');
     folderPath = folderPath.replace(/^\/+/, '').replace(/\/+$/, '');
 
-    // Notice: in the WebDAV url path, there is no /home, but just the path that follows after
+    // In the WebDAV url path, there is no /home, but just the path that follows after
     if (folderPath.toLowerCase().startsWith('home/')) {
       folderPath = folderPath.substring(5);
     } else if (folderPath.toLowerCase() === 'home') {
@@ -1547,14 +1551,40 @@ app.get('/api/webdav/download-zip', async (req, res) => {
       return res.status(400).json({ error: 'Valid directory path is required' });
     }
 
+    // Encoding helper for WebDAV path segments (spaces -> %20, ( -> %28, ) -> %29, etc.)
+    const encodeWebdavSegment = (seg: string) => {
+      return encodeURIComponent(seg)
+        .replace(/\(/g, '%28')
+        .replace(/\)/g, '%29')
+        .replace(/\[/g, '%5B')
+        .replace(/\]/g, '%5D')
+        .replace(/'/g, '%27')
+        .replace(/!/g, '%21')
+        .replace(/\*/g, '%2A');
+    };
+
     const segments = folderPath.split('/').filter(Boolean);
-    const encodedPath = segments.map(s => encodeURIComponent(s)).join('/');
+    const encodedPath = segments.map(encodeWebdavSegment).join('/');
+
+    // Derive correct human-readable zip filename
+    let customFilename = (req.params.filename as string || '').trim();
+    if (customFilename) {
+      try {
+        while (customFilename.includes('%')) {
+          const dec = decodeURIComponent(customFilename);
+          if (dec === customFilename) break;
+          customFilename = dec;
+        }
+      } catch (e) {}
+    }
+
     const folderName = segments[segments.length - 1] || 'download';
-    const zipFilename = folderName.endsWith('.zip') ? folderName : `${folderName}.zip`;
+    const baseZipName = customFilename || (folderName.endsWith('.zip') ? folderName : `${folderName}.zip`);
+    const zipFilename = baseZipName.endsWith('.zip') ? baseZipName : `${baseZipName}.zip`;
 
     // WebDAV folder zip download url format: https://zip.shutter.dpdns.org/PATH/?download=zip
     const webdavUrl = `${getWebdavHost()}/${encodedPath}/?download=zip`;
-    console.log(`[WebDAV ZIP] Proxying download for "${folderPath}" via "${webdavUrl}"`);
+    console.log(`[WebDAV ZIP] Proxying download for "${folderPath}" via "${webdavUrl}" (filename: "${zipFilename}")`);
 
     const authHeader = 'Basic ' + Buffer.from(`${getWebdavUser()}:${getWebdavPass()}`).toString('base64');
     const parsed = new URL(webdavUrl);
@@ -1576,8 +1606,18 @@ app.get('/api/webdav/download-zip', async (req, res) => {
         return res.status(statusCode).json({ error: `WebDAV server returned error code ${statusCode}` });
       }
 
+      // Safe ASCII filename without quotes, backslashes, or semicolons
+      const safeAsciiFilename = zipFilename.replace(/["\\;\r\n]/g, '_');
+      // RFC 5987 UTF-8 encoded filename for modern browsers
+      const rfc5987Filename = encodeURIComponent(zipFilename)
+        .replace(/\(/g, '%28')
+        .replace(/\)/g, '%29')
+        .replace(/\[/g, '%5B')
+        .replace(/\]/g, '%5D')
+        .replace(/'/g, '%27');
+
       res.setHeader('Content-Type', webdavRes.headers['content-type'] || 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFilename)}"; filename*=UTF-8''${encodeURIComponent(zipFilename)}`);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiFilename}"; filename*=UTF-8''${rfc5987Filename}`);
       if (webdavRes.headers['content-length']) {
         res.setHeader('Content-Length', webdavRes.headers['content-length']);
       }
