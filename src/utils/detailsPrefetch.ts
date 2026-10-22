@@ -356,7 +356,7 @@ export function prefetchItemDetails(
         isTvMedia,
       });
 
-      // Preload backdrop & poster images if discovered
+      // Preload backdrop & poster images if discovered (prioritizing backdrop, fallback to poster)
       if (data?.backdrop_path && typeof window !== 'undefined') {
         const bgUrl = data.backdrop_path.startsWith('http')
           ? data.backdrop_path
@@ -374,7 +374,12 @@ export function prefetchItemDetails(
           : `https://image.tmdb.org/t/p/w500${data.poster_path}`;
         const pImg = new Image();
         pImg.src = postUrl;
-        pImg.onload = () => markImageLoaded(postUrl);
+        pImg.onload = () => {
+          markImageLoaded(postUrl);
+          if (!data?.backdrop_path) {
+            extractDominantColor(postUrl).catch(() => {});
+          }
+        };
       }
 
       // If TV show, also prefetch TMDB season 1 details
@@ -453,8 +458,9 @@ export function prefetchItemDetails(
     });
   }
 
-  // 5. Preload high-res backdrop image into browser cache & extract dominant color
+  // 5. Preload high-res backdrop image (or fallback poster) into browser cache & extract dominant color
   const backdrop = tmdbData?.backdrop_path;
+  const poster = tmdbData?.poster_path;
   if (backdrop && typeof window !== 'undefined') {
     const backdropUrl = backdrop.startsWith('http')
       ? backdrop
@@ -464,6 +470,16 @@ export function prefetchItemDetails(
     img.onload = () => {
       markImageLoaded(backdropUrl);
       extractDominantColor(backdropUrl).catch(() => {});
+    };
+  } else if (poster && typeof window !== 'undefined') {
+    const posterUrl = poster.startsWith('http')
+      ? poster
+      : `https://image.tmdb.org/t/p/w780${poster}`;
+    const img = new Image();
+    img.src = posterUrl;
+    img.onload = () => {
+      markImageLoaded(posterUrl);
+      extractDominantColor(posterUrl).catch(() => {});
     };
   }
 }

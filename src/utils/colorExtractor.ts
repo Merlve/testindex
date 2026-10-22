@@ -27,6 +27,21 @@ export function clearPaletteCache(): void {
 export interface BackdropColorPalette {
   rgb: [number, number, number];
   hex: string;
+  // Solid adaptive palette
+  solidBg: string;             // Deep rich solid tone (e.g. "rgb(12, 16, 28)")
+  textPrimary: string;         // Adaptive high-contrast text color
+  textSecondary: string;       // Adaptive secondary text
+  textMuted: string;           // Adaptive muted text
+  cardBg: string;              // Frosted semi-transparent card surface
+  cardBgHover: string;         // Card hover surface
+  cardBorder: string;          // Subtle card border
+  badgeBg: string;             // Metadata badge background
+  badgeBorder: string;         // Metadata badge border
+  glow: string;                // Ambient glow color matching dominant hue
+  accent: string;              // Vibrant accent hue for highlights and buttons
+  isDarkBackground: boolean;   // true if background is deep/dark
+
+  // Legacy fields for backward compatibility
   bgDark: string;
   bgLight: string;
   glowDark: string;
@@ -37,37 +52,132 @@ export interface BackdropColorPalette {
   borderLight: string;
 }
 
-const DEFAULT_PALETTE: BackdropColorPalette = {
-  rgb: [130, 80, 220],
-  hex: '#8250dc',
-  bgDark: '#08080a',
-  bgLight: '#fffcf9',
-  glowDark: 'rgba(130, 80, 220, 0.18)',
-  glowLight: 'rgba(130, 80, 220, 0.10)',
-  cardDark: 'rgba(255, 255, 255, 0.05)',
-  cardLight: 'rgba(0, 0, 0, 0.03)',
-  borderDark: 'rgba(255, 255, 255, 0.10)',
-  borderLight: 'rgba(0, 0, 0, 0.08)',
-};
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const normR = r / 255;
+  const normG = g / 255;
+  const normB = b / 255;
+  const max = Math.max(normR, normG, normB);
+  const min = Math.min(normR, normG, normB);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case normR:
+        h = (normG - normB) / d + (normG < normB ? 6 : 0);
+        break;
+      case normG:
+        h = (normB - normR) / d + 2;
+        break;
+      case normB:
+        h = (normR - normG) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return [h * 360, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const normalizedH = ((h % 360 + 360) % 360) / 360;
+
+  if (s === 0) {
+    const val = Math.round(l * 255);
+    return [val, val, val];
+  }
+
+  const hue2rgb = (p: number, q: number, t: number) => {
+    let normalizedT = t;
+    if (normalizedT < 0) normalizedT += 1;
+    if (normalizedT > 1) normalizedT -= 1;
+    if (normalizedT < 1 / 6) return p + (q - p) * 6 * normalizedT;
+    if (normalizedT < 1 / 2) return q;
+    if (normalizedT < 2 / 3) return p + (q - p) * (2 / 3 - normalizedT) * 6;
+    return p;
+  };
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = hue2rgb(p, q, normalizedH + 1 / 3);
+  const g = hue2rgb(p, q, normalizedH);
+  const b = hue2rgb(p, q, normalizedH - 1 / 3);
+
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+function getRelativeLuminance(r: number, g: number, b: number): number {
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
 
 /**
- * Calculates a rich theme palette from an RGB triplet
+ * Calculates a deep rich solid palette and adaptive contrast text from an RGB triplet
  */
 export function generatePaletteFromRgb(r: number, g: number, b: number): BackdropColorPalette {
-  // Ensure RGB within bounds
   const clampedR = Math.max(0, Math.min(255, Math.round(r)));
   const clampedG = Math.max(0, Math.min(255, Math.round(g)));
   const clampedB = Math.max(0, Math.min(255, Math.round(b)));
 
   const hex = `#${((1 << 24) + (clampedR << 16) + (clampedG << 8) + clampedB).toString(16).slice(1)}`;
 
-  // Deep darkened tone for dark mode: base around 6-12 lightness with the dominant hue tint
+  const [h, s] = rgbToHsl(clampedR, clampedG, clampedB);
+
+  // Compute a Deep Rich Tone for solid page background:
+  // - If monochromatic / greyscale (s < 0.08), default to deep obsidian slate
+  // - Otherwise, preserve the hue, ensure rich saturation (35% to 75%), and set lightness to deep 9.5%
+  let solidBgR: number;
+  let solidBgG: number;
+  let solidBgB: number;
+
+  if (s < 0.08) {
+    solidBgR = 14;
+    solidBgG = 15;
+    solidBgB = 18;
+  } else {
+    const richSaturation = Math.min(0.75, Math.max(0.35, s * 1.15));
+    const deepLightness = 0.095;
+    [solidBgR, solidBgG, solidBgB] = hslToRgb(h, richSaturation, deepLightness);
+  }
+
+  const solidBg = `rgb(${solidBgR}, ${solidBgG}, ${solidBgB})`;
+
+  // Calculate relative luminance to determine adaptive text contrast
+  const bgLuminance = getRelativeLuminance(solidBgR, solidBgG, solidBgB);
+  const isDarkBackground = bgLuminance < 0.38;
+
+  // Adaptive contrast text and surfaces
+  const textPrimary = isDarkBackground ? '#ffffff' : '#0f172a';
+  const textSecondary = isDarkBackground ? 'rgba(255, 255, 255, 0.78)' : 'rgba(15, 23, 42, 0.78)';
+  const textMuted = isDarkBackground ? 'rgba(255, 255, 255, 0.52)' : 'rgba(15, 23, 42, 0.55)';
+  const cardBg = isDarkBackground ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)';
+  const cardBgHover = isDarkBackground ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.07)';
+  const cardBorder = isDarkBackground ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.09)';
+  const badgeBg = isDarkBackground ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
+  const badgeBorder = isDarkBackground ? 'rgba(255, 255, 255, 0.13)' : 'rgba(0, 0, 0, 0.08)';
+
+  // Accent color for highlights
+  const [accentR, accentG, accentB] = hslToRgb(
+    h,
+    Math.max(0.65, s),
+    isDarkBackground ? 0.60 : 0.45
+  );
+  const accent = `rgb(${accentR}, ${accentG}, ${accentB})`;
+
+  const glow = `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.22)`;
+
+  // Legacy variants for backward compatibility
   const darkR = Math.round(clampedR * 0.144 + 6);
   const darkG = Math.round(clampedG * 0.144 + 6);
   const darkB = Math.round(clampedB * 0.144 + 8);
   const bgDark = `rgb(${darkR}, ${darkG}, ${darkB})`;
 
-  // Soft tinted pastel tone for light mode: base around 96-98 lightness with the dominant hue tint
   const lightR = Math.round(255 - (255 - clampedR) * 0.12);
   const lightG = Math.round(255 - (255 - clampedG) * 0.12);
   const lightB = Math.round(255 - (255 - clampedB) * 0.12);
@@ -76,6 +186,18 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
   return {
     rgb: [clampedR, clampedG, clampedB],
     hex,
+    solidBg,
+    textPrimary,
+    textSecondary,
+    textMuted,
+    cardBg,
+    cardBgHover,
+    cardBorder,
+    badgeBg,
+    badgeBorder,
+    glow,
+    accent,
+    isDarkBackground,
     bgDark,
     bgLight,
     glowDark: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.264)`,
@@ -86,6 +208,8 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
     borderLight: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.144)`,
   };
 }
+
+const DEFAULT_PALETTE: BackdropColorPalette = generatePaletteFromRgb(130, 80, 220);
 
 /**
  * Extracts the dominant color from an image URL using FastAverageColor or Canvas fallback

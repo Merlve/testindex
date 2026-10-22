@@ -35,7 +35,8 @@ function IntentPlayerModal({
   tmdb,
   tmdbEpisode,
   showToast,
-  isTvMedia
+  isTvMedia,
+  colorPalette
 }: { 
   item: any; 
   itemPath: string; 
@@ -49,6 +50,7 @@ function IntentPlayerModal({
   tmdbEpisode?: any;
   showToast?: (msg: string) => void;
   isTvMedia?: boolean;
+  colorPalette?: BackdropColorPalette | null;
 }) {
   const [url, setUrl] = useState(item.url || '');
   const [loading, setLoading] = useState(!item.url);
@@ -229,40 +231,106 @@ function IntentPlayerModal({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-[#fbf4eb] dark:bg-[#121218] border border-black/10 dark:border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl relative"
+        className="intent-player-modal-card rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl relative border transition-colors duration-300"
+        style={{
+          backgroundColor: 'var(--details-bg, #0b0e14)',
+          color: 'var(--details-text-primary, #ffffff)',
+          borderColor: 'var(--details-border, rgba(255, 255, 255, 0.15))',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 45px var(--details-glow, rgba(130, 80, 220, 0.20))',
+          ...(colorPalette ? {
+            '--details-bg': colorPalette.solidBg,
+            '--details-text-primary': colorPalette.textPrimary,
+            '--details-text-secondary': colorPalette.textSecondary,
+            '--details-text-muted': colorPalette.textMuted,
+            '--details-surface': colorPalette.cardBg,
+            '--details-surface-hover': colorPalette.cardBgHover,
+            '--details-border': colorPalette.cardBorder,
+            '--details-badge-bg': colorPalette.badgeBg,
+            '--details-badge-border': colorPalette.badgeBorder,
+            '--details-glow': colorPalette.glow,
+            '--details-accent': colorPalette.accent,
+          } : {})
+        } as React.CSSProperties}
       >
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-gray-500 hover:text-black dark:hover:text-white rounded-full bg-black/5 dark:bg-white/5 transition cursor-pointer">
-          <X size={20} />
+        {/* Complete Theme Isolation for Modal */}
+        <style>{`
+          .intent-player-modal-card {
+            background-color: var(--details-bg, #0b0e14) !important;
+            color: var(--details-text-primary, #ffffff) !important;
+          }
+        `}</style>
+
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 p-2 rounded-xl transition cursor-pointer border"
+          style={{
+            backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+            borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+            color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))'
+          }}
+          aria-label="Close"
+        >
+          <X size={18} />
         </button>
 
-        <div className="flex items-center gap-2 mb-2 text-purple-600 dark:text-purple-400 font-bold text-xs uppercase tracking-wider">
+        <div 
+          className="flex items-center gap-2 mb-2 font-bold text-xs uppercase tracking-wider"
+          style={{ color: 'var(--details-accent, #a855f7)' }}
+        >
           <MonitorPlay size={16} /> Choose Player
         </div>
 
-        <h3 className="text-base font-bold text-black dark:text-white pr-8 mb-2 leading-snug break-words">
+        <h3 
+          className="text-base sm:text-lg font-bold pr-8 mb-2 leading-snug break-words"
+          style={{ color: 'var(--details-text-primary, #ffffff)' }}
+        >
           {item.name}
         </h3>
 
-        <div className="flex flex-wrap items-center gap-1.5 mb-6">
+        <div className="flex flex-wrap items-center gap-1.5 mb-5">
           {meta.resolution && (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-purple-600/15 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+            <span 
+              className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold border"
+              style={{
+                backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                borderColor: 'var(--details-badge-border, rgba(255, 255, 255, 0.15))',
+                color: 'var(--details-accent, #a855f7)'
+              }}
+            >
               {meta.resolution}
             </span>
           )}
           {meta.codec && (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-blue-600/15 text-blue-700 dark:text-blue-300 border border-blue-500/20">
+            <span 
+              className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold border"
+              style={{
+                backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                borderColor: 'var(--details-badge-border, rgba(255, 255, 255, 0.15))',
+                color: 'var(--details-accent, #a855f7)'
+              }}
+            >
               {meta.codec}
             </span>
           )}
           {meta.formattedSize && (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-300">
+            <span 
+              className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold border"
+              style={{
+                backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.75))'
+              }}
+            >
               {meta.formattedSize}
             </span>
           )}
         </div>
 
         {loading ? (
-          <div className="text-center py-10 text-gray-500 font-medium animate-pulse text-sm">
+          <div 
+            className="text-center py-10 font-medium animate-pulse text-sm"
+            style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+          >
             Fetching playback URL...
           </div>
         ) : (
@@ -272,23 +340,31 @@ function IntentPlayerModal({
                 <>
                   <a onClick={() => { onExternalPlay(); }}
                     href={`vlc://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 font-bold text-xs flex items-center justify-center shrink-0 border border-orange-500/30">VLC</div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">VLC</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">iOS / iPadOS</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>VLC</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>iOS / iPadOS</div>
                     </div>
                   </a>
 
                   <a onClick={() => { onExternalPlay(); }}
                     href={`infuse://x-callback-url/play?url=${encodeURIComponent(url)}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-blue-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-500 font-bold text-xs flex items-center justify-center shrink-0">INF</div>
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-500/30">INF</div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">Infuse</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">iOS / iPadOS</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Infuse</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>iOS / iPadOS</div>
                     </div>
                   </a>
                 </>
@@ -298,23 +374,31 @@ function IntentPlayerModal({
                 <>
                   <a onClick={() => { onExternalPlay(); }}
                     href={`iina://weblink?url=${encodeURIComponent(url)}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-indigo-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-500 font-bold text-xs flex items-center justify-center shrink-0">IINA</div>
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center shrink-0 border border-indigo-500/30">IINA</div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">IINA Player</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>IINA Player</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>macOS</div>
                     </div>
                   </a>
 
                   <a onClick={() => { onExternalPlay(); }}
                     href={`vlc://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 font-bold text-xs flex items-center justify-center shrink-0 border border-orange-500/30">VLC</div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">VLC</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">macOS</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>VLC</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>macOS</div>
                     </div>
                   </a>
                 </>
@@ -324,26 +408,53 @@ function IntentPlayerModal({
                 <>
                   <a onClick={() => { onExternalPlay(); }}
                     href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=is.xyz.mpv;component=is.xyz.mpv/.MPVActivity;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;S.title=${encodeURIComponent(item.name)};end;`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">MPV</div>
+                    <div 
+                      className="w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 border"
+                      style={{
+                        backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                        borderColor: 'var(--details-badge-border, rgba(255, 255, 255, 0.15))',
+                        color: 'var(--details-accent, #a855f7)'
+                      }}
+                    >
+                      MPV
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">MPV</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Android</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>MPV</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>Android</div>
                     </div>
                   </a>
 
                   <a onClick={() => { onExternalPlay(); }}
                     href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=app.gyrolet.mpvrx;component=app.gyrolet.mpvrx/.ui.player.PlayerActivity;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;S.title=${encodeURIComponent(item.name)};end;`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">RX</div>
+                    <div 
+                      className="w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 border"
+                      style={{
+                        backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                        borderColor: 'var(--details-badge-border, rgba(255, 255, 255, 0.15))',
+                        color: 'var(--details-accent, #a855f7)'
+                      }}
+                    >
+                      RX
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">mpvRx</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">supports resume</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>mpvRx</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>supports resume</div>
                     </div>
                   </a>
 
+                  {/* Play Here (In Browser): Adaptive surface background with non-flushing accented border */}
                   <button
                     type="button"
                     onClick={() => {
@@ -352,27 +463,52 @@ function IntentPlayerModal({
                         onClose();
                       }
                     }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl transition text-left cursor-pointer min-w-0 active:scale-95 border"
+                    style={{
+                      backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
+                      borderColor: 'var(--details-accent, #9333ea)',
+                      borderWidth: '1.5px',
+                      color: 'var(--details-text-primary, #ffffff)',
+                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                    <div 
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
+                      style={{
+                        backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                        borderColor: 'var(--details-accent, #9333ea)',
+                        color: 'var(--details-accent, #9333ea)'
+                      }}
+                    >
                       <Play size={14} fill="currentColor" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">Play Here</div>
-                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Play Here</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}>In Browser</div>
                     </div>
                   </button>
 
                   <a onClick={() => { onExternalPlay(); }}
                     href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 font-bold text-xs flex items-center justify-center shrink-0">
+                    <div 
+                      className="w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 border"
+                      style={{
+                        backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.08))',
+                        borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                        color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.75))'
+                      }}
+                    >
                       <ExternalLink size={14} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">Other</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Select player</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Other</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>Select player</div>
                     </div>
                   </a>
                 </>
@@ -382,15 +518,20 @@ function IntentPlayerModal({
                 <>
                   <a onClick={() => { onExternalPlay(); }}
                     href={`potplayer://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-yellow-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-yellow-500/20 text-yellow-500 font-bold text-xs flex items-center justify-center shrink-0">POT</div>
+                    <div className="w-8 h-8 rounded-lg bg-yellow-500/20 text-yellow-400 font-bold text-xs flex items-center justify-center shrink-0 border border-yellow-500/30">POT</div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">PotPlayer</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Windows</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>PotPlayer</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>Windows</div>
                     </div>
                   </a>
 
+                  {/* Play Here (In Browser): Adaptive surface background with non-flushing accented border */}
                   <button
                     type="button"
                     onClick={() => {
@@ -399,14 +540,28 @@ function IntentPlayerModal({
                         onClose();
                       }
                     }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl transition text-left cursor-pointer min-w-0 active:scale-95 border"
+                    style={{
+                      backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
+                      borderColor: 'var(--details-accent, #9333ea)',
+                      borderWidth: '1.5px',
+                      color: 'var(--details-text-primary, #ffffff)',
+                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                    <div 
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
+                      style={{
+                        backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                        borderColor: 'var(--details-accent, #9333ea)',
+                        color: 'var(--details-accent, #9333ea)'
+                      }}
+                    >
                       <Play size={14} fill="currentColor" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">Play Here</div>
-                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Play Here</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}>In Browser</div>
                     </div>
                   </button>
                 </>
@@ -416,15 +571,20 @@ function IntentPlayerModal({
                 <>
                   <a onClick={() => { onExternalPlay(); }}
                     href={`vlc://${url}`}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-orange-500/50 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
+                    style={{
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-500 font-bold text-xs flex items-center justify-center shrink-0">VLC</div>
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 font-bold text-xs flex items-center justify-center shrink-0 border border-orange-500/30">VLC</div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">VLC</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">External App</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>VLC</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>External App</div>
                     </div>
                   </a>
 
+                  {/* Play Here (In Browser): Adaptive surface background with non-flushing accented border */}
                   <button
                     type="button"
                     onClick={() => {
@@ -433,14 +593,28 @@ function IntentPlayerModal({
                         onClose();
                       }
                     }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 transition text-left cursor-pointer min-w-0"
+                    className="flex items-center gap-2.5 p-3 rounded-xl transition text-left cursor-pointer min-w-0 active:scale-95 border"
+                    style={{
+                      backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
+                      borderColor: 'var(--details-accent, #9333ea)',
+                      borderWidth: '1.5px',
+                      color: 'var(--details-text-primary, #ffffff)',
+                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-500 font-bold text-xs flex items-center justify-center shrink-0">
+                    <div 
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
+                      style={{
+                        backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                        borderColor: 'var(--details-accent, #9333ea)',
+                        color: 'var(--details-accent, #9333ea)'
+                      }}
+                    >
                       <Play size={14} fill="currentColor" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate">Play Here</div>
-                      <div className="text-[10px] opacity-80 truncate">In Browser</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Play Here</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}>In Browser</div>
                     </div>
                   </button>
                 </>
@@ -448,35 +622,66 @@ function IntentPlayerModal({
             </div>
 
             <div className="flex flex-col gap-2 w-full mt-3">
+              {/* Download Subtitle Button */}
               <button
                 type="button"
                 onClick={handleDownloadSubtitleModal}
                 disabled={subLoading}
-                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-xs font-semibold text-purple-600 dark:text-purple-400 transition cursor-pointer disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-50 active:scale-95 border"
+                style={{
+                  backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
+                  borderColor: 'var(--details-accent, #9333ea)',
+                  borderWidth: '1.5px',
+                  color: 'var(--details-text-primary, #ffffff)',
+                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                }}
               >
-                {subLoading ? <Loader2 size={14} className="animate-spin" /> : <Subtitles size={14} />}
+                {subLoading ? (
+                  <Loader2 size={14} className="animate-spin" style={{ color: 'var(--details-accent)' }} />
+                ) : (
+                  <Subtitles size={14} style={{ color: 'var(--details-accent)' }} />
+                )}
                 <span>Download Subtitle (SUB)</span>
               </button>
 
+              {/* Copy Direct Stream URL Button */}
               <button
+                type="button"
                 onClick={copyToClipboard}
-                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer"
+                style={
+                  copied
+                    ? {
+                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                        borderColor: 'rgba(16, 185, 129, 0.35)',
+                        color: '#34d399',
+                      }
+                    : {
+                        backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                        borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                        color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.75))',
+                      }
+                }
               >
-                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                 <span>{copied ? 'Direct Link Copied!' : 'Copy Direct Stream URL'}</span>
               </button>
             </div>
 
             {/* Platform Download Hints */}
             {os === 'android' && (
-              <div className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5 space-y-1">
+              <div 
+                className="text-[11px] text-center italic mt-2.5 space-y-1"
+                style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+              >
                 <p>
                   download mpv-android from{' '}
                   <a 
                     href="https://play.google.com/store/apps/details?id=is.xyz.mpv" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="underline hover:text-purple-600 dark:hover:text-purple-400 not-italic font-medium"
+                    className="underline not-italic font-medium"
+                    style={{ color: 'var(--details-accent, #a855f7)' }}
                   >
                     play store
                   </a>
@@ -487,7 +692,8 @@ function IntentPlayerModal({
                     href="https://mpvrx.vercel.app" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="underline hover:text-purple-600 dark:hover:text-purple-400 not-italic font-medium"
+                    className="underline not-italic font-medium"
+                    style={{ color: 'var(--details-accent, #a855f7)' }}
                   >
                     here
                   </a>
@@ -496,13 +702,17 @@ function IntentPlayerModal({
             )}
 
             {os === 'windows' && (
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
+              <p 
+                className="text-[11px] text-center italic mt-2.5"
+                style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+              >
                 download Potplayer from{' '}
                 <a 
                   href="https://potplayer.tv" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="underline hover:text-yellow-600 dark:hover:text-yellow-400 not-italic font-medium"
+                  className="underline not-italic font-medium"
+                  style={{ color: 'var(--details-accent, #a855f7)' }}
                 >
                   https://potplayer.tv
                 </a>
@@ -510,13 +720,16 @@ function IntentPlayerModal({
             )}
 
             {os === 'ios' && (
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
+              <p 
+                className="text-[11px] text-center italic mt-2.5"
+                style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+              >
                 install{' '}
                 <a 
                   href="https://apps.apple.com/app/vlc-media-player/id650377962" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="underline hover:text-orange-600 dark:hover:text-orange-400 not-italic font-medium"
+                  className="underline not-italic font-medium text-orange-400"
                 >
                   VLC
                 </a>{' '}
@@ -525,7 +738,7 @@ function IntentPlayerModal({
                   href="https://apps.apple.com/app/infuse-video-player/id1136220934" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="underline hover:text-blue-600 dark:hover:text-blue-400 not-italic font-medium"
+                  className="underline not-italic font-medium text-blue-400"
                 >
                   infuse
                 </a>{' '}
@@ -534,13 +747,17 @@ function IntentPlayerModal({
             )}
 
             {os === 'macos' && (
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center italic mt-2.5">
+              <p 
+                className="text-[11px] text-center italic mt-2.5"
+                style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+              >
                 install IINA player from{' '}
                 <a 
                   href="https://iina.io" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="underline hover:text-indigo-600 dark:hover:text-indigo-400 not-italic font-medium"
+                  className="underline not-italic font-medium"
+                  style={{ color: 'var(--details-accent, #a855f7)' }}
                 >
                   https://iina.io
                 </a>
@@ -784,18 +1001,21 @@ const FileRowItem = memo(function FileRowItem({
 
   return (
     <div 
-      className={`p-3 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 ${
-        isWatched 
-          ? 'bg-black/5 dark:bg-white/5 border-transparent opacity-60 hover:opacity-100' 
-          : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-purple-500/40'
-      } ${isSelected ? 'ring-2 ring-purple-500 bg-purple-500/5' : ''}`}
+      className={`p-3 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 backdrop-blur-md ${
+        isWatched ? 'opacity-60 hover:opacity-100' : ''
+      } ${isSelected ? 'ring-2 ring-purple-500' : ''}`}
+      style={{
+        backgroundColor: 'var(--details-surface)',
+        borderColor: isSelected ? 'var(--details-accent)' : 'var(--details-border)',
+      }}
     >
       <div className="flex items-start sm:items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
         <button 
           onClick={toggleSelection}
-          className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center mt-1 sm:mt-0 ${
-            isSelected ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-          }`}
+          className="shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center mt-1 sm:mt-0"
+          style={{
+            color: isSelected ? 'var(--details-accent)' : 'var(--details-text-muted)'
+          }}
           title={isSelected ? "Deselect" : "Select"}
         >
           {isSelected ? <CheckSquare size={19} /> : <Square size={19} />}
@@ -803,7 +1023,13 @@ const FileRowItem = memo(function FileRowItem({
 
         {/* Thumbnail on All Devices (Mobile, Tablet, Desktop) - Uses episode still or falls back to show landscape poster for uniform layout & resolution */}
         {(isTvMedia && (thumbSrc || fallbackThumbUrl)) ? (
-          <div className="relative shrink-0 rounded-xl overflow-hidden bg-black/10 dark:bg-white/10 w-24 h-14 sm:w-32 sm:h-16 md:w-36 md:h-20 self-start sm:self-center shadow-sm">
+          <div 
+            className="relative shrink-0 rounded-xl overflow-hidden w-24 h-14 sm:w-32 sm:h-16 md:w-36 md:h-20 self-start sm:self-center shadow-sm border"
+            style={{ 
+              backgroundColor: 'var(--details-surface)',
+              borderColor: 'var(--details-border)' 
+            }}
+          >
             <img 
               src={thumbSrc || fallbackThumbUrl || ''} 
               alt={tmdbEpisode?.name || fallbackTitle || file.name || 'Episode thumbnail'} 
@@ -826,7 +1052,12 @@ const FileRowItem = memo(function FileRowItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <h4 className={`text-xs sm:text-sm font-semibold break-all break-words whitespace-normal leading-snug transition ${isWatched ? 'text-gray-500 dark:text-gray-400' : 'text-black dark:text-white'}`}>
+            <h4 
+              className="text-xs sm:text-sm font-semibold break-all break-words whitespace-normal leading-snug transition"
+              style={{
+                color: isWatched ? 'var(--details-text-muted)' : 'var(--details-text-primary)'
+              }}
+            >
               {(tmdbEpisode && isTvMedia)
                 ? `${epNumberFormatted ? `${epNumberFormatted} • ` : ''}${tmdbEpisode.name || `Episode ${tmdbEpisode.episode_number}`}` 
                 : fallbackTitle}
@@ -835,24 +1066,44 @@ const FileRowItem = memo(function FileRowItem({
 
           {/* Episode Plot / Overview on all devices */}
           {tmdbEpisode && tmdbEpisode.overview ? (
-            <p className={`text-[11px] sm:text-xs mt-1 line-clamp-2 leading-relaxed transition ${isWatched ? 'text-gray-500/70 dark:text-gray-500/70' : 'text-gray-600 dark:text-gray-300'}`}>
+            <p 
+              className="text-[11px] sm:text-xs mt-1 line-clamp-2 leading-relaxed transition"
+              style={{ color: 'var(--details-text-muted)' }}
+            >
               {tmdbEpisode.overview}
             </p>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
             {meta.resolution && (
-              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${isWatched ? 'bg-gray-500/15 text-gray-500' : 'bg-purple-600/15 text-purple-600 dark:text-purple-300'}`}>
+              <span 
+                className="px-2 py-0.5 rounded text-[10px] font-extrabold border"
+                style={{
+                  backgroundColor: 'var(--details-badge-bg)',
+                  borderColor: 'var(--details-badge-border)',
+                  color: 'var(--details-text-primary)',
+                }}
+              >
                 {meta.resolution}
               </span>
             )}
             {meta.codec && (
-              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${isWatched ? 'bg-gray-500/15 text-gray-500' : 'bg-blue-600/15 text-blue-600 dark:text-blue-300'}`}>
+              <span 
+                className="px-2 py-0.5 rounded text-[10px] font-extrabold border"
+                style={{
+                  backgroundColor: 'var(--details-badge-bg)',
+                  borderColor: 'var(--details-badge-border)',
+                  color: 'var(--details-text-secondary)',
+                }}
+              >
                 {meta.codec}
               </span>
             )}
             {meta.formattedSize && (
-              <span className="text-[11px] text-gray-500 font-medium">
+              <span 
+                className="text-[11px] font-medium"
+                style={{ color: 'var(--details-text-muted)' }}
+              >
                 {meta.formattedSize}
               </span>
             )}
@@ -863,9 +1114,14 @@ const FileRowItem = memo(function FileRowItem({
       <div className="flex items-center gap-2 shrink-0 self-end md:self-center mt-1 md:mt-0">
         <button 
           onClick={() => toggleWatched(file.name, itemPath)}
-          className={`p-2 rounded-xl transition cursor-pointer shrink-0 ${
-            isWatched ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-black/5 dark:bg-white/5 text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/10 dark:hover:bg-white/10'
+          className={`p-2 rounded-xl transition cursor-pointer shrink-0 border ${
+            isWatched ? 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/25' : ''
           }`}
+          style={!isWatched ? {
+            backgroundColor: 'var(--details-surface)',
+            borderColor: 'var(--details-border)',
+            color: 'var(--details-text-secondary)'
+          } : undefined}
           title={isWatched ? 'Mark as unwatched' : 'Mark as watched'}
         >
           {isWatched ? <Check size={16} /> : <Eye size={16} />}
@@ -875,26 +1131,41 @@ const FileRowItem = memo(function FileRowItem({
         <button
           onClick={handleDownloadSubtitle}
           disabled={actionLoading === 'sub'}
-          className="px-2.5 sm:px-3 py-2 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95 shadow-sm shrink-0"
+          className="px-2.5 sm:px-3 py-2 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95 shadow-sm shrink-0 border"
+          style={{
+            backgroundColor: 'var(--details-surface)',
+            borderColor: 'var(--details-border)',
+            color: 'var(--details-text-primary)'
+          }}
           title="Download English Subtitles (SUB)"
         >
-          {actionLoading === 'sub' ? <Loader2 size={14} className="animate-spin text-purple-600 dark:text-purple-400" /> : <Subtitles size={14} className="text-purple-600 dark:text-purple-400" />}
+          {actionLoading === 'sub' ? <Loader2 size={14} className="animate-spin" style={{ color: 'var(--details-accent)' }} /> : <Subtitles size={14} style={{ color: 'var(--details-accent)' }} />}
           <span>SUB</span>
         </button>
 
         <button
           onClick={handleCopy}
           disabled={actionLoading === 'copy'}
-          className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+          className="p-2 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-50 border"
+          style={{
+            backgroundColor: 'var(--details-surface)',
+            borderColor: 'var(--details-border)',
+            color: 'var(--details-text-secondary)'
+          }}
           title="Copy Direct Link"
         >
-          {actionLoading === 'copy' ? <Loader2 size={16} className="animate-spin" /> : copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+          {actionLoading === 'copy' ? <Loader2 size={16} className="animate-spin" /> : copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
         </button>
 
         <button
           onClick={handleDownload}
           disabled={actionLoading === 'download'}
-          className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+          className="p-2 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-50 border"
+          style={{
+            backgroundColor: 'var(--details-surface)',
+            borderColor: 'var(--details-border)',
+            color: 'var(--details-text-secondary)'
+          }}
           title="Download File"
         >
           {actionLoading === 'download' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
@@ -902,9 +1173,16 @@ const FileRowItem = memo(function FileRowItem({
 
         <button
           onClick={() => setIntentModalData({ item: file, path: itemPath, tmdbEpisode })}
-          className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-md shadow-purple-600/20 cursor-pointer"
+          className="px-4 py-2 rounded-xl font-semibold text-xs transition flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-[1.02] active:scale-95 border"
+          style={{
+            backgroundColor: 'var(--details-surface-hover)',
+            borderColor: 'var(--details-accent)',
+            borderWidth: '1.5px',
+            color: 'var(--details-text-primary)',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+          }}
         >
-          <Play size={14} fill="currentColor" />
+          <Play size={14} style={{ color: 'var(--details-accent)' }} fill="currentColor" />
           <span>Play</span>
         </button>
       </div>
@@ -1070,13 +1348,13 @@ export default function Details() {
   const [logoSearchResults, setLogoSearchResults] = useState<any[]>([]);
   const [activeLogoTmdb, setActiveLogoTmdb] = useState<any>(null);
 
-  // Dominant color palette state
+  // Dominant color palette state (prioritize backdrop, fallback to poster)
   const initialPalette = useMemo(() => {
-    const bg = initialTmdb?.backdrop_path;
+    const bg = initialTmdb?.backdrop_path || initialTmdb?.poster_path || location.state?.item?.backdrop_path || location.state?.item?.poster_path;
     if (!bg) return null;
     const url = bg.startsWith('http') ? bg : `https://image.tmdb.org/t/p/w1280${bg}`;
     return getCachedPalette(url);
-  }, [initialTmdb]);
+  }, [initialTmdb, location.state]);
 
   const [colorPalette, setColorPalette] = useState<BackdropColorPalette | null>(initialPalette);
 
@@ -2127,21 +2405,33 @@ export default function Details() {
     return [];
   }, [tmdb]);
 
-  // Extract Backdrop URL
+  // Extract Backdrop URL (prioritized)
   const backdropUrl = useMemo(() => {
-    if (!tmdb) return '';
-    if (tmdb.backdrop_path) {
-      return tmdb.backdrop_path.startsWith('http')
-        ? tmdb.backdrop_path
-        : `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}`;
+    const raw = tmdb?.backdrop_path || initialTmdb?.backdrop_path || location.state?.item?.backdrop_path || location.state?.item?.backdropPath;
+    if (raw) {
+      return raw.startsWith('http') ? raw : `https://image.tmdb.org/t/p/w1280${raw}`;
     }
-    if (tmdb.poster_path) {
-      return tmdb.poster_path.startsWith('http')
-        ? tmdb.poster_path
-        : `https://image.tmdb.org/t/p/w780${tmdb.poster_path}`;
+    // Fallback backdrop to poster if no backdrop exists
+    const rawPoster = tmdb?.poster_path || initialTmdb?.poster_path || location.state?.item?.poster_path || location.state?.item?.posterPath;
+    if (rawPoster) {
+      return rawPoster.startsWith('http') ? rawPoster : `https://image.tmdb.org/t/p/w780${rawPoster}`;
     }
     return '';
-  }, [tmdb]);
+  }, [tmdb, initialTmdb, location.state]);
+
+  // Extract Poster URL
+  const posterUrl = useMemo(() => {
+    const raw = tmdb?.poster_path || initialTmdb?.poster_path || location.state?.item?.poster_path || location.state?.item?.posterPath;
+    if (raw) {
+      return raw.startsWith('http') ? raw : `https://image.tmdb.org/t/p/w780${raw}`;
+    }
+    return '';
+  }, [tmdb, initialTmdb, location.state]);
+
+  // Dominant color extraction target (Backdrop image first, fallback to poster)
+  const colorExtractionUrl = useMemo(() => {
+    return backdropUrl || posterUrl || '';
+  }, [backdropUrl, posterUrl]);
 
   // Fallback landscape poster for episodes lacking individual TMDB episode thumbnails
   const fallbackLandscapePoster = useMemo(() => {
@@ -2164,16 +2454,16 @@ export default function Details() {
     return 'Available';
   }, [tmdb]);
 
-  // Extract Dominant Color from Backdrop Image
+  // Extract Dominant Color from Media Image (Backdrop first, fallback to Poster)
   useEffect(() => {
     let isMounted = true;
-    if (backdropUrl) {
-      const cached = getCachedPalette(backdropUrl);
+    if (colorExtractionUrl) {
+      const cached = getCachedPalette(colorExtractionUrl);
       if (cached) {
         setColorPalette(cached);
         return;
       }
-      extractDominantColor(backdropUrl)
+      extractDominantColor(colorExtractionUrl)
         .then(palette => {
           if (isMounted) setColorPalette(palette);
         })
@@ -2184,7 +2474,7 @@ export default function Details() {
       setColorPalette(null);
     }
     return () => { isMounted = false; };
-  }, [backdropUrl]);
+  }, [colorExtractionUrl]);
 
   // Batch Selection Logic
   const toggleSelectAll = () => {
@@ -2302,33 +2592,35 @@ export default function Details() {
 
   return (
     <div 
-      className="details-page-root min-h-screen text-black dark:text-white pb-24 relative transition-colors duration-700 ease-out"
+      className="details-page-root min-h-screen pb-24 relative transition-colors duration-700 ease-out"
       style={{
-        backgroundColor: 'var(--page-bg)',
-        '--page-bg': colorPalette ? colorPalette.bgLight : '#fffcf9',
-        '--page-bg-dark': colorPalette ? colorPalette.bgDark : '#08080a',
-        '--page-glow': colorPalette ? colorPalette.glowLight : 'rgba(130,80,220,0.10)',
-        '--page-glow-dark': colorPalette ? colorPalette.glowDark : 'rgba(130,80,220,0.20)',
-        '--page-card': colorPalette ? colorPalette.cardLight : 'rgba(0,0,0,0.03)',
-        '--page-card-dark': colorPalette ? colorPalette.cardDark : 'rgba(255,255,255,0.05)',
+        backgroundColor: 'var(--details-bg)',
+        color: 'var(--details-text-primary)',
+        '--details-bg': colorPalette ? colorPalette.solidBg : '#0b0e14',
+        '--details-text-primary': colorPalette ? colorPalette.textPrimary : '#ffffff',
+        '--details-text-secondary': colorPalette ? colorPalette.textSecondary : 'rgba(255, 255, 255, 0.78)',
+        '--details-text-muted': colorPalette ? colorPalette.textMuted : 'rgba(255, 255, 255, 0.52)',
+        '--details-surface': colorPalette ? colorPalette.cardBg : 'rgba(255, 255, 255, 0.06)',
+        '--details-surface-hover': colorPalette ? colorPalette.cardBgHover : 'rgba(255, 255, 255, 0.10)',
+        '--details-border': colorPalette ? colorPalette.cardBorder : 'rgba(255, 255, 255, 0.10)',
+        '--details-badge-bg': colorPalette ? colorPalette.badgeBg : 'rgba(255, 255, 255, 0.08)',
+        '--details-badge-border': colorPalette ? colorPalette.badgeBorder : 'rgba(255, 255, 255, 0.13)',
+        '--details-glow': colorPalette ? colorPalette.glow : 'rgba(130, 80, 220, 0.22)',
+        '--details-accent': colorPalette ? colorPalette.accent : 'rgb(130, 80, 220)',
+        // Legacy variables compatibility
+        '--page-bg': colorPalette ? colorPalette.solidBg : '#0b0e14',
+        '--page-bg-dark': colorPalette ? colorPalette.solidBg : '#0b0e14',
       } as React.CSSProperties}
     >
-      {/* Dark mode overrides using inline styles and a tiny script or CSS */}
+      {/* Complete Theme Isolation: Neither light nor dark mode affects details page */}
       <style>{`
+        .details-page-root,
         .dark .details-page-root {
-          background-color: var(--page-bg-dark) !important;
+          background-color: var(--details-bg) !important;
+          color: var(--details-text-primary) !important;
         }
-        .hero-gradient {
-          background: linear-gradient(to top, var(--page-bg) 0%, rgba(255,255,255,0) 100%);
-        }
-        .dark .hero-gradient {
-          background: linear-gradient(to top, var(--page-bg-dark) 0%, rgba(0,0,0,0) 100%);
-        }
-        .hero-glow {
-          background: radial-gradient(ellipse 85% 65% at 50% 20%, var(--page-glow) 0%, transparent 80%);
-        }
-        .dark .hero-glow {
-          background: radial-gradient(ellipse 85% 65% at 50% 20%, var(--page-glow-dark) 0%, transparent 80%);
+        .details-hero-glow {
+          background: radial-gradient(ellipse 85% 65% at 50% 20%, var(--details-glow) 0%, transparent 80%);
         }
       `}</style>
 
@@ -2339,7 +2631,12 @@ export default function Details() {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[150] bg-black/90 dark:bg-white/90 text-white dark:text-black px-6 py-3 rounded-2xl shadow-2xl text-sm font-semibold backdrop-blur-md border border-white/20 dark:border-black/20"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[150] px-6 py-3 rounded-2xl shadow-2xl text-sm font-semibold backdrop-blur-md border"
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              color: '#ffffff',
+              borderColor: 'rgba(255,255,255,0.2)'
+            }}
           >
             {toast}
           </motion.div>
@@ -2362,10 +2659,10 @@ export default function Details() {
         style={{ height: `calc(var(--backdrop-h) + ${parallaxThreshold}px)` }}
       >
         <div className="sticky top-0 w-full h-[var(--backdrop-h)]">
-          {/* Ambient Dominant Color Glow / Tint Layer */}
+          {/* Ambient Dominant Color Glow Layer */}
           {colorPalette && (
             <div 
-              className="hero-glow absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[650px] pointer-events-none z-0 blur-3xl opacity-70 dark:opacity-75 transition-opacity duration-1000"
+              className="details-hero-glow absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[650px] pointer-events-none z-0 blur-3xl opacity-75 transition-opacity duration-1000"
             />
           )}
           
@@ -2376,39 +2673,34 @@ export default function Details() {
               maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)'
             }}
           >
-            {backdropUrl && (
+            {(backdropUrl || posterUrl) && (
               <img 
-                src={backdropUrl} 
+                src={backdropUrl || posterUrl} 
                 alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || name} 
-                className="w-full h-full object-cover object-center sm:object-top opacity-100 dark:opacity-85 pointer-events-none transition-opacity duration-700"
+                className="w-full h-full object-cover object-center sm:object-top opacity-85 pointer-events-none transition-opacity duration-700"
               />
             )}
 
-            {/* Contrast Overlay - ensures text readability while preserving image brightness */}
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent from-40% to-white/40 dark:to-black/70 transition-colors duration-700" />
+            {/* Seamless blend overlay into the solid adaptive background */}
+            <div 
+              className="absolute inset-0 pointer-events-none transition-colors duration-700" 
+              style={{
+                background: `linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.45) 70%, var(--details-bg) 100%)`
+              }}
+            />
 
-            {/* 1. Standard Color Tint - Guarantees color is physically added to the pixels regardless of dark/light backdrop */}
+            {/* Dynamic hue tint layer to harmonize artwork into the solid tone */}
             {colorPalette && (
               <div 
-                className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-50 transition-opacity duration-700"
+                className="absolute inset-0 pointer-events-none opacity-40 transition-opacity duration-700"
                 style={{
-                  background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
+                  background: `linear-gradient(to bottom, transparent 55%, var(--details-bg) 100%)`,
                 }}
               />
             )}
             
-            {/* 2. Vibrant Screen Layer (Dark Mode Only) - Prevents colors from being crushed by dark backgrounds */}
-            {colorPalette && (
-              <div 
-                className="absolute inset-0 pointer-events-none hidden dark:block mix-blend-screen opacity-40 transition-opacity duration-700"
-                style={{
-                  background: `linear-gradient(to bottom, transparent 60%, rgb(${colorPalette.rgb[0]}, ${colorPalette.rgb[1]}, ${colorPalette.rgb[2]}) 100%)`,
-                }}
-              />
-            )}
-            
-            {/* Gradients to blend into the dynamic background seamlessly */}
-            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10" />
+            {/* Top scrim for clear readability under top floating navigation pills */}
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-10" />
           </div>
         </div>
       </div>
@@ -2425,14 +2717,25 @@ export default function Details() {
               onError={() => setLogoUrl(null)}
             />
           ) : (
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-black dark:text-white drop-shadow-xl leading-tight">
+            <h1 
+              className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight drop-shadow-xl leading-tight"
+              style={{ color: 'var(--details-text-primary)' }}
+            >
               {formatTitleCase(tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName)}
             </h1>
           )}
 
           {/* Release Year & Meta Info */}
           {metaInfoStr && (
-            <span className="mt-3 px-4 py-1.5 rounded-full bg-black/5 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10 text-[10px] sm:text-[11px] font-bold text-gray-800 dark:text-gray-200 tracking-wider shadow-sm">
+            <span 
+              className="mt-3 px-4 py-1.5 rounded-full backdrop-blur-md text-[10px] sm:text-[11px] font-bold tracking-wider shadow-sm"
+              style={{
+                backgroundColor: 'var(--details-badge-bg)',
+                borderColor: 'var(--details-badge-border)',
+                borderWidth: '1px',
+                color: 'var(--details-text-secondary)',
+              }}
+            >
               {metaInfoStr}
             </span>
           )}
@@ -2444,7 +2747,13 @@ export default function Details() {
             {genreList.map((genre, idx) => (
               <span 
                 key={idx} 
-                className="px-4 py-1.5 rounded-full bg-black/5 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10 text-xs font-semibold tracking-wide text-gray-800 dark:text-gray-200 shadow-sm"
+                className="px-4 py-1.5 rounded-full backdrop-blur-md text-xs font-semibold tracking-wide shadow-sm"
+                style={{
+                  backgroundColor: 'var(--details-badge-bg)',
+                  borderColor: 'var(--details-badge-border)',
+                  borderWidth: '1px',
+                  color: 'var(--details-text-secondary)',
+                }}
               >
                 {genre}
               </span>
@@ -2457,17 +2766,17 @@ export default function Details() {
           if (!tmdb?.status) return null;
           const s = String(tmdb.status).trim().toLowerCase();
           let label = tmdb.status;
-          let badgeClass = 'bg-gray-500/10 dark:bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/30';
+          let badgeClass = 'bg-gray-500/15 text-gray-300 border-gray-500/30';
 
           if (s === 'returning series' || s === 'in production' || s === 'planned' || s === 'pilot' || s === 'ongoing' || s === 'continuing') {
             label = (s === 'returning series' || s === 'in production' || s === 'pilot' || s === 'planned' || s === 'ongoing' || s === 'continuing') ? 'Continuing' : (tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1));
-            badgeClass = 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
+            badgeClass = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
           } else if (s === 'ended' || s === 'complete' || s === 'completed') {
             label = 'Ended';
-            badgeClass = 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30';
+            badgeClass = 'bg-blue-500/15 text-blue-300 border-blue-500/30';
           } else if (s === 'canceled' || s === 'cancelled') {
             label = 'Canceled';
-            badgeClass = 'bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30';
+            badgeClass = 'bg-red-500/15 text-red-300 border-red-500/30';
           } else {
             label = tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1);
           }
@@ -2490,7 +2799,7 @@ export default function Details() {
           const formatted = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
           return (
             <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
-              <span className="px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold uppercase tracking-wider shadow-sm bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30">
+              <span className="px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold uppercase tracking-wider shadow-sm bg-blue-500/15 text-blue-300 border-blue-500/30">
                 Digital Release: {formatted}
               </span>
             </div>
@@ -2499,14 +2808,25 @@ export default function Details() {
 
         {/* Action Buttons Row */}
         <div className="flex flex-wrap items-center justify-center pt-1 mb-2">
-          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 sm:py-2.5 rounded-full bg-black/5 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
+          <div 
+            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 sm:py-2.5 rounded-full backdrop-blur-xl shadow-lg border"
+            style={{
+              backgroundColor: 'var(--details-surface)',
+              borderColor: 'var(--details-border)',
+            }}
+          >
             <button
               onClick={handleToggleWatchlist}
               title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
-              className="p-2.5 sm:p-3 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white transition flex items-center justify-center cursor-pointer"
+              className="p-2.5 sm:p-3 rounded-full active:scale-95 transition flex items-center justify-center cursor-pointer border"
+              style={{
+                backgroundColor: 'var(--details-surface)',
+                borderColor: 'var(--details-border)',
+                color: 'var(--details-text-primary)',
+              }}
             >
               {inWatchlist ? (
-                <BookmarkCheck size={20} className="text-purple-600 dark:text-purple-400" />
+                <BookmarkCheck size={20} className="text-purple-400" />
               ) : (
                 <Bookmark size={20} />
               )}
@@ -2516,12 +2836,12 @@ export default function Details() {
               onClick={handleWatchTrailer}
               disabled={loadingTrailer}
               title="Watch Trailer on YouTube"
-              className="p-2.5 sm:p-3 rounded-full bg-red-600/10 dark:bg-red-500/15 hover:bg-red-600/20 dark:hover:bg-red-500/25 active:scale-95 text-red-600 dark:text-red-400 transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+              className="p-2.5 sm:p-3 rounded-full bg-red-600/15 hover:bg-red-600/25 active:scale-95 text-red-400 transition flex items-center justify-center cursor-pointer disabled:opacity-50 border border-red-500/25"
             >
               {loadingTrailer ? (
-                <Loader2 size={20} className="animate-spin text-red-600 dark:text-red-400" />
+                <Loader2 size={20} className="animate-spin text-red-400" />
               ) : (
-                <Youtube size={20} className="text-red-600 dark:text-red-400" />
+                <Youtube size={20} className="text-red-400" />
               )}
             </button>
 
@@ -2530,9 +2850,14 @@ export default function Details() {
                 onClick={handleRefreshRoot}
                 disabled={loadingFiles}
                 title="Refresh Root Directory"
-                className="p-2.5 sm:p-3 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+                className="p-2.5 sm:p-3 rounded-full active:scale-95 transition flex items-center justify-center cursor-pointer disabled:opacity-50 border"
+                style={{
+                  backgroundColor: 'var(--details-surface)',
+                  borderColor: 'var(--details-border)',
+                  color: 'var(--details-text-primary)',
+                }}
               >
-                <RefreshCw size={20} className={loadingFiles ? "animate-spin text-purple-600 dark:text-purple-400" : ""} />
+                <RefreshCw size={20} className={loadingFiles ? "animate-spin text-purple-400" : ""} />
               </button>
             )}
 
@@ -2562,7 +2887,12 @@ export default function Details() {
                 setShowMetadataModal(true);
               }}
               title="Fix Metadata & Logo"
-              className="p-2.5 sm:p-3 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 text-black dark:text-white transition flex items-center justify-center cursor-pointer"
+              className="p-2.5 sm:p-3 rounded-full active:scale-95 transition flex items-center justify-center cursor-pointer border"
+              style={{
+                backgroundColor: 'var(--details-surface)',
+                borderColor: 'var(--details-border)',
+                color: 'var(--details-text-primary)',
+              }}
             >
               <Edit2 size={20} />
             </button>
@@ -2572,15 +2902,19 @@ export default function Details() {
 
         {/* Plot / Overview Text */}
         <div className="w-full max-w-2xl text-center pt-2 pb-4 flex flex-col items-center">
-          <p className={`text-gray-800 dark:text-gray-200 text-sm md:text-base leading-relaxed font-medium transition-all ${
-            isPlotExpanded ? '' : 'line-clamp-3'
-          }`}>
+          <p 
+            className={`text-sm md:text-base leading-relaxed font-medium transition-all ${
+              isPlotExpanded ? '' : 'line-clamp-3'
+            }`}
+            style={{ color: 'var(--details-text-secondary)' }}
+          >
             {tmdb?.overview || 'No overview available for this title.'}
           </p>
           {(tmdb?.overview?.length > 150) && (
             <button
               onClick={() => setIsPlotExpanded(!isPlotExpanded)}
-              className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 mt-2 transition cursor-pointer"
+              className="text-xs font-bold uppercase tracking-wider mt-2 transition cursor-pointer hover:underline"
+              style={{ color: 'var(--details-accent)' }}
             >
               {isPlotExpanded ? 'Show Less' : 'Read More'}
             </button>
@@ -2591,23 +2925,49 @@ export default function Details() {
       {/* Main Files / Playable Media Section (NO Cast & Crew) */}
       <div className="px-4 sm:px-8 md:px-12 max-w-7xl mx-auto py-6 relative z-20 space-y-6">
         {user === 'guest' ? (
-          <div className="p-8 sm:p-12 rounded-3xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-center max-w-xl mx-auto shadow-xl backdrop-blur-md">
-            <div className="w-16 h-16 rounded-2xl bg-purple-600/15 text-purple-600 dark:text-purple-400 mx-auto flex items-center justify-center mb-5 border border-purple-500/20 shadow-inner">
+          <div 
+            className="p-8 sm:p-12 rounded-3xl text-center max-w-xl mx-auto shadow-xl backdrop-blur-md border"
+            style={{
+              backgroundColor: 'var(--details-surface)',
+              borderColor: 'var(--details-border)',
+            }}
+          >
+            <div 
+              className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-5 border shadow-inner"
+              style={{
+                backgroundColor: 'var(--details-surface)',
+                color: 'var(--details-accent)',
+                borderColor: 'var(--details-border)',
+              }}
+            >
               <Lock size={30} />
             </div>
-            <h3 className="text-xl font-extrabold text-black dark:text-white mb-2 tracking-tight">
+            <h3 
+              className="text-xl font-extrabold mb-2 tracking-tight"
+              style={{ color: 'var(--details-text-primary)' }}
+            >
               Sign in to view media files
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed max-w-md mx-auto">
+            <p 
+              className="text-sm mb-6 leading-relaxed max-w-md mx-auto"
+              style={{ color: 'var(--details-text-secondary)' }}
+            >
               Guest preview mode is active. Please log in with your account to access episode listings, stream high-definition video, and download files.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
                 to="/login"
                 state={{ from: location.pathname }}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2.5 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm shadow-lg transition flex items-center justify-center gap-2.5 cursor-pointer hover:scale-[1.02] active:scale-95 border"
+                style={{
+                  backgroundColor: 'var(--details-surface-hover)',
+                  borderColor: 'var(--details-accent)',
+                  borderWidth: '1.5px',
+                  color: 'var(--details-text-primary)',
+                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                }}
               >
-                <LogIn size={18} />
+                <LogIn size={18} style={{ color: 'var(--details-accent)' }} />
                 <span>Log In to View Files</span>
               </Link>
             </div>
@@ -2617,8 +2977,11 @@ export default function Details() {
             {/* Season Selector Tabs (For TV Series) */}
             {seasonItems.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
-              <Tv size={20} className="text-purple-600 dark:text-purple-400" />
+            <h2 
+              className="text-lg font-bold flex items-center gap-2"
+              style={{ color: 'var(--details-text-primary)' }}
+            >
+              <Tv size={20} style={{ color: 'var(--details-accent)' }} />
               <span>Seasons</span>
             </h2>
             <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none">
@@ -2628,13 +2991,16 @@ export default function Details() {
                   <button
                     key={idx}
                     onClick={() => setActiveSeasonIndex(idx)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border ${
-                      isActive 
-                        ? 'bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-600/20' 
-                        : 'bg-black/5 dark:bg-white/5 text-gray-700 dark:text-gray-300 border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10'
-                    }`}
+                    className="px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border"
+                    style={{
+                      backgroundColor: isActive ? 'var(--details-surface-hover)' : 'var(--details-surface)',
+                      color: 'var(--details-text-primary)',
+                      borderColor: isActive ? 'var(--details-accent)' : 'var(--details-border)',
+                      borderWidth: isActive ? '1.5px' : '1px',
+                      boxShadow: isActive ? '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)' : 'none',
+                    }}
                   >
-                    <Folder size={14} />
+                    <Folder size={14} style={{ color: isActive ? 'var(--details-accent)' : 'var(--details-text-muted)' }} />
                     <span>{season.name}</span>
                   </button>
                 );
@@ -2644,9 +3010,18 @@ export default function Details() {
         )}
 
         {/* Media Files List Header */}
-        <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-3">
-          <h2 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
-            <Film size={20} className="text-purple-600 dark:text-purple-400" />
+        <div 
+          className="flex items-center justify-between pb-3"
+          style={{
+            borderBottomWidth: '1px',
+            borderBottomColor: 'var(--details-border)'
+          }}
+        >
+          <h2 
+            className="text-lg font-bold flex items-center gap-2"
+            style={{ color: 'var(--details-text-primary)' }}
+          >
+            <Film size={20} style={{ color: 'var(--details-accent)' }} />
             <span>Available Files & Playback</span>
           </h2>
           <div className="flex items-center gap-3">
@@ -2654,14 +3029,24 @@ export default function Details() {
               <button
                 onClick={handleBatchCopy}
                 disabled={batchCopyLoading}
-                className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-95 border"
+                style={{
+                  backgroundColor: 'var(--details-surface-hover)',
+                  borderColor: 'var(--details-accent)',
+                  borderWidth: '1.5px',
+                  color: 'var(--details-text-primary)',
+                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                }}
               >
-                {batchCopyLoading ? <Loader2 size={14} className="animate-spin" /> : batchCopied ? <Check size={14} /> : <Copy size={14} />}
+                {batchCopyLoading ? <Loader2 size={14} className="animate-spin" style={{ color: 'var(--details-accent)' }} /> : batchCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} style={{ color: 'var(--details-accent)' }} />}
                 <span>Copy {selectedFiles.length} {selectedFiles.length === 1 ? 'Link' : 'Links'}</span>
               </button>
             )}
             {seasonItems.length === 0 && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+              <span 
+                className="text-xs font-medium"
+                style={{ color: 'var(--details-text-muted)' }}
+              >
                 {baseItems.length} {baseItems.length === 1 ? 'file' : 'files'}
               </span>
             )}
@@ -2680,9 +3065,14 @@ export default function Details() {
                 }
                 setShowZipModal(true);
               }}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 font-bold text-xs sm:text-sm tracking-wide transition-all duration-200 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm tracking-wide transition-all duration-200 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98] border"
+              style={{
+                backgroundColor: 'var(--details-surface)',
+                borderColor: 'var(--details-border)',
+                color: 'var(--details-text-primary)'
+              }}
             >
-              <Archive size={16} className="text-purple-500" />
+              <Archive size={16} style={{ color: 'var(--details-accent)' }} />
               <span>DOWNLOAD FOLDER AS ZIP</span>
             </button>
           </div>
@@ -2690,8 +3080,11 @@ export default function Details() {
 
         {/* Files Display */}
         {loadingFiles || loadingSeasonFiles ? (
-          <div className="flex items-center justify-center py-12 text-gray-500 gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+          <div 
+            className="flex items-center justify-center py-12 gap-3"
+            style={{ color: 'var(--details-text-muted)' }}
+          >
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--details-accent)' }} />
             <span className="text-sm font-medium">Loading media files...</span>
           </div>
         ) : (
@@ -2702,27 +3095,39 @@ export default function Details() {
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={toggleSelectAll} 
-                    className={`shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center ${
-                      (seasonItems.length > 0 ? currentSeasonEpisodes : baseItems).every(f => 
+                    className="shrink-0 p-1 rounded transition cursor-pointer flex items-center justify-center"
+                    style={{
+                      color: (seasonItems.length > 0 ? currentSeasonEpisodes : baseItems).every(f => 
                         selectedFiles.some(s => s.file.name === f.name)
-                      ) ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                    }`}
+                      ) ? 'var(--details-accent)' : 'var(--details-text-muted)'
+                    }}
                     title="Select All"
                   >
                     {(seasonItems.length > 0 ? currentSeasonEpisodes : baseItems).every(f => 
                       selectedFiles.some(s => s.file.name === f.name)
                     ) ? <CheckSquare size={20} /> : <Square size={20} />}
                   </button>
-                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-pointer" onClick={toggleSelectAll}>Select All</span>
+                  <span 
+                    className="text-sm font-semibold cursor-pointer" 
+                    onClick={toggleSelectAll}
+                    style={{ color: 'var(--details-text-secondary)' }}
+                  >
+                    Select All
+                  </span>
                 </div>
 
                 <button 
                   onClick={handleRefresh}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition text-sm font-semibold cursor-pointer"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition text-sm font-semibold cursor-pointer border"
+                  style={{
+                    backgroundColor: 'var(--details-surface)',
+                    borderColor: 'var(--details-border)',
+                    color: 'var(--details-text-secondary)'
+                  }}
                   title="Refresh folder contents"
                 >
-                  <RefreshCw size={14} className={loadingFiles || loadingSeasonFiles ? "animate-spin text-purple-600" : "text-gray-600 dark:text-gray-300"} />
-                  <span className="hidden sm:inline text-gray-700 dark:text-gray-300">Refresh</span>
+                  <RefreshCw size={14} className={loadingFiles || loadingSeasonFiles ? "animate-spin" : ""} style={{ color: 'var(--details-text-secondary)' }} />
+                  <span className="hidden sm:inline">Refresh</span>
                 </button>
               </div>
             )}
@@ -2782,7 +3187,10 @@ export default function Details() {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-12 text-gray-500 text-sm">
+                <div 
+                  className="text-center py-12 text-sm"
+                  style={{ color: 'var(--details-text-muted)' }}
+                >
                   No playable media files found in this season.
                 </div>
               )
@@ -2839,7 +3247,10 @@ export default function Details() {
               </div>
             ) : (
               <div className="text-center py-12 flex flex-col items-center justify-center">
-                <span className="text-gray-500 text-sm">
+                <span 
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--details-text-muted)' }}
+                >
                   {(() => {
                     const effectiveDigitalDate = tmdb?.digital_release_date || location.state?.item?.digitalReleaseDate || location.state?.item?.digital_release_date || location.state?.tmdbData?.digital_release_date;
                     if (effectiveDigitalDate) {
@@ -2867,7 +3278,12 @@ export default function Details() {
                           .catch(e => alert('Failed to update path: ' + e.message));
                       }
                     }}
-                    className="mt-4 px-4 py-2 bg-black/10 dark:bg-white/10 rounded-xl hover:bg-black/20 dark:hover:bg-white/20 transition text-sm font-semibold flex items-center gap-2 cursor-pointer"
+                    className="mt-4 px-4 py-2 rounded-xl transition text-sm font-semibold flex items-center gap-2 cursor-pointer border"
+                    style={{
+                      backgroundColor: 'var(--details-surface)',
+                      borderColor: 'var(--details-border)',
+                      color: 'var(--details-text-primary)'
+                    }}
                   >
                     <Edit2 size={16} />
                     <span>Edit Openlist Path</span>
@@ -2943,6 +3359,7 @@ export default function Details() {
             tmdbEpisode={intentModalData.tmdbEpisode}
             showToast={(msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }}
             isTvMedia={isTvMedia}
+            colorPalette={colorPalette}
           />
         )}
       </AnimatePresence>
@@ -3423,6 +3840,7 @@ export default function Details() {
           seasonItems={seasonItems}
           token={token}
           user={user}
+          colorPalette={colorPalette}
         />
       )}
     </div>

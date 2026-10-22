@@ -3,6 +3,7 @@ import { X, Archive, Folder, Download, Loader2, CheckCircle2, ShieldCheck, Folde
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 import { formatBytes } from '../utils/nameParser';
+import type { BackdropColorPalette } from '../utils/colorExtractor';
 
 interface ZipDownloadModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface ZipDownloadModalProps {
   seasonItems: Array<{ name: string; is_dir?: boolean }>;
   token: string | null;
   user: string | null;
+  colorPalette?: BackdropColorPalette | null;
 }
 
 interface DirectoryOption {
@@ -39,7 +41,8 @@ export default function ZipDownloadModal({
   showFolderPath,
   seasonItems,
   token,
-  user
+  user,
+  colorPalette
 }: ZipDownloadModalProps) {
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
@@ -259,7 +262,7 @@ export default function ZipDownloadModal({
   return (
     <AnimatePresence>
       <div 
-        className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+        className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
         onClick={onClose}
       >
         <motion.div
@@ -267,23 +270,75 @@ export default function ZipDownloadModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="bg-[#fbf4eb] dark:bg-[#121217] border border-black/10 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 w-full max-w-xl shadow-2xl overflow-hidden relative"
+          className="zip-download-modal-card rounded-2xl sm:rounded-3xl p-4 sm:p-7 w-full max-w-xl shadow-2xl overflow-hidden relative border transition-colors duration-300"
+          style={{
+            backgroundColor: 'var(--details-bg, #0b0e14)',
+            color: 'var(--details-text-primary, #ffffff)',
+            borderColor: 'var(--details-border, rgba(255, 255, 255, 0.15))',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 45px var(--details-glow, rgba(130, 80, 220, 0.20))',
+            ...(colorPalette ? {
+              '--details-bg': colorPalette.solidBg,
+              '--details-text-primary': colorPalette.textPrimary,
+              '--details-text-secondary': colorPalette.textSecondary,
+              '--details-text-muted': colorPalette.textMuted,
+              '--details-surface': colorPalette.cardBg,
+              '--details-surface-hover': colorPalette.cardBgHover,
+              '--details-border': colorPalette.cardBorder,
+              '--details-badge-bg': colorPalette.badgeBg,
+              '--details-badge-border': colorPalette.badgeBorder,
+              '--details-glow': colorPalette.glow,
+              '--details-accent': colorPalette.accent,
+            } : {})
+          } as React.CSSProperties}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Complete Theme Isolation for Modal */}
+          <style>{`
+            .zip-download-modal-card {
+              background-color: var(--details-bg, #0b0e14) !important;
+              color: var(--details-text-primary, #ffffff) !important;
+            }
+          `}</style>
+
           {/* Header */}
-          <div className="flex items-start justify-between gap-3 pb-3.5 border-b border-black/10 dark:border-white/10">
+          <div 
+            className="flex items-start justify-between gap-3 pb-3.5 border-b"
+            style={{ borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))' }}
+          >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-purple-600/15 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-500/30 shrink-0 shadow-inner">
+              <div 
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-inner border"
+                style={{
+                  backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.08))',
+                  borderColor: 'var(--details-accent, #9333ea)',
+                  borderWidth: '1.5px',
+                  color: 'var(--details-accent, #9333ea)'
+                }}
+              >
                 <Archive size={20} className="stroke-[2.2]" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-base sm:text-xl font-bold text-black dark:text-white tracking-tight flex items-center gap-2 flex-wrap">
+                <h3 
+                  className="text-base sm:text-xl font-bold tracking-tight flex items-center gap-2 flex-wrap"
+                  style={{ color: 'var(--details-text-primary, #ffffff)' }}
+                >
                   <span>Download Folder as ZIP</span>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-purple-500 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full uppercase">
+                  <span 
+                    className="text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase border"
+                    style={{
+                      backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                      borderColor: 'var(--details-badge-border, rgba(255, 255, 255, 0.15))',
+                      color: 'var(--details-accent, #a855f7)'
+                    }}
+                  >
                     {category}
                   </span>
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs sm:max-w-md mt-0.5" title={title}>
+                <p 
+                  className="text-xs truncate max-w-xs sm:max-w-md mt-0.5" 
+                  title={title}
+                  style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}
+                >
                   {title}
                 </p>
               </div>
@@ -291,7 +346,12 @@ export default function ZipDownloadModal({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer shrink-0"
+              className="p-2 rounded-xl transition cursor-pointer shrink-0 border"
+              style={{
+                backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))'
+              }}
               aria-label="Close"
             >
               <X size={18} />
@@ -299,9 +359,16 @@ export default function ZipDownloadModal({
           </div>
 
           {/* Info Banner */}
-          <div className="my-3.5 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center gap-2.5 text-xs text-purple-700 dark:text-purple-300">
-            <ShieldCheck size={16} className="text-purple-500 shrink-0" />
-            <span className="font-semibold text-xs sm:text-sm">Zip Generator</span>
+          <div 
+            className="my-3.5 p-3 rounded-xl flex items-center gap-2.5 text-xs font-semibold border"
+            style={{
+              backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+              borderColor: 'var(--details-border, rgba(255, 255, 255, 0.14))',
+              color: 'var(--details-text-primary, #ffffff)'
+            }}
+          >
+            <ShieldCheck size={16} className="shrink-0" style={{ color: 'var(--details-accent, #a855f7)' }} />
+            <span className="text-xs sm:text-sm">Zip Generator</span>
           </div>
 
           {/* Success Toast */}
@@ -309,16 +376,24 @@ export default function ZipDownloadModal({
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-3.5 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2"
+              className="mb-3.5 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border"
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                borderColor: 'rgba(16, 185, 129, 0.35)',
+                color: '#34d399'
+              }}
             >
-              <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+              <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
               <span>{successMsg}</span>
             </motion.div>
           )}
 
           {/* Available Directories List */}
           <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-            <div className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-1">
+            <div 
+              className="text-xs font-bold uppercase tracking-wider px-1"
+              style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+            >
               Available Directories ({directories.length})
             </div>
 
@@ -336,40 +411,79 @@ export default function ZipDownloadModal({
               return (
                 <div
                   key={dir.id}
-                  className="p-3 sm:p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/10 transition flex items-center justify-between gap-2.5 sm:gap-3 overflow-hidden group"
+                  className="p-3 sm:p-3.5 rounded-2xl border transition flex items-center justify-between gap-2.5 sm:gap-3 overflow-hidden group"
+                  style={{
+                    backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                    borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))'
+                  }}
                 >
                   {/* Left Side: Icon & Details */}
                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 overflow-hidden">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                      dir.isEntireFolder 
-                        ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' 
-                        : 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                    }`}>
+                    <div 
+                      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border"
+                      style={
+                        dir.isEntireFolder
+                          ? {
+                              backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                              borderColor: 'rgba(245, 158, 11, 0.35)',
+                              color: '#f59e0b',
+                            }
+                          : {
+                              backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                              borderColor: 'var(--details-accent, #a855f7)',
+                              borderWidth: '1.5px',
+                              color: 'var(--details-accent, #a855f7)',
+                            }
+                      }
+                    >
                       {dir.isEntireFolder ? <FolderArchive size={18} /> : <Folder size={18} />}
                     </div>
 
                     <div className="min-w-0 flex-1 overflow-hidden">
-                      <div className="text-xs sm:text-sm font-bold text-black dark:text-white truncate" title={dir.name}>
+                      <div 
+                        className="text-xs sm:text-sm font-bold truncate" 
+                        title={dir.name}
+                        style={{ color: 'var(--details-text-primary, #ffffff)' }}
+                      >
                         {dir.name}
                       </div>
                       
-                      <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] mt-0.5 flex-wrap">
                         {sizeInfo ? (
                           <>
-                            <span className="font-semibold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
+                            <span 
+                              className="font-semibold px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap border"
+                              style={{
+                                backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
+                                borderColor: 'var(--details-badge-border, rgba(255, 255, 255, 0.15))',
+                                color: 'var(--details-accent, #a855f7)'
+                              }}
+                            >
                               {formatBytes(sizeInfo.size)}
                             </span>
-                            <span className="opacity-60">•</span>
-                            <span className="whitespace-nowrap">{sizeInfo.fileCount} {sizeInfo.fileCount === 1 ? 'file' : 'files'}</span>
+                            <span style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.40))' }}>•</span>
+                            <span 
+                              className="whitespace-nowrap"
+                              style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}
+                            >
+                              {sizeInfo.fileCount} {sizeInfo.fileCount === 1 ? 'file' : 'files'}
+                            </span>
                           </>
                         ) : (
-                          <span className="text-[10px] text-gray-400 dark:text-gray-500 animate-pulse whitespace-nowrap">
+                          <span 
+                            className="text-[10px] animate-pulse whitespace-nowrap"
+                            style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+                          >
                             Calculating size...
                           </span>
                         )}
                       </div>
 
-                      <div className="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5" title={`/${dir.path}`}>
+                      <div 
+                        className="text-[10px] font-mono truncate mt-0.5" 
+                        title={`/${dir.path}`}
+                        style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.45))' }}
+                      >
                         /{dir.path}
                       </div>
                     </div>
@@ -381,17 +495,26 @@ export default function ZipDownloadModal({
                     <button
                       type="button"
                       onClick={() => handleCopyLink(dir)}
-                      className={`p-2 sm:px-2.5 sm:py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      className="p-2 sm:px-2.5 sm:py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                      style={
                         isCopied
-                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shadow-sm'
-                          : 'bg-black/5 dark:bg-white/5 hover:bg-purple-500/10 text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 border-black/10 dark:border-white/10 hover:border-purple-500/30'
-                      }`}
+                          ? {
+                              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                              borderColor: 'rgba(16, 185, 129, 0.35)',
+                              color: '#34d399',
+                            }
+                          : {
+                              backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                              borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                              color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.75))',
+                            }
+                      }
                       title={`Copy link for ${dir.zipFilename} to use in downloader apps (1DM, ADM, aria2, IDM, etc.)`}
                       aria-label={`Copy link for ${dir.zipFilename}`}
                     >
                       {isCopied ? (
                         <>
-                          <Check size={14} className="text-emerald-500 shrink-0" />
+                          <Check size={14} className="text-emerald-400 shrink-0" />
                           <span className="hidden sm:inline text-[11px] font-bold">Copied</span>
                         </>
                       ) : (
@@ -402,22 +525,29 @@ export default function ZipDownloadModal({
                       )}
                     </button>
 
-                    {/* Download ZIP Button */}
+                    {/* Download ZIP Button: Adaptive surface background with non-flushing accented border */}
                     <button
                       type="button"
                       onClick={() => handleDownload(dir)}
                       disabled={isCurrentDownloading}
-                      className="shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-purple-600 hover:bg-purple-500 active:scale-95 text-white shadow-md shadow-purple-600/25 transition cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                      className="shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer disabled:opacity-60 whitespace-nowrap active:scale-95 border"
+                      style={{
+                        backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
+                        borderColor: 'var(--details-accent, #9333ea)',
+                        borderWidth: '1.5px',
+                        color: 'var(--details-text-primary, #ffffff)',
+                        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                      }}
                       title={`Download ${dir.zipFilename}`}
                     >
                       {isCurrentDownloading ? (
                         <>
-                          <Loader2 size={13} className="animate-spin shrink-0" />
+                          <Loader2 size={13} className="animate-spin shrink-0" style={{ color: 'var(--details-accent)' }} />
                           <span>Starting...</span>
                         </>
                       ) : (
                         <>
-                          <Download size={13} className="shrink-0" />
+                          <Download size={13} className="shrink-0" style={{ color: 'var(--details-accent)' }} />
                           <span className="truncate max-w-[100px] sm:max-w-[170px]">
                             {getButtonLabel(dir)}
                           </span>
@@ -431,11 +561,24 @@ export default function ZipDownloadModal({
           </div>
 
           {/* Footer */}
-          <div className="mt-4 pt-3 border-t border-black/10 dark:border-white/10 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span className="truncate max-w-[200px] sm:max-w-none">resume not supported</span>
+          <div 
+            className="mt-4 pt-3 border-t flex items-center justify-between text-xs"
+            style={{ borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))' }}
+          >
+            <span 
+              className="truncate max-w-[200px] sm:max-w-none"
+              style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}
+            >
+              resume not supported
+            </span>
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-black dark:text-white transition cursor-pointer shrink-0"
+              className="px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 border"
+              style={{
+                backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                color: 'var(--details-text-primary, #ffffff)'
+              }}
             >
               Close
             </button>

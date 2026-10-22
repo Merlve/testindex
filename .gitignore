@@ -38,3 +38,9 @@ test*.cjs
 *.tmp
 
 watched/
+
+# AI Studio artifacts, plans, and user submitted media
+.aistudio/
+public/assets/aistudio/
+assets/aistudio/
+implementation_plan.md*
