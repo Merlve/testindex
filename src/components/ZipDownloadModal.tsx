@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 import { formatBytes } from '../utils/nameParser';
 import type { BackdropColorPalette } from '../utils/colorExtractor';
+import { useIsDarkMode } from '../utils/colorExtractor';
 
 interface ZipDownloadModalProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ export default function ZipDownloadModal({
   user,
   colorPalette
 }: ZipDownloadModalProps) {
+  const isDarkMode = useIsDarkMode();
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -277,17 +279,17 @@ export default function ZipDownloadModal({
             borderColor: 'var(--details-border, rgba(255, 255, 255, 0.15))',
             boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 45px var(--details-glow, rgba(130, 80, 220, 0.20))',
             ...(colorPalette ? {
-              '--details-bg': colorPalette.solidBg,
-              '--details-text-primary': colorPalette.textPrimary,
-              '--details-text-secondary': colorPalette.textSecondary,
-              '--details-text-muted': colorPalette.textMuted,
-              '--details-surface': colorPalette.cardBg,
-              '--details-surface-hover': colorPalette.cardBgHover,
-              '--details-border': colorPalette.cardBorder,
-              '--details-badge-bg': colorPalette.badgeBg,
-              '--details-badge-border': colorPalette.badgeBorder,
-              '--details-glow': colorPalette.glow,
-              '--details-accent': colorPalette.accent,
+              '--details-bg': isDarkMode ? colorPalette.darkBlendBg : colorPalette.rawBg,
+              '--details-text-primary': isDarkMode ? colorPalette.darkTextPrimary : colorPalette.lightTextPrimary,
+              '--details-text-secondary': isDarkMode ? colorPalette.darkTextSecondary : colorPalette.lightTextSecondary,
+              '--details-text-muted': isDarkMode ? colorPalette.darkTextMuted : colorPalette.lightTextMuted,
+              '--details-surface': isDarkMode ? colorPalette.darkSurface : colorPalette.lightSurface,
+              '--details-surface-hover': isDarkMode ? colorPalette.darkSurfaceHover : colorPalette.lightSurfaceHover,
+              '--details-border': isDarkMode ? colorPalette.darkBorder : colorPalette.lightBorder,
+              '--details-badge-bg': isDarkMode ? colorPalette.darkBadgeBg : colorPalette.lightBadgeBg,
+              '--details-badge-border': isDarkMode ? colorPalette.darkBadgeBorder : colorPalette.lightBadgeBorder,
+              '--details-glow': isDarkMode ? colorPalette.darkGlow : colorPalette.lightGlow,
+              '--details-accent': isDarkMode ? colorPalette.darkAccent : colorPalette.lightAccent,
             } : {})
           } as React.CSSProperties}
           onClick={(e) => e.stopPropagation()}

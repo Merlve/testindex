@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { FastAverageColor } from 'fast-average-color';
 
 const fac = new FastAverageColor();
@@ -24,15 +25,82 @@ export function clearPaletteCache(): void {
   paletteCache.clear();
 }
 
+/**
+ * Reactive hook to track the active theme (light vs dark mode)
+ */
+export function useIsDarkMode(): boolean {
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const update = () => {
+      if (typeof document !== 'undefined') {
+        setIsDark(document.documentElement.classList.contains('dark'));
+      }
+    };
+    update();
+
+    window.addEventListener('theme-change', update);
+    const observer = new MutationObserver(update);
+    if (typeof document !== 'undefined') {
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    return () => {
+      window.removeEventListener('theme-change', update);
+      observer.disconnect();
+    };
+  }, []);
+
+  return isDark;
+}
+
 export interface BackdropColorPalette {
   rgb: [number, number, number];
   hex: string;
-  // Solid adaptive palette
-  solidBg: string;             // Deep rich solid tone (e.g. "rgb(12, 16, 28)")
+
+  // Exact extracted color (no darkness added) for Light Mode
+  rawBg: string;
+  // Deep rich dark blend for Dark Mode
+  darkBlendBg: string;
+
+  // Dark Mode specific adaptive tokens:
+  darkBg: string;
+  darkTextPrimary: string;
+  darkTextSecondary: string;
+  darkTextMuted: string;
+  darkSurface: string;
+  darkSurfaceHover: string;
+  darkBorder: string;
+  darkBadgeBg: string;
+  darkBadgeBorder: string;
+  darkAccent: string;
+  darkGlow: string;
+
+  // Light Mode specific adaptive tokens (matching exact extracted color):
+  lightBg: string;
+  lightTextPrimary: string;
+  lightTextSecondary: string;
+  lightTextMuted: string;
+  lightSurface: string;
+  lightSurfaceHover: string;
+  lightBorder: string;
+  lightBadgeBg: string;
+  lightBadgeBorder: string;
+  lightAccent: string;
+  lightGlow: string;
+  isLightBgLight: boolean;
+
+  // Backward compatibility / default fields
+  solidBg: string;             // Active solidBg default
   textPrimary: string;         // Adaptive high-contrast text color
   textSecondary: string;       // Adaptive secondary text
   textMuted: string;           // Adaptive muted text
-  cardBg: string;              // Frosted semi-transparent card surface
+  cardBg: string;              // Frosted card surface
   cardBgHover: string;         // Card hover surface
   cardBorder: string;          // Subtle card border
   badgeBg: string;             // Metadata badge background
@@ -126,51 +194,66 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
   const clampedB = Math.max(0, Math.min(255, Math.round(b)));
 
   const hex = `#${((1 << 24) + (clampedR << 16) + (clampedG << 8) + clampedB).toString(16).slice(1)}`;
-
   const [h, s] = rgbToHsl(clampedR, clampedG, clampedB);
 
-  // Compute a Deep Rich Tone for solid page background:
-  // - If monochromatic / greyscale (s < 0.08), default to deep obsidian slate
-  // - Otherwise, preserve the hue, ensure rich saturation (35% to 75%), and set lightness to deep 9.5%
-  let solidBgR: number;
-  let solidBgG: number;
-  let solidBgB: number;
+  // 1. Dark Mode Theme: Deep rich dark blend (the dark blend color)
+  let darkBgR: number;
+  let darkBgG: number;
+  let darkBgB: number;
 
   if (s < 0.08) {
-    solidBgR = 14;
-    solidBgG = 15;
-    solidBgB = 18;
+    darkBgR = 14;
+    darkBgG = 15;
+    darkBgB = 18;
   } else {
     const richSaturation = Math.min(0.75, Math.max(0.35, s * 1.15));
     const deepLightness = 0.095;
-    [solidBgR, solidBgG, solidBgB] = hslToRgb(h, richSaturation, deepLightness);
+    [darkBgR, darkBgG, darkBgB] = hslToRgb(h, richSaturation, deepLightness);
   }
 
-  const solidBg = `rgb(${solidBgR}, ${solidBgG}, ${solidBgB})`;
+  const darkBlendBg = `rgb(${darkBgR}, ${darkBgG}, ${darkBgB})`;
+  const darkTextPrimary = '#ffffff';
+  const darkTextSecondary = 'rgba(255, 255, 255, 0.78)';
+  const darkTextMuted = 'rgba(255, 255, 255, 0.52)';
+  const darkSurface = 'rgba(255, 255, 255, 0.06)';
+  const darkSurfaceHover = 'rgba(255, 255, 255, 0.10)';
+  const darkBorder = 'rgba(255, 255, 255, 0.10)';
+  const darkBadgeBg = 'rgba(255, 255, 255, 0.08)';
+  const darkBadgeBorder = 'rgba(255, 255, 255, 0.13)';
+  const [darkAccR, darkAccG, darkAccB] = hslToRgb(h, Math.max(0.65, s), 0.60);
+  const darkAccent = `rgb(${darkAccR}, ${darkAccG}, ${darkAccB})`;
+  const darkGlow = `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.22)`;
 
-  // Calculate relative luminance to determine adaptive text contrast
-  const bgLuminance = getRelativeLuminance(solidBgR, solidBgG, solidBgB);
-  const isDarkBackground = bgLuminance < 0.38;
+  // 2. Light Mode Theme: Exact extracted color from the backdrop/poster (no darkness added!)
+  const rawBg = `rgb(${clampedR}, ${clampedG}, ${clampedB})`;
+  const lightBg = rawBg;
 
-  // Adaptive contrast text and surfaces
-  const textPrimary = isDarkBackground ? '#ffffff' : '#0f172a';
-  const textSecondary = isDarkBackground ? 'rgba(255, 255, 255, 0.78)' : 'rgba(15, 23, 42, 0.78)';
-  const textMuted = isDarkBackground ? 'rgba(255, 255, 255, 0.52)' : 'rgba(15, 23, 42, 0.55)';
-  const cardBg = isDarkBackground ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)';
-  const cardBgHover = isDarkBackground ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.07)';
-  const cardBorder = isDarkBackground ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.09)';
-  const badgeBg = isDarkBackground ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
-  const badgeBorder = isDarkBackground ? 'rgba(255, 255, 255, 0.13)' : 'rgba(0, 0, 0, 0.08)';
+  // Determine luminance of the exact extracted color to ensure high-contrast readability
+  const lightLuminance = getRelativeLuminance(clampedR, clampedG, clampedB);
+  const isLightBgLight = lightLuminance >= 0.40;
 
-  // Accent color for highlights
-  const [accentR, accentG, accentB] = hslToRgb(
+  // Adaptive typography and surfaces tailored to the exact extracted color:
+  const lightTextPrimary = isLightBgLight ? '#0a0d14' : '#ffffff';
+  const lightTextSecondary = isLightBgLight ? 'rgba(10, 13, 20, 0.88)' : 'rgba(255, 255, 255, 0.85)';
+  const lightTextMuted = isLightBgLight ? 'rgba(10, 13, 20, 0.65)' : 'rgba(255, 255, 255, 0.60)';
+
+  // Contrast surfaces for light mode:
+  const lightSurface = isLightBgLight ? 'rgba(0, 0, 0, 0.07)' : 'rgba(255, 255, 255, 0.12)';
+  const lightSurfaceHover = isLightBgLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.18)';
+  const lightBorder = isLightBgLight ? 'rgba(0, 0, 0, 0.18)' : 'rgba(255, 255, 255, 0.22)';
+  const lightBadgeBg = isLightBgLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.12)';
+  const lightBadgeBorder = isLightBgLight ? 'rgba(0, 0, 0, 0.24)' : 'rgba(255, 255, 255, 0.25)';
+
+  // Accent for light mode: if background is bright, use deep saturated tone; if background is dark, use vibrant pop
+  const [lightAccR, lightAccG, lightAccB] = hslToRgb(
     h,
-    Math.max(0.65, s),
-    isDarkBackground ? 0.60 : 0.45
+    Math.max(0.70, s),
+    isLightBgLight ? 0.32 : 0.65
   );
-  const accent = `rgb(${accentR}, ${accentG}, ${accentB})`;
-
-  const glow = `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.22)`;
+  const lightAccent = `rgb(${lightAccR}, ${lightAccG}, ${lightAccB})`;
+  const lightGlow = isLightBgLight 
+    ? `rgba(${Math.max(0, clampedR - 40)}, ${Math.max(0, clampedG - 40)}, ${Math.max(0, clampedB - 40)}, 0.15)`
+    : `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.25)`;
 
   // Legacy variants for backward compatibility
   const darkR = Math.round(clampedR * 0.144 + 6);
@@ -186,18 +269,49 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
   return {
     rgb: [clampedR, clampedG, clampedB],
     hex,
-    solidBg,
-    textPrimary,
-    textSecondary,
-    textMuted,
-    cardBg,
-    cardBgHover,
-    cardBorder,
-    badgeBg,
-    badgeBorder,
-    glow,
-    accent,
-    isDarkBackground,
+    rawBg,
+    darkBlendBg,
+
+    // Dark Mode tokens
+    darkBg: darkBlendBg,
+    darkTextPrimary,
+    darkTextSecondary,
+    darkTextMuted,
+    darkSurface,
+    darkSurfaceHover,
+    darkBorder,
+    darkBadgeBg,
+    darkBadgeBorder,
+    darkAccent,
+    darkGlow,
+
+    // Light Mode tokens (exact extracted color)
+    lightBg,
+    lightTextPrimary,
+    lightTextSecondary,
+    lightTextMuted,
+    lightSurface,
+    lightSurfaceHover,
+    lightBorder,
+    lightBadgeBg,
+    lightBadgeBorder,
+    lightAccent,
+    lightGlow,
+    isLightBgLight,
+
+    // Default / Backward compatibility
+    solidBg: darkBlendBg,
+    textPrimary: darkTextPrimary,
+    textSecondary: darkTextSecondary,
+    textMuted: darkTextMuted,
+    cardBg: darkSurface,
+    cardBgHover: darkSurfaceHover,
+    cardBorder: darkBorder,
+    badgeBg: darkBadgeBg,
+    badgeBorder: darkBadgeBorder,
+    glow: darkGlow,
+    accent: darkAccent,
+    isDarkBackground: true,
     bgDark,
     bgLight,
     glowDark: `rgba(${clampedR}, ${clampedG}, ${clampedB}, 0.264)`,

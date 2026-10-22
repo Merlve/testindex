@@ -14,7 +14,7 @@ import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
 import ZipDownloadModal from '../components/ZipDownloadModal';
 import { useQueryClient } from '@tanstack/react-query';
-import { extractDominantColor, BackdropColorPalette, getCachedPalette } from '../utils/colorExtractor';
+import { extractDominantColor, BackdropColorPalette, getCachedPalette, useIsDarkMode } from '../utils/colorExtractor';
 import { markImageLoaded, isImageLoaded } from '../utils/imageCache';
 
 // Helper to identify video files
@@ -224,6 +224,8 @@ function IntentPlayerModal({
     }
   };
 
+  const isDarkMode = useIsDarkMode();
+
   return (
     <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={onClose}>
       <motion.div 
@@ -238,17 +240,17 @@ function IntentPlayerModal({
           borderColor: 'var(--details-border, rgba(255, 255, 255, 0.15))',
           boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 45px var(--details-glow, rgba(130, 80, 220, 0.20))',
           ...(colorPalette ? {
-            '--details-bg': colorPalette.solidBg,
-            '--details-text-primary': colorPalette.textPrimary,
-            '--details-text-secondary': colorPalette.textSecondary,
-            '--details-text-muted': colorPalette.textMuted,
-            '--details-surface': colorPalette.cardBg,
-            '--details-surface-hover': colorPalette.cardBgHover,
-            '--details-border': colorPalette.cardBorder,
-            '--details-badge-bg': colorPalette.badgeBg,
-            '--details-badge-border': colorPalette.badgeBorder,
-            '--details-glow': colorPalette.glow,
-            '--details-accent': colorPalette.accent,
+            '--details-bg': isDarkMode ? colorPalette.darkBlendBg : colorPalette.rawBg,
+            '--details-text-primary': isDarkMode ? colorPalette.darkTextPrimary : colorPalette.lightTextPrimary,
+            '--details-text-secondary': isDarkMode ? colorPalette.darkTextSecondary : colorPalette.lightTextSecondary,
+            '--details-text-muted': isDarkMode ? colorPalette.darkTextMuted : colorPalette.lightTextMuted,
+            '--details-surface': isDarkMode ? colorPalette.darkSurface : colorPalette.lightSurface,
+            '--details-surface-hover': isDarkMode ? colorPalette.darkSurfaceHover : colorPalette.lightSurfaceHover,
+            '--details-border': isDarkMode ? colorPalette.darkBorder : colorPalette.lightBorder,
+            '--details-badge-bg': isDarkMode ? colorPalette.darkBadgeBg : colorPalette.lightBadgeBg,
+            '--details-badge-border': isDarkMode ? colorPalette.darkBadgeBorder : colorPalette.lightBadgeBorder,
+            '--details-glow': isDarkMode ? colorPalette.darkGlow : colorPalette.lightGlow,
+            '--details-accent': isDarkMode ? colorPalette.darkAccent : colorPalette.lightAccent,
           } : {})
         } as React.CSSProperties}
       >
@@ -1204,6 +1206,7 @@ const getFolderSeasonNum = (pathStr: string): number | null => {
 export default function Details() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isDarkMode = useIsDarkMode();
   
 
   const { '*' : paramPath } = useParams();
@@ -2590,31 +2593,83 @@ export default function Details() {
 
   if (loading) return <DetailsSkeleton />;
 
+  const activeBg = colorPalette 
+    ? (isDarkMode ? colorPalette.darkBlendBg : colorPalette.rawBg) 
+    : (isDarkMode ? '#0b0e14' : '#f8fafc');
+
+  const activeTextPrimary = colorPalette
+    ? (isDarkMode ? colorPalette.darkTextPrimary : colorPalette.lightTextPrimary)
+    : (isDarkMode ? '#ffffff' : '#0f172a');
+
+  const activeTextSecondary = colorPalette
+    ? (isDarkMode ? colorPalette.darkTextSecondary : colorPalette.lightTextSecondary)
+    : (isDarkMode ? 'rgba(255, 255, 255, 0.78)' : 'rgba(15, 23, 42, 0.78)');
+
+  const activeTextMuted = colorPalette
+    ? (isDarkMode ? colorPalette.darkTextMuted : colorPalette.lightTextMuted)
+    : (isDarkMode ? 'rgba(255, 255, 255, 0.52)' : 'rgba(15, 23, 42, 0.58)');
+
+  const activeSurface = colorPalette
+    ? (isDarkMode ? colorPalette.darkSurface : colorPalette.lightSurface)
+    : (isDarkMode ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)');
+
+  const activeSurfaceHover = colorPalette
+    ? (isDarkMode ? colorPalette.darkSurfaceHover : colorPalette.lightSurfaceHover)
+    : (isDarkMode ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.10)');
+
+  const activeBorder = colorPalette
+    ? (isDarkMode ? colorPalette.darkBorder : colorPalette.lightBorder)
+    : (isDarkMode ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.12)');
+
+  const activeBadgeBg = colorPalette
+    ? (isDarkMode ? colorPalette.darkBadgeBg : colorPalette.lightBadgeBg)
+    : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)');
+
+  const activeBadgeBorder = colorPalette
+    ? (isDarkMode ? colorPalette.darkBadgeBorder : colorPalette.lightBadgeBorder)
+    : (isDarkMode ? 'rgba(255, 255, 255, 0.13)' : 'rgba(0, 0, 0, 0.15)');
+
+  const activeAccent = colorPalette
+    ? (isDarkMode ? colorPalette.darkAccent : colorPalette.lightAccent)
+    : (isDarkMode ? 'rgb(130, 80, 220)' : 'rgb(109, 40, 217)');
+
+  const activeGlow = colorPalette
+    ? (isDarkMode ? colorPalette.darkGlow : colorPalette.lightGlow)
+    : 'rgba(130, 80, 220, 0.22)';
+
+  const isBackgroundLight = !isDarkMode && (colorPalette ? colorPalette.isLightBgLight : true);
+
   return (
     <div 
       className="details-page-root min-h-screen pb-24 relative transition-colors duration-700 ease-out"
       style={{
         backgroundColor: 'var(--details-bg)',
         color: 'var(--details-text-primary)',
-        '--details-bg': colorPalette ? colorPalette.solidBg : '#0b0e14',
-        '--details-text-primary': colorPalette ? colorPalette.textPrimary : '#ffffff',
-        '--details-text-secondary': colorPalette ? colorPalette.textSecondary : 'rgba(255, 255, 255, 0.78)',
-        '--details-text-muted': colorPalette ? colorPalette.textMuted : 'rgba(255, 255, 255, 0.52)',
-        '--details-surface': colorPalette ? colorPalette.cardBg : 'rgba(255, 255, 255, 0.06)',
-        '--details-surface-hover': colorPalette ? colorPalette.cardBgHover : 'rgba(255, 255, 255, 0.10)',
-        '--details-border': colorPalette ? colorPalette.cardBorder : 'rgba(255, 255, 255, 0.10)',
-        '--details-badge-bg': colorPalette ? colorPalette.badgeBg : 'rgba(255, 255, 255, 0.08)',
-        '--details-badge-border': colorPalette ? colorPalette.badgeBorder : 'rgba(255, 255, 255, 0.13)',
-        '--details-glow': colorPalette ? colorPalette.glow : 'rgba(130, 80, 220, 0.22)',
-        '--details-accent': colorPalette ? colorPalette.accent : 'rgb(130, 80, 220)',
+        '--details-bg': activeBg,
+        '--details-text-primary': activeTextPrimary,
+        '--details-text-secondary': activeTextSecondary,
+        '--details-text-muted': activeTextMuted,
+        '--details-surface': activeSurface,
+        '--details-surface-hover': activeSurfaceHover,
+        '--details-border': activeBorder,
+        '--details-badge-bg': activeBadgeBg,
+        '--details-badge-border': activeBadgeBorder,
+        '--details-glow': activeGlow,
+        '--details-accent': activeAccent,
+        // Mode-specific tokens
+        '--details-dark-bg': colorPalette ? colorPalette.darkBlendBg : '#0b0e14',
+        '--details-light-bg': colorPalette ? colorPalette.rawBg : '#f8fafc',
         // Legacy variables compatibility
-        '--page-bg': colorPalette ? colorPalette.solidBg : '#0b0e14',
-        '--page-bg-dark': colorPalette ? colorPalette.solidBg : '#0b0e14',
+        '--page-bg': activeBg,
+        '--page-bg-dark': activeBg,
       } as React.CSSProperties}
     >
-      {/* Complete Theme Isolation: Neither light nor dark mode affects details page */}
+      {/* Complete Theme Harmony for Details Page */}
       <style>{`
-        .details-page-root,
+        .details-page-root {
+          background-color: var(--details-bg) !important;
+          color: var(--details-text-primary) !important;
+        }
         .dark .details-page-root {
           background-color: var(--details-bg) !important;
           color: var(--details-text-primary) !important;
@@ -2685,22 +2740,32 @@ export default function Details() {
             <div 
               className="absolute inset-0 pointer-events-none transition-colors duration-700" 
               style={{
-                background: `linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.45) 70%, var(--details-bg) 100%)`
+                background: isDarkMode
+                  ? `linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.45) 70%, var(--details-bg) 100%)`
+                  : `linear-gradient(to bottom, transparent 40%, var(--details-bg) 100%)`
               }}
             />
 
             {/* Dynamic hue tint layer to harmonize artwork into the solid tone */}
             {colorPalette && (
               <div 
-                className="absolute inset-0 pointer-events-none opacity-40 transition-opacity duration-700"
+                className="absolute inset-0 pointer-events-none transition-opacity duration-700"
                 style={{
+                  opacity: isDarkMode ? 0.40 : 0.20,
                   background: `linear-gradient(to bottom, transparent 55%, var(--details-bg) 100%)`,
                 }}
               />
             )}
             
             {/* Top scrim for clear readability under top floating navigation pills */}
-            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-10" />
+            <div 
+              className="absolute top-0 left-0 right-0 h-32 pointer-events-none z-10 transition-opacity duration-700"
+              style={{
+                background: isDarkMode
+                  ? 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)'
+                  : 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 100%)'
+              }}
+            />
           </div>
         </div>
       </div>
@@ -2732,8 +2797,8 @@ export default function Details() {
               style={{
                 backgroundColor: 'var(--details-badge-bg)',
                 borderColor: 'var(--details-badge-border)',
-                borderWidth: '1px',
-                color: 'var(--details-text-secondary)',
+                borderWidth: '1.5px',
+                color: 'var(--details-text-primary)',
               }}
             >
               {metaInfoStr}
@@ -2747,12 +2812,12 @@ export default function Details() {
             {genreList.map((genre, idx) => (
               <span 
                 key={idx} 
-                className="px-4 py-1.5 rounded-full backdrop-blur-md text-xs font-semibold tracking-wide shadow-sm"
+                className="px-4 py-1.5 rounded-full backdrop-blur-md text-xs font-bold tracking-wide shadow-sm"
                 style={{
                   backgroundColor: 'var(--details-badge-bg)',
                   borderColor: 'var(--details-badge-border)',
-                  borderWidth: '1px',
-                  color: 'var(--details-text-secondary)',
+                  borderWidth: '1.5px',
+                  color: 'var(--details-text-primary)',
                 }}
               >
                 {genre}
@@ -2761,29 +2826,37 @@ export default function Details() {
           </div>
         )}
 
-        {/* TV Show Status */}
+        {/* TV Show / Movie Status */}
         {(() => {
           if (!tmdb?.status) return null;
           const s = String(tmdb.status).trim().toLowerCase();
           let label = tmdb.status;
-          let badgeClass = 'bg-gray-500/15 text-gray-300 border-gray-500/30';
+          let badgeClass = isBackgroundLight
+            ? 'bg-black/10 text-slate-950 border-slate-700/35 font-extrabold'
+            : 'bg-gray-500/15 text-gray-300 border-gray-500/30 font-bold';
 
           if (s === 'returning series' || s === 'in production' || s === 'planned' || s === 'pilot' || s === 'ongoing' || s === 'continuing') {
             label = (s === 'returning series' || s === 'in production' || s === 'pilot' || s === 'planned' || s === 'ongoing' || s === 'continuing') ? 'Continuing' : (tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1));
-            badgeClass = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+            badgeClass = isBackgroundLight
+              ? 'bg-emerald-600/15 text-emerald-950 border-emerald-700/40 font-extrabold'
+              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-bold';
           } else if (s === 'ended' || s === 'complete' || s === 'completed') {
             label = 'Ended';
-            badgeClass = 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+            badgeClass = isBackgroundLight
+              ? 'bg-blue-600/15 text-blue-950 border-blue-700/40 font-extrabold'
+              : 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-bold';
           } else if (s === 'canceled' || s === 'cancelled') {
             label = 'Canceled';
-            badgeClass = 'bg-red-500/15 text-red-300 border-red-500/30';
+            badgeClass = isBackgroundLight
+              ? 'bg-red-600/15 text-red-950 border-red-700/40 font-extrabold'
+              : 'bg-red-500/15 text-red-300 border-red-500/30 font-bold';
           } else {
             label = tmdb.status.charAt(0).toUpperCase() + tmdb.status.slice(1);
           }
 
           return (
             <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-              <span className={`px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold uppercase tracking-wider shadow-sm ${badgeClass}`}>
+              <span className={`px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] uppercase tracking-wider shadow-sm ${badgeClass}`}>
                 {label}
               </span>
             </div>
@@ -2797,9 +2870,12 @@ export default function Details() {
           const dateStr = effectiveDigitalDate.includes('T') ? effectiveDigitalDate : `${effectiveDigitalDate}T00:00:00`;
           const d = new Date(dateStr);
           const formatted = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          const digitalBadgeClass = isBackgroundLight
+            ? 'bg-blue-600/15 text-blue-950 border-blue-700/40 font-extrabold'
+            : 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-bold';
           return (
             <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
-              <span className="px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold uppercase tracking-wider shadow-sm bg-blue-500/15 text-blue-300 border-blue-500/30">
+              <span className={`px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] uppercase tracking-wider shadow-sm ${digitalBadgeClass}`}>
                 Digital Release: {formatted}
               </span>
             </div>
