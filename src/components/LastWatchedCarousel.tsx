@@ -45,11 +45,6 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
   const { data: tmdb } = useQuery({
     queryKey: ['tmdb-watched', targetShowName, targetShowPath, item.tmdbId || item.tmdbData?.id],
     queryFn: async () => {
-      // If item already contains full tmdbData, use it directly
-      if (item.tmdbData && (item.tmdbData.backdrop_path || item.tmdbData.poster_path || item.tmdbData.title || item.tmdbData.name)) {
-        return item.tmdbData;
-      }
-
       const { cleanName, year } = parseMediaName(targetShowName);
       const itemPath = targetShowPath;
       
@@ -60,12 +55,22 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
       }
       
       const tmdbIdParam = (item.tmdbId || item.tmdbData?.id) ? `&tmdbId=${item.tmdbId || item.tmdbData?.id}` : '';
-      const res = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${type}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}${tmdbIdParam}`);
-      return res.data;
+      try {
+        const res = await axios.get(`/api/meta/search?query=${encodeURIComponent(cleanName)}&type=${type}${year ? `&year=${year}` : ''}&path=${encodeURIComponent(itemPath)}&full=true${tmdbIdParam}`);
+        if (res.data && (res.data.backdrop_path || res.data.poster_path || res.data.title || res.data.name)) {
+          return res.data;
+        }
+      } catch (e) {}
+
+      // Fallback to item.tmdbData if fetch returns nothing or errors
+      if (item.tmdbData && (item.tmdbData.backdrop_path || item.tmdbData.poster_path || item.tmdbData.title || item.tmdbData.name)) {
+        return item.tmdbData;
+      }
+      return null;
     },
     initialData: (item.tmdbData && (item.tmdbData.backdrop_path || item.tmdbData.poster_path || item.tmdbData.title || item.tmdbData.name)) ? item.tmdbData : undefined,
     enabled: !!item,
-    staleTime: Infinity,
+    staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   });
 
@@ -135,6 +140,7 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
       parentPath: targetShowPath,
       tmdbData: tmdb,
       token,
+      fromWatched: true,
     });
   };
 
@@ -145,7 +151,8 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
         item: { ...item, name: targetShowName, openlist_path: targetShowPath }, 
         tmdbData: tmdb, 
         metaVer: currentMetaVer, 
-        preselectSeason 
+        preselectSeason,
+        fromWatched: true,
       }}
       onPointerEnter={handlePrefetch}
       onPointerDown={handlePrefetch}

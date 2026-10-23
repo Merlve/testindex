@@ -1241,17 +1241,38 @@ export default function Details() {
     [actualItemOpenlistPath, cleanName, category, parsedYear, tmdbId]
   );
 
+  const isFromWatched = Boolean(
+    location.state?.fromWatched || 
+    location.state?.item?._dedupeKey || 
+    Boolean(location.state?.preselectSeason !== undefined && (location.state?.item?.showName || location.state?.item?._targetName || location.state?.item?.parentPath))
+  );
+
+  const prefetchedDetailsMeta = useMemo(() => {
+    return queryClient.getQueryData<any>(tmdbQueryKey) ||
+           queryClient.getQueryData<any>(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, undefined]) ||
+           queryClient.getQueryData<any>(['details-meta', actualFolderOpenlistPath, cleanName, category, parsedYear, tmdbId]);
+  }, [queryClient, tmdbQueryKey, actualItemOpenlistPath, actualFolderOpenlistPath, cleanName, category, parsedYear, tmdbId]);
+
+  const [hasLoadedAuthoritativeMeta, setHasLoadedAuthoritativeMeta] = useState<boolean>(Boolean(prefetchedDetailsMeta));
+
   const initialTmdb = useMemo(() => {
     if (isStale) return null;
+    // 1. Authoritative prefetched/cached details-meta query for this exact item/path
+    if (prefetchedDetailsMeta) return prefetchedDetailsMeta;
+
+    // 2. If navigating from Last Watched, do NOT use location.state.tmdbData as initialTmdb
+    // because the watched item may have a different backdrop (e.g. episode still, outdated backdrop)
+    // than this details page. Wait for authoritative metadata to load so wrong colors are never applied!
+    if (isFromWatched) {
+      return null;
+    }
+
     if (location.state?.tmdbData) return location.state.tmdbData;
-    const prefetched = queryClient.getQueryData<any>(tmdbQueryKey) ||
-                       queryClient.getQueryData<any>(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, undefined]);
-    if (prefetched) return prefetched;
     const cachedTmdb = queryClient.getQueryData<any>(['tmdb', name, category, location.state?.item?.parentPath]) ||
                        queryClient.getQueryData<any>(['tmdb', name, location.state?.item?.parentPath]) ||
                        queryClient.getQueryData<any>(['tmdb_search', name, location.state?.item?.parent]);
     return cachedTmdb || null;
-  }, [isStale, location.state?.tmdbData, tmdbQueryKey, queryClient, actualItemOpenlistPath, cleanName, category, parsedYear, name, location.state?.item]);
+  }, [isStale, prefetchedDetailsMeta, isFromWatched, location.state?.tmdbData, name, category, location.state?.item, queryClient]);
 
   const [tmdb, setTmdb] = useState<any>(initialTmdb);
   const [loading, setLoading] = useState(!initialTmdb);
@@ -1382,11 +1403,16 @@ export default function Details() {
 
   // Dominant color palette state (prioritize backdrop, fallback to poster)
   const initialPalette = useMemo(() => {
-    const bg = initialTmdb?.backdrop_path || initialTmdb?.poster_path || location.state?.item?.backdrop_path || location.state?.item?.poster_path;
+    // If navigating from Last Watched and we haven't loaded authoritative details metadata,
+    // do NOT use the unverified watched backdrop to extract colors, avoiding wrong color flash!
+    if (isFromWatched && !prefetchedDetailsMeta && !hasLoadedAuthoritativeMeta) {
+      return null;
+    }
+    const bg = initialTmdb?.backdrop_path || initialTmdb?.poster_path || (!isFromWatched ? (location.state?.item?.backdrop_path || location.state?.item?.poster_path) : null);
     if (!bg) return null;
     const url = bg.startsWith('http') ? bg : `https://image.tmdb.org/t/p/w1280${bg}`;
     return getCachedPalette(url);
-  }, [initialTmdb, location.state]);
+  }, [initialTmdb, location.state, isFromWatched, prefetchedDetailsMeta, hasLoadedAuthoritativeMeta]);
 
   const [colorPalette, setColorPalette] = useState<BackdropColorPalette | null>(initialPalette);
 
@@ -1514,6 +1540,7 @@ export default function Details() {
     axios.get(url)
       .then(res => {
         if (isMounted) {
+          setHasLoadedAuthoritativeMeta(true);
           if (res.data && (res.data.poster_path || res.data._overridden || res.data.title || res.data.name || res.data.custom_title || res.data._customTitle)) {
             queryClient.setQueryData(tmdbQueryKey, res.data);
             setTmdb((prev: any) => {
@@ -1553,7 +1580,10 @@ export default function Details() {
       })
       .catch(console.error)
       .finally(() => {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setHasLoadedAuthoritativeMeta(true);
+          setLoading(false);
+        }
       });
     return () => { isMounted = false; };
   }, [fullPath, name, category, actualOpenlistPath]);
@@ -2451,26 +2481,34 @@ export default function Details() {
 
   // Extract Backdrop URL (prioritized)
   const backdropUrl = useMemo(() => {
-    const raw = tmdb?.backdrop_path || initialTmdb?.backdrop_path || location.state?.item?.backdrop_path || location.state?.item?.backdropPath;
+    // If navigating from Last Watched and we haven't loaded authoritative details metadata,
+    // do NOT display the unverified watched card's backdrop to prevent flashing a different image before real backdrop loads
+    if (isFromWatched && !prefetchedDetailsMeta && !hasLoadedAuthoritativeMeta) {
+      return '';
+    }
+    const raw = tmdb?.backdrop_path || initialTmdb?.backdrop_path || (!isFromWatched ? (location.state?.item?.backdrop_path || location.state?.item?.backdropPath) : null);
     if (raw) {
       return raw.startsWith('http') ? raw : `https://image.tmdb.org/t/p/w1280${raw}`;
     }
     // Fallback backdrop to poster if no backdrop exists
-    const rawPoster = tmdb?.poster_path || initialTmdb?.poster_path || location.state?.item?.poster_path || location.state?.item?.posterPath;
+    const rawPoster = tmdb?.poster_path || initialTmdb?.poster_path || (!isFromWatched ? (location.state?.item?.poster_path || location.state?.item?.posterPath) : null);
     if (rawPoster) {
       return rawPoster.startsWith('http') ? rawPoster : `https://image.tmdb.org/t/p/w780${rawPoster}`;
     }
     return '';
-  }, [tmdb, initialTmdb, location.state]);
+  }, [tmdb, initialTmdb, location.state, isFromWatched, prefetchedDetailsMeta, hasLoadedAuthoritativeMeta]);
 
   // Extract Poster URL
   const posterUrl = useMemo(() => {
-    const raw = tmdb?.poster_path || initialTmdb?.poster_path || location.state?.item?.poster_path || location.state?.item?.posterPath;
+    if (isFromWatched && !prefetchedDetailsMeta && !hasLoadedAuthoritativeMeta) {
+      return '';
+    }
+    const raw = tmdb?.poster_path || initialTmdb?.poster_path || (!isFromWatched ? (location.state?.item?.poster_path || location.state?.item?.posterPath) : null);
     if (raw) {
       return raw.startsWith('http') ? raw : `https://image.tmdb.org/t/p/w780${raw}`;
     }
     return '';
-  }, [tmdb, initialTmdb, location.state]);
+  }, [tmdb, initialTmdb, location.state, isFromWatched, prefetchedDetailsMeta, hasLoadedAuthoritativeMeta]);
 
   // Dominant color extraction target (Backdrop image first, fallback to poster)
   const colorExtractionUrl = useMemo(() => {
@@ -2481,15 +2519,17 @@ export default function Details() {
   const fallbackLandscapePoster = useMemo(() => {
     const rawPath = tmdb?.backdrop_path || 
       initialTmdb?.backdrop_path || 
-      location.state?.item?.backdropPath || 
-      location.state?.item?.backdrop_path || 
-      location.state?.tmdbData?.backdrop_path || 
-      location.state?.tmdbData?.backdropPath || 
+      (!isFromWatched ? (
+        location.state?.item?.backdropPath || 
+        location.state?.item?.backdrop_path || 
+        location.state?.tmdbData?.backdrop_path || 
+        location.state?.tmdbData?.backdropPath
+      ) : null) || 
       tmdb?.poster_path || 
       initialTmdb?.poster_path || 
-      location.state?.item?.posterPath;
+      (!isFromWatched ? location.state?.item?.posterPath : null);
     return typeof rawPath === 'string' ? rawPath : null;
-  }, [tmdb, initialTmdb, location.state]);
+  }, [tmdb, initialTmdb, location.state, isFromWatched]);
 
   // Extract Status Text
   const statusText = useMemo(() => {

@@ -313,6 +313,7 @@ export function prefetchItemDetails(
     tmdbData,
     token,
     config,
+    fromWatched = false,
   }: {
     item: any;
     category: string;
@@ -320,6 +321,7 @@ export function prefetchItemDetails(
     tmdbData?: any;
     token?: string | null;
     config?: any;
+    fromWatched?: boolean;
   }
 ) {
   if (!item || !item.name) return;
@@ -459,27 +461,30 @@ export function prefetchItemDetails(
   }
 
   // 5. Preload high-res backdrop image (or fallback poster) into browser cache & extract dominant color
-  const backdrop = tmdbData?.backdrop_path;
-  const poster = tmdbData?.poster_path;
-  if (backdrop && typeof window !== 'undefined') {
-    const backdropUrl = backdrop.startsWith('http')
-      ? backdrop
-      : `https://image.tmdb.org/t/p/w1280${backdrop}`;
-    const img = new Image();
-    img.src = backdropUrl;
-    img.onload = () => {
-      markImageLoaded(backdropUrl);
-      extractDominantColor(backdropUrl).catch(() => {});
-    };
-  } else if (poster && typeof window !== 'undefined') {
-    const posterUrl = poster.startsWith('http')
-      ? poster
-      : `https://image.tmdb.org/t/p/w780${poster}`;
-    const img = new Image();
-    img.src = posterUrl;
-    img.onload = () => {
-      markImageLoaded(posterUrl);
-      extractDominantColor(posterUrl).catch(() => {});
-    };
+  // When navigating from watched history, skip speculative color extraction from tmdbData to avoid flashing mismatched colors before the authoritative backdrop is fetched
+  if (!fromWatched) {
+    const backdrop = tmdbData?.backdrop_path;
+    const poster = tmdbData?.poster_path;
+    if (backdrop && typeof window !== 'undefined') {
+      const backdropUrl = backdrop.startsWith('http')
+        ? backdrop
+        : `https://image.tmdb.org/t/p/w1280${backdrop}`;
+      const img = new Image();
+      img.src = backdropUrl;
+      img.onload = () => {
+        markImageLoaded(backdropUrl);
+        extractDominantColor(backdropUrl).catch(() => {});
+      };
+    } else if (poster && typeof window !== 'undefined') {
+      const posterUrl = poster.startsWith('http')
+        ? poster
+        : `https://image.tmdb.org/t/p/w780${poster}`;
+      const img = new Image();
+      img.src = posterUrl;
+      img.onload = () => {
+        markImageLoaded(posterUrl);
+        extractDominantColor(posterUrl).catch(() => {});
+      };
+    }
   }
 }
