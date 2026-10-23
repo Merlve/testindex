@@ -1,6 +1,6 @@
 import { softRefreshMediaCaches } from '../utils/cacheManager';
 import DetailsSkeleton from "../components/DetailsSkeleton";
-import { useEffect, useState, useRef, useMemo, memo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback, memo } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -1300,11 +1300,40 @@ export default function Details() {
   const [toast, setToast] = useState('');
   const [showZipModal, setShowZipModal] = useState(false);
   const [isSeasonDropdownOpen, setIsSeasonDropdownOpen] = useState(false);
+  const [dropdownPlacement, setDropdownPlacement] = useState<'bottom' | 'top'>('bottom');
+  const [maxDropdownHeight, setMaxDropdownHeight] = useState<number>(288);
   const seasonDropdownRef = useRef<HTMLDivElement>(null);
+  const seasonButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Close season dropdown on click outside or Escape
+  // Dynamically calculate whether the popover should open to the bottom or top
+  // so that it never flows below the user device screen
+  const updateDropdownPlacement = useCallback(() => {
+    const el = seasonButtonRef.current || seasonDropdownRef.current;
+    if (!el || typeof window === 'undefined') return;
+    const rect = el.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    // Desired height for the dropdown menu
+    const desiredHeight = 280;
+
+    // If space below is not enough to show the popover comfortably and space above is greater,
+    // flow to the top instead of cutting off at the bottom of the device screen
+    if (spaceBelow < desiredHeight && spaceAbove > spaceBelow) {
+      setDropdownPlacement('top');
+      setMaxDropdownHeight(Math.min(288, Math.max(140, spaceAbove - 24)));
+    } else {
+      setDropdownPlacement('bottom');
+      setMaxDropdownHeight(Math.min(288, Math.max(140, spaceBelow - 24)));
+    }
+  }, []);
+
+  // Close season dropdown on click outside or Escape, and track resize/scroll for positioning
   useEffect(() => {
     if (!isSeasonDropdownOpen) return;
+    updateDropdownPlacement();
+
     const handleClickOutside = (e: MouseEvent) => {
       if (seasonDropdownRef.current && !seasonDropdownRef.current.contains(e.target as Node)) {
         setIsSeasonDropdownOpen(false);
@@ -1315,13 +1344,22 @@ export default function Details() {
         setIsSeasonDropdownOpen(false);
       }
     };
+
+    const handleScrollOrResize = () => {
+      updateDropdownPlacement();
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleScrollOrResize, { passive: true });
+    window.addEventListener('scroll', handleScrollOrResize, { passive: true, capture: true });
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
     };
-  }, [isSeasonDropdownOpen]);
+  }, [isSeasonDropdownOpen, updateDropdownPlacement]);
 
   const isZipCategory = ['ANIME', 'SERIES', 'KDRAMA'].includes(category) || 
                         ['ANIMES', 'SHOWS', 'KOREAN_DRAMA', 'ASIAN_DRAMA'].includes(category);
@@ -3144,9 +3182,13 @@ export default function Details() {
 
                 <div className="relative inline-block text-left">
                   <button
+                    ref={seasonButtonRef}
                     type="button"
                     onClick={() => {
                       if (seasonItems.length > 1) {
+                        if (!isSeasonDropdownOpen) {
+                          updateDropdownPlacement();
+                        }
                         setIsSeasonDropdownOpen(prev => !prev);
                       }
                     }}
@@ -3185,15 +3227,20 @@ export default function Details() {
                   <AnimatePresence>
                     {isSeasonDropdownOpen && seasonItems.length > 1 && (
                       <motion.div
-                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        initial={{ opacity: 0, y: dropdownPlacement === 'top' ? 6 : -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        exit={{ opacity: 0, y: dropdownPlacement === 'top' ? 6 : -6, scale: 0.98 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
-                        className="absolute left-0 top-full mt-2 z-50 min-w-[210px] max-w-[280px] max-h-72 overflow-y-auto rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl backdrop-saturate-[180%] border scrollbar-thin"
+                        className={`absolute left-0 z-50 min-w-[210px] max-w-[280px] overflow-y-auto rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl backdrop-saturate-[180%] border scrollbar-thin ${
+                          dropdownPlacement === 'top' ? 'bottom-full mb-2 origin-bottom-left' : 'top-full mt-2 origin-top-left'
+                        }`}
                         style={{
+                          maxHeight: `${maxDropdownHeight}px`,
                           backgroundColor: 'var(--details-surface)',
                           borderColor: 'var(--details-border)',
-                          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.1)',
+                          boxShadow: dropdownPlacement === 'top'
+                            ? '0 -12px 36px rgba(0, 0, 0, 0.25), 0 -2px 6px rgba(0, 0, 0, 0.1)'
+                            : '0 12px 36px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.1)',
                           color: 'var(--details-text-primary)',
                         }}
                         role="listbox"
