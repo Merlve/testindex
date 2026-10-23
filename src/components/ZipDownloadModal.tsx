@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Archive, Folder, Download, Loader2, CheckCircle2, ShieldCheck, FolderArchive, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
-import { formatBytes } from '../utils/nameParser';
+import { formatBytes, formatSeasonDisplayName } from '../utils/nameParser';
 import type { BackdropColorPalette } from '../utils/colorExtractor';
 import { useIsDarkMode } from '../utils/colorExtractor';
 
@@ -91,7 +91,7 @@ export default function ZipDownloadModal({
       const fullOpenlistPath = `${cleanOpenlistBase}/${folderName}`;
       directories.push({
         id: `season-${folderName}`,
-        name: folderName,
+        name: formatSeasonDisplayName(folderName) || folderName,
         zipFilename: `${folderName}.zip`,
         path: fullWebdavPath,
         openlistPath: fullOpenlistPath,

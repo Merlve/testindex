@@ -9,7 +9,14 @@ import {
   X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle, Archive, Subtitles
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue } from 'motion/react';
-import { parseMediaName, extractFileMetadata, formatBytes } from '../utils/nameParser';
+import { 
+  parseMediaName, 
+  extractFileMetadata, 
+  formatBytes, 
+  formatSeasonDisplayName, 
+  sortSeasonFolders, 
+  getFolderSeasonNum 
+} from '../utils/nameParser';
 import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
 import ZipDownloadModal from '../components/ZipDownloadModal';
@@ -1192,17 +1199,6 @@ const FileRowItem = memo(function FileRowItem({
   );
 });
 
-const getFolderSeasonNum = (pathStr: string): number | null => {
-  if (!pathStr) return null;
-  const clean = pathStr.trim();
-  if (/(?:^|[^a-z])(specials|extras|special|sp)(?:$|[^a-z])/i.test(clean)) return 0;
-  const match = clean.match(/(?:^|[^a-z])(?:season|series|staffel|temporada|s)[\s_.-]*(\d+)/i);
-  if (match) return parseInt(match[1], 10);
-  const pureNumMatch = clean.match(/^0*(\d{1,2})$/);
-  if (pureNumMatch) return parseInt(pureNumMatch[1], 10);
-  return null;
-};
-
 export default function Details() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1275,19 +1271,51 @@ export default function Details() {
   }, [queryClient, folderFilesQueryKey, actualFolderOpenlistPath, isVideoTarget, targetFilename, baseRefresh]);
 
   const [baseItems, setBaseItems] = useState<any[]>(() => initialFolderFiles?.baseFiles || []);
-  const [seasonItems, setSeasonItems] = useState<any[]>(() => initialFolderFiles?.seasonFolders || []);
+  const [seasonItems, setSeasonItems] = useState<any[]>(() => 
+    initialFolderFiles?.seasonFolders ? sortSeasonFolders(initialFolderFiles.seasonFolders) : []
+  );
   const [loadingFiles, setLoadingFiles] = useState(() => !initialFolderFiles && user !== 'guest');
   const [inWatchlist, setInWatchlist] = useState(false);
   const [toast, setToast] = useState('');
   const [showZipModal, setShowZipModal] = useState(false);
+  const [isSeasonDropdownOpen, setIsSeasonDropdownOpen] = useState(false);
+  const seasonDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close season dropdown on click outside or Escape
+  useEffect(() => {
+    if (!isSeasonDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (seasonDropdownRef.current && !seasonDropdownRef.current.contains(e.target as Node)) {
+        setIsSeasonDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSeasonDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSeasonDropdownOpen]);
+
   const isZipCategory = ['ANIME', 'SERIES', 'KDRAMA'].includes(category) || 
                         ['ANIMES', 'SHOWS', 'KOREAN_DRAMA', 'ASIAN_DRAMA'].includes(category);
 
   const initialSeasonIdx = useMemo(() => {
     if (!initialFolderFiles?.seasonFolders?.length) return null;
+    const sorted = sortSeasonFolders(initialFolderFiles.seasonFolders);
     if (location.state?.preselectSeason) {
       const preSeasonStr = String(location.state.preselectSeason).toLowerCase();
-      const matchedIdx = initialFolderFiles.seasonFolders.findIndex((f: any) => f.name.toLowerCase() === preSeasonStr);
+      const preSeasonNum = getFolderSeasonNum(preSeasonStr);
+      const matchedIdx = sorted.findIndex((f: any) => {
+        if (f.name.toLowerCase() === preSeasonStr) return true;
+        const fNum = getFolderSeasonNum(f.name);
+        return fNum !== null && preSeasonNum !== null && fNum === preSeasonNum;
+      });
       if (matchedIdx !== -1) return matchedIdx;
     }
     return 0;
@@ -1296,8 +1324,9 @@ export default function Details() {
   const [activeSeasonIndex, setActiveSeasonIndex] = useState<number | null>(initialSeasonIdx);
 
   const initialEpisodes = useMemo(() => {
-    if (initialSeasonIdx === null || !initialFolderFiles?.seasonFolders?.[initialSeasonIdx]) return [];
-    const seasonFolder = initialFolderFiles.seasonFolders[initialSeasonIdx];
+    const sorted = initialFolderFiles?.seasonFolders ? sortSeasonFolders(initialFolderFiles.seasonFolders) : [];
+    if (initialSeasonIdx === null || !sorted[initialSeasonIdx]) return [];
+    const seasonFolder = sorted[initialSeasonIdx];
     const sPath = `${actualFolderOpenlistPath.replace(/^\/+/, '')}/${seasonFolder.name}`;
     return queryClient.getQueryData<any[]>(['details-season-episodes', sPath, 0]) || [];
   }, [initialSeasonIdx, initialFolderFiles, actualFolderOpenlistPath, queryClient]);
@@ -1688,12 +1717,18 @@ export default function Details() {
     if (cachedFiles && baseRefresh === 0) {
       setBaseItems(cachedFiles.baseFiles || []);
       if (cachedFiles.seasonFolders && cachedFiles.seasonFolders.length > 0) {
-        setSeasonItems(cachedFiles.seasonFolders);
+        const sortedCached = sortSeasonFolders(cachedFiles.seasonFolders);
+        setSeasonItems(sortedCached);
         if (activeSeasonIndex === null) {
           let targetIdx = 0;
           if (location.state?.preselectSeason) {
             const preSeasonStr = String(location.state.preselectSeason).toLowerCase();
-            const matchedIdx = cachedFiles.seasonFolders.findIndex((f: any) => f.name.toLowerCase() === preSeasonStr);
+            const preSeasonNum = getFolderSeasonNum(preSeasonStr);
+            const matchedIdx = sortedCached.findIndex((f: any) => {
+              if (f.name.toLowerCase() === preSeasonStr) return true;
+              const fNum = getFolderSeasonNum(f.name);
+              return fNum !== null && preSeasonNum !== null && fNum === preSeasonNum;
+            });
             if (matchedIdx !== -1) targetIdx = matchedIdx;
           }
           setActiveSeasonIndex(targetIdx);
@@ -1750,26 +1785,32 @@ export default function Details() {
         setBaseItems(dirFiles);
 
         if (dirFolders.length > 0) {
-          dirFolders.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-          setSeasonItems(dirFolders);
+          const sortedDirs = sortSeasonFolders(dirFolders);
+          setSeasonItems(sortedDirs);
           if (activeSeasonIndex === null) {
             let targetIdx = 0;
             if (location.state?.preselectSeason) {
                 const preSeasonStr = String(location.state.preselectSeason).toLowerCase();
-                const matchedIdx = dirFolders.findIndex((f: any) => f.name.toLowerCase() === preSeasonStr);
+                const preSeasonNum = getFolderSeasonNum(preSeasonStr);
+                const matchedIdx = sortedDirs.findIndex((f: any) => {
+                  if (f.name.toLowerCase() === preSeasonStr) return true;
+                  const fNum = getFolderSeasonNum(f.name);
+                  return fNum !== null && preSeasonNum !== null && fNum === preSeasonNum;
+                });
                 if (matchedIdx !== -1) {
                     targetIdx = matchedIdx;
                 }
             }
             setActiveSeasonIndex(targetIdx);
           }
+          // Cache in TanStack Query
+          queryClient.setQueryData(folderFilesQueryKey, { baseFiles: dirFiles, seasonFolders: sortedDirs });
+          queryClient.setQueryData(['details-folder-files', actualFolderOpenlistPath, Boolean(isVideoTarget), targetFilename, 0], { baseFiles: dirFiles, seasonFolders: sortedDirs });
         } else {
           setSeasonItems([]);
+          queryClient.setQueryData(folderFilesQueryKey, { baseFiles: dirFiles, seasonFolders: [] });
+          queryClient.setQueryData(['details-folder-files', actualFolderOpenlistPath, Boolean(isVideoTarget), targetFilename, 0], { baseFiles: dirFiles, seasonFolders: [] });
         }
-
-        // Cache in TanStack Query
-        queryClient.setQueryData(folderFilesQueryKey, { baseFiles: dirFiles, seasonFolders: dirFolders });
-        queryClient.setQueryData(['details-folder-files', actualFolderOpenlistPath, Boolean(isVideoTarget), targetFilename, 0], { baseFiles: dirFiles, seasonFolders: dirFolders });
       })
       .catch(err => {
         console.error('Error fetching folder files:', err);
@@ -3050,40 +3091,112 @@ export default function Details() {
           </div>
         ) : (
           <>
-            {/* Season Selector Tabs (For TV Series) */}
+            {/* Season Selector Dropdown (For TV Series) */}
             {seasonItems.length > 0 && (
-          <div className="space-y-3">
-            <h2 
-              className="text-lg font-bold flex items-center gap-2"
-              style={{ color: 'var(--details-text-primary)' }}
-            >
-              <Tv size={20} style={{ color: 'var(--details-accent)' }} />
-              <span>Seasons</span>
-            </h2>
-            <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none">
-              {seasonItems.map((season, idx) => {
-                const isActive = activeSeasonIndex === idx;
-                return (
+              <div className="space-y-3 relative" ref={seasonDropdownRef}>
+                <h2 
+                  className="text-lg font-bold flex items-center gap-2"
+                  style={{ color: 'var(--details-text-primary)' }}
+                >
+                  <Tv size={20} style={{ color: 'var(--details-accent)' }} />
+                  <span>Seasons</span>
+                </h2>
+
+                <div className="relative inline-block text-left">
                   <button
-                    key={idx}
-                    onClick={() => setActiveSeasonIndex(idx)}
-                    className="px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border"
-                    style={{
-                      backgroundColor: isActive ? 'var(--details-surface-hover)' : 'var(--details-surface)',
-                      color: 'var(--details-text-primary)',
-                      borderColor: isActive ? 'var(--details-accent)' : 'var(--details-border)',
-                      borderWidth: isActive ? '1.5px' : '1px',
-                      boxShadow: isActive ? '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)' : 'none',
+                    type="button"
+                    onClick={() => {
+                      if (seasonItems.length > 1) {
+                        setIsSeasonDropdownOpen(prev => !prev);
+                      }
                     }}
+                    disabled={seasonItems.length <= 1}
+                    className={`inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 border backdrop-blur-xl backdrop-saturate-[180%] ${
+                      seasonItems.length > 1 ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : 'cursor-default opacity-95'
+                    }`}
+                    style={{
+                      backgroundColor: isSeasonDropdownOpen ? 'var(--details-surface-hover)' : 'var(--details-surface)',
+                      borderColor: isSeasonDropdownOpen ? 'var(--details-accent)' : 'var(--details-border)',
+                      borderWidth: isSeasonDropdownOpen ? '1.5px' : '1px',
+                      color: 'var(--details-text-primary)',
+                      boxShadow: isSeasonDropdownOpen 
+                        ? '0 4px 18px rgba(0, 0, 0, 0.18)' 
+                        : '0 2px 8px rgba(0, 0, 0, 0.10)',
+                    }}
+                    aria-expanded={isSeasonDropdownOpen}
+                    aria-haspopup="listbox"
                   >
-                    <Folder size={14} style={{ color: isActive ? 'var(--details-accent)' : 'var(--details-text-muted)' }} />
-                    <span>{season.name}</span>
+                    <Folder size={16} style={{ color: 'var(--details-accent)' }} />
+                    <span>
+                      {seasonItems[activeSeasonIndex || 0] 
+                        ? formatSeasonDisplayName(seasonItems[activeSeasonIndex || 0].name)
+                        : 'Select Season'}
+                    </span>
+                    {seasonItems.length > 1 && (
+                      <ChevronDown 
+                        size={16} 
+                        className={`transition-transform duration-200 ${isSeasonDropdownOpen ? 'rotate-180' : ''}`}
+                        style={{ color: 'var(--details-text-secondary)' }} 
+                      />
+                    )}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+
+                  {/* Floating Popover Menu */}
+                  <AnimatePresence>
+                    {isSeasonDropdownOpen && seasonItems.length > 1 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="absolute left-0 top-full mt-2 z-50 min-w-[210px] max-w-[280px] max-h-72 overflow-y-auto rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl backdrop-saturate-[180%] border scrollbar-thin"
+                        style={{
+                          backgroundColor: 'var(--details-surface)',
+                          borderColor: 'var(--details-border)',
+                          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.1)',
+                          color: 'var(--details-text-primary)',
+                        }}
+                        role="listbox"
+                      >
+                        {seasonItems.map((season, idx) => {
+                          const isActive = (activeSeasonIndex || 0) === idx;
+                          const displayName = formatSeasonDisplayName(season.name);
+                          return (
+                            <button
+                              key={idx}
+                              role="option"
+                              aria-selected={isActive}
+                              onClick={() => {
+                                setActiveSeasonIndex(idx);
+                                setIsSeasonDropdownOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-all duration-150 cursor-pointer text-left hover:bg-[var(--details-surface-hover)] ${
+                                isActive ? 'font-bold shadow-sm' : 'opacity-90 hover:opacity-100 font-medium'
+                              }`}
+                              style={{
+                                backgroundColor: isActive ? 'var(--details-surface-hover)' : 'transparent',
+                                borderColor: isActive ? 'var(--details-border)' : 'transparent',
+                                borderWidth: '1px',
+                                color: isActive ? 'var(--details-accent)' : 'var(--details-text-primary)',
+                              }}
+                            >
+                              <div className="flex items-center gap-2.5 truncate">
+                                {isActive ? (
+                                  <Check size={16} className="shrink-0" style={{ color: 'var(--details-accent)' }} />
+                                ) : (
+                                  <span className="w-4 shrink-0" />
+                                )}
+                                <span className="truncate">{displayName}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
 
         {/* Media Files List Header */}
         <div 

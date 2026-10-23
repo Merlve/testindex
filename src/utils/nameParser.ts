@@ -177,3 +177,76 @@ export function extractFileMetadata(filename: string, fileSize?: number) {
   };
 }
 
+/**
+ * Detects season number from a folder path or name
+ * Returns 0 for specials/extras, integer for numbered season, null if unrecognized
+ */
+export const getFolderSeasonNum = (pathStr: string): number | null => {
+  if (!pathStr) return null;
+  const clean = pathStr.trim();
+  if (/(?:^|[^a-z])(specials|extras|special|sp)(?:$|[^a-z])/i.test(clean)) return 0;
+  const match = clean.match(/(?:^|[^a-z])(?:season|series|staffel|temporada|s)[\s_.-]*(\d+)/i);
+  if (match) return parseInt(match[1], 10);
+  const pureNumMatch = clean.match(/^0*(\d{1,2})$/);
+  if (pureNumMatch) return parseInt(pureNumMatch[1], 10);
+  return null;
+};
+
+/**
+ * Normalizes season folder names to a uniform title (e.g. 'Season 1', 'Season 24', 'Specials')
+ */
+export const formatSeasonDisplayName = (rawName: string): string => {
+  if (!rawName) return '';
+  const clean = rawName.trim();
+  if (/(?:^|[^a-z])(specials|special|sp)(?:$|[^a-z])/i.test(clean)) {
+    return 'Specials';
+  }
+  if (/(?:^|[^a-z])(extras|extra)(?:$|[^a-z])/i.test(clean)) {
+    return 'Extras';
+  }
+  if (/(?:^|[^a-z])ova(?:$|[^a-z])/i.test(clean)) {
+    return 'OVA';
+  }
+  const seasonNum = getFolderSeasonNum(clean);
+  if (seasonNum !== null && seasonNum > 0) {
+    return `Season ${seasonNum}`;
+  }
+  if (seasonNum === 0) {
+    return 'Specials';
+  }
+  return clean;
+};
+
+/**
+ * Sorts season folders in numerical ascending order (Season 1, Season 2... Season 26),
+ * placing Specials/Extras and other non-numbered folders at the end.
+ */
+export const sortSeasonFolders = (folders: any[]): any[] => {
+  if (!Array.isArray(folders)) return [];
+  return [...folders].sort((a, b) => {
+    const nameA = a?.name || '';
+    const nameB = b?.name || '';
+    const numA = getFolderSeasonNum(nameA);
+    const numB = getFolderSeasonNum(nameB);
+
+    const isNumA = numA !== null && numA > 0;
+    const isNumB = numB !== null && numB > 0;
+
+    // Both are numerical seasons > 0: sort ascending (1, 2, 3...)
+    if (isNumA && isNumB) {
+      return (numA as number) - (numB as number);
+    }
+    // Numbered seasons come before specials/extras
+    if (isNumA && !isNumB) return -1;
+    if (!isNumA && isNumB) return 1;
+
+    // If one is specials (num === 0) and the other is unknown
+    if (numA === 0 && numB !== 0) return -1;
+    if (numB === 0 && numA !== 0) return 1;
+
+    // Fallback: natural locale compare
+    return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+};
+
+
