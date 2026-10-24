@@ -166,7 +166,8 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
               {!imgLoaded && (
                 <img 
                   src={tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w300${tmdb.backdrop_path}` : backdrop || ''} 
-                  className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100" 
+                  decoding="async"
+                  className="absolute inset-0 w-full h-full object-cover blur-sm scale-105 opacity-80" 
                   alt="" 
                   aria-hidden="true" 
                 />
@@ -180,6 +181,7 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
                   }
                 }}
                 src={backdrop} 
+                decoding="async"
                 onLoad={() => {
                   markImageLoaded(backdrop);
                   setImgLoaded(true);
@@ -209,6 +211,7 @@ const LastWatchedCard = memo(function LastWatchedCard({ item, onDismiss }: { ite
             <img 
               src={logoUrl} 
               alt={title} 
+              decoding="async"
               onError={() => setLogoError(true)}
               className="h-8 md:h-12 max-w-[80%] object-contain object-left drop-shadow-lg filter brightness-105 group-hover:scale-105 transition-transform duration-300 origin-bottom-left"
             />

@@ -182,7 +182,8 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
            {!imgLoaded && (
              <img 
                src={`https://image.tmdb.org/t/p/w300${tmdb.backdrop_path || tmdb.poster_path}`} 
-               className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100" 
+               decoding="async"
+               className="absolute inset-0 w-full h-full object-cover blur-sm scale-105 opacity-80" 
                alt="" 
                aria-hidden="true" 
              />
@@ -196,6 +197,7 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
                }
              }}
              src={backdrop} 
+             decoding="async"
              onLoad={() => {
                markImageLoaded(backdrop);
                setImgLoaded(true);

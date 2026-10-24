@@ -1,6 +1,6 @@
 export default function DetailsSkeleton(_props?: { onRefresh?: () => void; refreshingFolder?: boolean }) {
   return (
-    <div className="-mt-16 min-h-screen bg-[#fffcf9] dark:bg-[#08080a] pb-20 relative overflow-hidden">
+    <div className="-mt-16 min-h-[100dvh] bg-[#fffcf9] dark:bg-[#08080a] pb-20 relative overflow-hidden">
       {/* Backdrop Image Skeleton */}
       <div 
         className="absolute top-0 left-0 right-0 h-[52vh] sm:h-[60vh] md:h-[68vh] pointer-events-none z-0 animate-pulse bg-black/10 dark:bg-white/5" 

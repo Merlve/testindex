@@ -3,25 +3,26 @@ import { useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp } from 'lucide-react';
 
-export default function ScrollToTopButton({ scrollRef }: { scrollRef: React.RefObject<HTMLElement> }) {
+export default function ScrollToTopButton({ scrollRef }: { scrollRef?: React.RefObject<HTMLElement | null> }) {
   const [isVisible, setIsVisible] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
-      if (scrollRef.current) {
-        setIsVisible(scrollRef.current.scrollTop > 500);
-      }
+      const scrollPos = window.scrollY || document.documentElement.scrollTop || (scrollRef?.current ? scrollRef.current.scrollTop : 0);
+      setIsVisible(scrollPos > 500);
     };
     
-    const el = scrollRef.current;
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    const el = scrollRef?.current;
     if (el) {
       el.addEventListener('scroll', handleScroll, { passive: true });
-      // Check immediately
-      handleScroll();
     }
+    // Check immediately
+    handleScroll();
     
     return () => {
+      window.removeEventListener('scroll', handleScroll);
       if (el) {
         el.removeEventListener('scroll', handleScroll);
       }
@@ -29,7 +30,8 @@ export default function ScrollToTopButton({ scrollRef }: { scrollRef: React.RefO
   }, [scrollRef, location.pathname]);
 
   const scrollToTop = () => {
-    if (scrollRef.current) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (scrollRef?.current) {
       scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };

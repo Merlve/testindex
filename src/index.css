@@ -7,6 +7,10 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+@utility min-h-screen {
+  min-height: 100dvh;
+}
+
 .markdown-body p {
   margin-bottom: 0.5rem;
 }
@@ -31,16 +35,16 @@
   overscroll-behavior-x: contain;
 }
 
-/* Horizontal carousel smooth momentum swiping on touch devices with GPU acceleration */
+/* Horizontal carousel smooth momentum swiping on touch devices */
 .carousel-track {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  transform: translate3d(0, 0, 0);
-  -webkit-transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  perspective: 1000px;
-  -webkit-perspective: 1000px;
+}
+
+html, body, #root {
+  min-height: 100dvh;
 }
 
 body {
@@ -50,24 +54,15 @@ body {
   background-color: #08080a;
 }
 
-/* Device Hardware Acceleration & Compositor Optimizations */
+/* Device Hardware Acceleration & WebKit/iOS Optimizations */
 html {
-  -webkit-overflow-scrolling: touch;
-  touch-action: manipulation;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  overscroll-behavior-y: none;
-}
-
-/* Hardware accelerated scroll containers */
-main,
-.overflow-y-auto,
-.overflow-x-auto {
-  -webkit-overflow-scrolling: touch;
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* GPU Hardware Composite Layers for smooth 60/120fps scrolling & transforms */
@@ -79,9 +74,7 @@ main,
   -webkit-backface-visibility: hidden;
 }
 
-/* Optimize image rasterization pipeline and offscreen paint */
 img {
-  content-visibility: auto;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
 }

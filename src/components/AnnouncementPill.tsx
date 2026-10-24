@@ -48,7 +48,7 @@ export default function AnnouncementPill({ message, className = '' }: Announceme
 
   return (
     <div
-      className={`relative flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18)] dark:bg-black/60 dark:border-white/20 dark:text-white h-9 overflow-hidden ${className}`}
+      className={`relative flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border backdrop-blur-md bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18)] dark:bg-black/60 dark:border-white/20 dark:text-white h-9 overflow-hidden ${className}`}
       title={trimmedMessage}
     >
       <div className="flex items-center gap-1.5 shrink-0 bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 px-2 py-0.5 rounded-full text-xs font-semibold">

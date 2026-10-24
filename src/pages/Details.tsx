@@ -1010,7 +1010,7 @@ const FileRowItem = memo(function FileRowItem({
 
   return (
     <div 
-      className={`p-3 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 backdrop-blur-md ${
+      className={`p-3 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 ${
         isWatched ? 'opacity-60 hover:opacity-100' : ''
       } ${isSelected ? 'ring-2 ring-purple-500' : ''}`}
       style={{
@@ -1052,7 +1052,7 @@ const FileRowItem = memo(function FileRowItem({
               className={`w-full h-full object-cover transition ${isWatched ? 'opacity-50 grayscale hover:grayscale-0 hover:opacity-100' : ''}`}
             />
             {typeof tmdbEpisode?.vote_average === 'number' && tmdbEpisode.vote_average > 0 && (
-              <span className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 backdrop-blur-sm text-amber-400 font-bold text-[9px] sm:text-[10px] rounded leading-none flex items-center gap-0.5">
+              <span className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 text-amber-400 font-bold text-[9px] sm:text-[10px] rounded leading-none flex items-center gap-0.5">
                 ★ {tmdbEpisode.vote_average.toFixed(1)}
               </span>
             )}
@@ -1482,14 +1482,16 @@ export default function Details() {
     if (!mainEl) return;
 
     const calculateThreshold = () => {
-      if (!logoContainerRef.current || !mainEl) return;
-      const mainRect = mainEl.getBoundingClientRect();
+      if (!logoContainerRef.current) return;
       const logoRect = logoContainerRef.current.getBoundingClientRect();
+      const currentScroll = window.scrollY || document.documentElement.scrollTop || (mainEl ? mainEl.scrollTop : 0);
+      const mainRectTop = mainEl ? mainEl.getBoundingClientRect().top : 0;
       // Calculate true distance from top of scroll viewport to the logo
-      const logoOffsetInMain = (logoRect.top - mainRect.top) + mainEl.scrollTop;
+      const logoOffsetInMain = (logoRect.top - mainRectTop) + currentScroll;
       // Stop fixing the backdrop when logo is docked ~75px from top (below top nav)
       const calculatedThreshold = Math.max(0, logoOffsetInMain - 75);
-      setParallaxThreshold(calculatedThreshold > 50 ? calculatedThreshold : 350);
+      const nextThreshold = calculatedThreshold > 50 ? Math.round(calculatedThreshold) : 350;
+      setParallaxThreshold(prev => Math.abs(prev - nextThreshold) > 10 ? nextThreshold : prev);
     };
 
     calculateThreshold();
@@ -2760,7 +2762,7 @@ export default function Details() {
 
   return (
     <div 
-      className="details-page-root min-h-screen pb-24 relative transition-colors duration-700 ease-out"
+      className="details-page-root min-h-[100dvh] pb-24 relative"
       style={{
         backgroundColor: 'var(--details-bg)',
         color: 'var(--details-text-primary)',
@@ -2792,9 +2794,6 @@ export default function Details() {
         .dark .details-page-root {
           background-color: var(--details-bg) !important;
           color: var(--details-text-primary) !important;
-        }
-        .details-hero-glow {
-          background: radial-gradient(ellipse 85% 65% at 50% 20%, var(--details-glow) 0%, transparent 80%);
         }
       `}</style>
 
@@ -2832,21 +2831,8 @@ export default function Details() {
         className="absolute top-0 left-0 w-full z-0 pointer-events-none"
         style={{ height: `calc(var(--backdrop-h) + ${parallaxThreshold}px)` }}
       >
-        <div className="sticky top-0 w-full h-[var(--backdrop-h)]">
-          {/* Ambient Dominant Color Glow Layer */}
-          {colorPalette && (
-            <div 
-              className="details-hero-glow absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[650px] pointer-events-none z-0 blur-3xl opacity-75 transition-opacity duration-1000"
-            />
-          )}
-          
-          <div 
-            className="absolute inset-0 w-full h-full overflow-hidden"
-            style={{
-              WebkitMaskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
-              maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)'
-            }}
-          >
+        <div className="sticky top-0 w-full h-[var(--backdrop-h)] overflow-hidden">
+          <div className="absolute inset-0 w-full h-full overflow-hidden">
             {(backdropUrl || posterUrl) && (
               <img 
                 src={backdropUrl || posterUrl} 
@@ -2897,12 +2883,12 @@ export default function Details() {
             <img 
               src={logoUrl} 
               alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName} 
-              className="h-20 sm:h-24 md:h-32 object-contain drop-shadow-xl"
+              className="h-20 sm:h-24 md:h-32 object-contain drop-shadow-md"
               onError={() => setLogoUrl(null)}
             />
           ) : (
             <h1 
-              className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight drop-shadow-xl leading-tight"
+              className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-tight"
               style={{ color: 'var(--details-text-primary)' }}
             >
               {formatTitleCase(tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName)}
@@ -2912,7 +2898,7 @@ export default function Details() {
           {/* Release Year & Meta Info */}
           {metaInfoStr && (
             <span 
-              className="mt-3 px-4 py-1.5 rounded-full backdrop-blur-md text-[10px] sm:text-[11px] font-bold tracking-wider shadow-sm"
+              className="mt-3 px-4 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider shadow-sm"
               style={{
                 backgroundColor: 'var(--details-badge-bg)',
                 borderColor: 'var(--details-badge-border)',
@@ -2931,7 +2917,7 @@ export default function Details() {
             {genreList.map((genre, idx) => (
               <span 
                 key={idx} 
-                className="px-4 py-1.5 rounded-full backdrop-blur-md text-xs font-bold tracking-wide shadow-sm"
+                className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wide shadow-sm"
                 style={{
                   backgroundColor: 'var(--details-badge-bg)',
                   borderColor: 'var(--details-badge-border)',
@@ -2975,7 +2961,7 @@ export default function Details() {
 
           return (
             <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-              <span className={`px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] uppercase tracking-wider shadow-sm ${badgeClass}`}>
+              <span className={`px-3.5 py-1 rounded-full border text-[10px] uppercase tracking-wider shadow-sm ${badgeClass}`}>
                 {label}
               </span>
             </div>
@@ -2994,7 +2980,7 @@ export default function Details() {
             : 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-bold';
           return (
             <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
-              <span className={`px-3.5 py-1 rounded-full backdrop-blur-md border text-[10px] uppercase tracking-wider shadow-sm ${digitalBadgeClass}`}>
+              <span className={`px-3.5 py-1 rounded-full border text-[10px] uppercase tracking-wider shadow-sm ${digitalBadgeClass}`}>
                 Digital Release: {formatted}
               </span>
             </div>
@@ -3004,7 +2990,7 @@ export default function Details() {
         {/* Action Buttons Row */}
         <div className="flex flex-wrap items-center justify-center pt-1 mb-2">
           <div 
-            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 sm:py-2.5 rounded-full backdrop-blur-xl shadow-lg border"
+            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 sm:py-2.5 rounded-full shadow-lg border"
             style={{
               backgroundColor: 'var(--details-surface)',
               borderColor: 'var(--details-border)',
@@ -3121,7 +3107,7 @@ export default function Details() {
       <div className="px-4 sm:px-8 md:px-12 max-w-7xl mx-auto py-6 relative z-20 space-y-6">
         {user === 'guest' ? (
           <div 
-            className="p-8 sm:p-12 rounded-3xl text-center max-w-xl mx-auto shadow-xl backdrop-blur-md border"
+            className="p-8 sm:p-12 rounded-3xl text-center max-w-xl mx-auto shadow-xl border"
             style={{
               backgroundColor: 'var(--details-surface)',
               borderColor: 'var(--details-border)',

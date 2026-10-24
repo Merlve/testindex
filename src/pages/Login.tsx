@@ -182,7 +182,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fffcf9] dark:bg-[#08080a] flex items-center justify-center p-4 relative">
+    <div className="min-h-[100dvh] bg-[#fffcf9] dark:bg-[#08080a] flex items-center justify-center p-4 relative">
       {/* Floating Top Right Theme Action Pill */}
       <div 
         id="floating-top-right-nav"

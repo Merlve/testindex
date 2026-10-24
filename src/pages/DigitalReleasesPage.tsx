@@ -100,7 +100,7 @@ export default function DigitalReleasesPage() {
     const mainEl = document.querySelector('main');
     const handleScroll = () => {
       if (isRestoringRef.current) return;
-      const pos = mainEl ? mainEl.scrollTop : window.scrollY;
+      const pos = window.scrollY || document.documentElement.scrollTop || (mainEl ? mainEl.scrollTop : 0);
       if (pos > 0) {
         sessionStorage.setItem('digital_releases_scroll_top', pos.toString());
       }
@@ -120,7 +120,7 @@ export default function DigitalReleasesPage() {
   // When clicking an item, capture exact position and target
   const handleItemClick = (itemKey: string, isPrevious: boolean) => {
     const mainEl = document.querySelector('main');
-    const pos = mainEl ? mainEl.scrollTop : window.scrollY;
+    const pos = window.scrollY || document.documentElement.scrollTop || (mainEl ? mainEl.scrollTop : 0);
     sessionStorage.setItem('digital_releases_scroll_top', pos.toString());
     sessionStorage.setItem('digital_releases_last_clicked', `${isPrevious ? 'prev' : 'cur'}-${itemKey}`);
     if (isPrevious) {
@@ -150,7 +150,6 @@ export default function DigitalReleasesPage() {
 
     const restore = () => {
       const mainEl = document.querySelector('main');
-      if (!mainEl) return false;
 
       if (savedLastClicked) {
         const el = document.getElementById(savedLastClicked);
@@ -161,9 +160,11 @@ export default function DigitalReleasesPage() {
       }
 
       if (savedPos > 0) {
-        const canScrollFully = mainEl.scrollHeight >= savedPos + mainEl.clientHeight - 80;
+        const docHeight = document.documentElement.scrollHeight;
+        const canScrollFully = docHeight >= savedPos + window.innerHeight - 80 || (mainEl && mainEl.scrollHeight >= savedPos + mainEl.clientHeight - 80);
         if (canScrollFully || attempts >= maxAttempts) {
-          mainEl.scrollTop = savedPos;
+          window.scrollTo(0, savedPos);
+          if (mainEl) mainEl.scrollTop = savedPos;
           return true;
         }
       }

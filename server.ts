@@ -1124,6 +1124,190 @@ app.post('/api/downloads/track', async (req, res) => {
 });
 
 
+function parseAssTimestamp(ts: string): string {
+  const clean = ts.trim();
+  const match = clean.match(/^(\d+):(\d{2}):(\d{2})(?:[.,](\d{1,3}))?$/);
+  if (!match) return '00:00:00.000';
+  const hours = match[1].padStart(2, '0');
+  const minutes = match[2];
+  const seconds = match[3];
+  let ms = match[4] || '000';
+  if (ms.length === 1) ms = ms + '00';
+  else if (ms.length === 2) ms = ms + '0';
+  else if (ms.length > 3) ms = ms.slice(0, 3);
+  return `${hours}:${minutes}:${seconds}.${ms}`;
+}
+
+function parseAssToVtt(assContent: string): string {
+  const lines = assContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  let inEvents = false;
+  let formatFields: string[] = [];
+  const cues: Array<{ start: string; end: string; text: string; rawStart: number }> = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i].trim();
+    if (!rawLine) continue;
+
+    if (rawLine.startsWith('[')) {
+      inEvents = rawLine.toLowerCase() === '[events]';
+      continue;
+    }
+
+    if (inEvents && rawLine.toLowerCase().startsWith('format:')) {
+      formatFields = rawLine
+        .substring(7)
+        .split(',')
+        .map(f => f.trim().toLowerCase());
+      continue;
+    }
+
+    if (inEvents && rawLine.toLowerCase().startsWith('dialogue:')) {
+      const colonIdx = rawLine.indexOf(':');
+      const rest = rawLine.substring(colonIdx + 1).trim();
+
+      const fieldCount = formatFields.length > 0 ? formatFields.length : 10;
+      const parts: string[] = [];
+      let current = '';
+      let commaCount = 0;
+
+      for (let c = 0; c < rest.length; c++) {
+        if (rest[c] === ',' && commaCount < fieldCount - 1) {
+          parts.push(current.trim());
+          current = '';
+          commaCount++;
+        } else {
+          current += rest[c];
+        }
+      }
+      parts.push(current.trim());
+
+      let startStr = '';
+      let endStr = '';
+      let textStr = '';
+      let styleStr = '';
+
+      if (formatFields.length > 0) {
+        const startIdx = formatFields.indexOf('start');
+        const endIdx = formatFields.indexOf('end');
+        const textIdx = formatFields.indexOf('text');
+        const styleIdx = formatFields.indexOf('style');
+
+        startStr = startIdx !== -1 && parts[startIdx] ? parts[startIdx] : parts[1] || '';
+        endStr = endIdx !== -1 && parts[endIdx] ? parts[endIdx] : parts[2] || '';
+        textStr = textIdx !== -1 && parts[textIdx] !== undefined ? parts[textIdx] : parts[parts.length - 1] || '';
+        styleStr = styleIdx !== -1 && parts[styleIdx] ? parts[styleIdx] : parts[3] || '';
+      } else {
+        startStr = parts[1] || '';
+        endStr = parts[2] || '';
+        textStr = parts[parts.length - 1] || '';
+        styleStr = parts[3] || '';
+      }
+
+      if (!startStr || !endStr || !textStr) continue;
+
+      // Filter out wyzie/ad promotion cues
+      if (/store\.wyzie\.io|wyzie\.io/i.test(textStr)) {
+        continue;
+      }
+
+      let cleanedText = textStr
+        .replace(/\\N/gi, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\h/g, ' ')
+        .replace(/\{\\i1\}/gi, '<i>')
+        .replace(/\{\\i0\}/gi, '</i>')
+        .replace(/\{\\b1\}/gi, '<b>')
+        .replace(/\{\\b0\}/gi, '</b>')
+        .replace(/\{\\u1\}/gi, '<u>')
+        .replace(/\{\\u0\}/gi, '</u>')
+        .replace(/\{[^}]+\}/g, '')
+        .trim();
+
+      if (!cleanedText) continue;
+
+      if (styleStr.toLowerCase().includes('italic') && !cleanedText.startsWith('<i>')) {
+        cleanedText = `<i>${cleanedText}</i>`;
+      }
+
+      const vttStart = parseAssTimestamp(startStr);
+      const vttEnd = parseAssTimestamp(endStr);
+
+      if (vttStart === vttEnd) continue;
+
+      const [h, m, restS] = vttStart.split(':');
+      const [s, ms] = restS.split('.');
+      const startMs = (+h * 3600 + +m * 60 + +s) * 1000 + +ms;
+
+      cues.push({
+        start: vttStart,
+        end: vttEnd,
+        text: cleanedText,
+        rawStart: startMs
+      });
+    }
+  }
+
+  cues.sort((a, b) => a.rawStart - b.rawStart);
+
+  let output = 'WEBVTT\n\n';
+  cues.forEach((cue, index) => {
+    output += `${index + 1}\n${cue.start} --> ${cue.end}\n${cue.text}\n\n`;
+  });
+
+  return output.trim() + '\n';
+}
+
+function convertSrtToVtt(srtText: string): string {
+  const normalized = srtText
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(
+      /(?:(\d+):)?(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d+):)?(\d{2}):(\d{2})[,.](\d{1,3})/g,
+      (_match, sH, sM, sS, sMs, eH, eM, eS, eMs) => {
+        const startH = (sH || '00').padStart(2, '0');
+        const startMs = (sMs || '000').padEnd(3, '0').slice(0, 3);
+        const endH = (eH || '00').padStart(2, '0');
+        const endMs = (eMs || '000').padEnd(3, '0').slice(0, 3);
+        return `${startH}:${sM}:${sS}.${startMs} --> ${endH}:${eM}:${eS}.${endMs}`;
+      }
+    )
+    .replace(/\\h/g, ' ')
+    .replace(/\\N/gi, '\n')
+    .replace(/\{[^}]+\}/g, '');
+
+  return `WEBVTT\n\n${normalized}`.trim() + '\n';
+}
+
+function convertSubtitlesToVtt(rawText: string): string {
+  if (!rawText || !rawText.trim()) {
+    return 'WEBVTT\n\n';
+  }
+
+  // Strip BOM
+  let text = rawText.replace(/^\uFEFF/, '').trim();
+
+  // 1. Detect ASS/SSA format (even if WEBVTT was erroneously prepended)
+  if (
+    text.includes('[Script Info]') ||
+    text.includes('[V4+ Styles]') ||
+    text.includes('[Events]') ||
+    /^\s*Dialogue:\s*/m.test(text)
+  ) {
+    return parseAssToVtt(text);
+  }
+
+  // 2. Check if it's already compliant WebVTT (starts with WEBVTT)
+  if (text.startsWith('WEBVTT')) {
+    return text
+      .replace(/\\h/g, ' ')
+      .replace(/\\N/gi, '\n')
+      .replace(/\{[^}]+\}/g, '');
+  }
+
+  // 3. Otherwise treat as SRT or generic cue-based format
+  return convertSrtToVtt(text);
+}
+
 app.get('/api/subtitles', async (req, res) => {
   try {
     const { tmdb_id, type, season, episode, language = 'en' } = req.query;
@@ -1140,9 +1324,22 @@ app.get('/api/subtitles', async (req, res) => {
     if (fs.existsSync(cachePath)) {
       let cachedSub = fs.readFileSync(cachePath, 'utf8');
       
-      // Clean up common ASS/SSA artifacts just in case they were cached
-      cachedSub = cachedSub.replace(/\\h/g, ' ');
-      cachedSub = cachedSub.replace(/\{[^}]+\}/g, '');
+      // If cached file is unconverted ASS/SSA or malformed, convert it and update the cache file
+      if (
+        cachedSub.includes('[Script Info]') ||
+        cachedSub.includes('[Events]') ||
+        /^\s*Dialogue:\s*/m.test(cachedSub) ||
+        !cachedSub.trim().startsWith('WEBVTT')
+      ) {
+        cachedSub = convertSubtitlesToVtt(cachedSub);
+        try {
+          fs.writeFileSync(cachePath, cachedSub, 'utf8');
+        } catch (e) {
+          console.error('Failed to update subtitle cache file:', e);
+        }
+      } else {
+        cachedSub = cachedSub.replace(/\\h/g, ' ').replace(/\{[^}]+\}/g, '');
+      }
 
       res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
       return res.send(cachedSub);
@@ -1178,14 +1375,8 @@ app.get('/api/subtitles', async (req, res) => {
       const subRes = await fetch(downloadLink);
       let subText = await subRes.text();
       
-      // Auto-convert SRT to VTT if necessary
-      if (!subText.trim().startsWith('WEBVTT')) {
-        subText = 'WEBVTT\n\n' + subText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
-      }
-
-      // Clean up common ASS/SSA artifacts often found in OpenSubtitles
-      subText = subText.replace(/\\h/g, ' ');
-      subText = subText.replace(/\{[^}]+\}/g, '');
+      // Convert ASS, SSA, or SRT subtitles to compliant WebVTT
+      subText = convertSubtitlesToVtt(subText);
 
       // Save to cache
       fs.writeFileSync(cachePath, subText, 'utf8');

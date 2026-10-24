@@ -27,15 +27,13 @@ function ScrollRestorer({
   const isProgrammaticRef = useRef(false);
 
   useLayoutEffect(() => {
-    if (!mainRef.current) return;
-    const el = mainRef.current;
-    
     // Stop recording scroll events during navigation state change
     isRestoredRef.current = false;
 
     if (navigationType !== 'POP') {
       isProgrammaticRef.current = true;
-      el.scrollTop = 0;
+      window.scrollTo(0, 0);
+      if (mainRef.current) mainRef.current.scrollTop = 0;
       isRestoredRef.current = true;
       const t = setTimeout(() => {
         isProgrammaticRef.current = false;
@@ -49,7 +47,8 @@ function ScrollRestorer({
 
     if (!savedScrollStr) {
       isProgrammaticRef.current = true;
-      el.scrollTop = 0;
+      window.scrollTo(0, 0);
+      if (mainRef.current) mainRef.current.scrollTop = 0;
       isRestoredRef.current = true;
       const t = setTimeout(() => {
         isProgrammaticRef.current = false;
@@ -60,11 +59,12 @@ function ScrollRestorer({
     const targetScroll = parseInt(savedScrollStr, 10);
 
     const attemptRestore = () => {
-      if (!mainRef.current) return false;
-      const currentEl = mainRef.current;
-      if (targetScroll === 0 || currentEl.scrollHeight >= targetScroll + currentEl.clientHeight - 100) {
+      const docHeight = document.documentElement.scrollHeight;
+      const winHeight = window.innerHeight;
+      if (targetScroll === 0 || docHeight >= targetScroll + winHeight - 100) {
         isProgrammaticRef.current = true;
-        currentEl.scrollTop = targetScroll;
+        window.scrollTo(0, targetScroll);
+        if (mainRef.current) mainRef.current.scrollTop = targetScroll;
         isRestoredRef.current = true;
         setTimeout(() => {
           isProgrammaticRef.current = false;
@@ -82,13 +82,14 @@ function ScrollRestorer({
       }
     });
 
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
     const timeout = setTimeout(() => {
       observer.disconnect();
-      if (!isRestoredRef.current && mainRef.current) {
+      if (!isRestoredRef.current) {
         isProgrammaticRef.current = true;
-        mainRef.current.scrollTop = targetScroll;
+        window.scrollTo(0, targetScroll);
+        if (mainRef.current) mainRef.current.scrollTop = targetScroll;
         isRestoredRef.current = true;
         setTimeout(() => {
           isProgrammaticRef.current = false;
@@ -104,21 +105,16 @@ function ScrollRestorer({
 
   useEffect(() => {
     const handleScroll = () => {
-      if (mainRef.current && isRestoredRef.current && !isProgrammaticRef.current) {
-        const pos = mainRef.current.scrollTop.toString();
+      if (isRestoredRef.current && !isProgrammaticRef.current) {
+        const pos = (window.scrollY || document.documentElement.scrollTop || (mainRef.current ? mainRef.current.scrollTop : 0)).toString();
         sessionStorage.setItem(`scroll-key-${scrollKey}`, pos);
         sessionStorage.setItem(`scroll-path-${locationPathAndSearch}`, pos);
       }
     };
 
-    const mainEl = mainRef.current;
-    if (mainEl) {
-      mainEl.addEventListener('scroll', handleScroll, { passive: true });
-    }
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
-      if (mainEl) {
-        mainEl.removeEventListener('scroll', handleScroll);
-      }
+      window.removeEventListener('scroll', handleScroll);
     };
   }, [scrollKey, locationPathAndSearch, mainRef]);
 
@@ -223,7 +219,7 @@ export default function Layout() {
       curr = curr.parentElement;
     }
 
-    setIsUnderlyingDark(isDarkBg);
+    setIsUnderlyingDark(prev => prev === isDarkBg ? prev : isDarkBg);
   }, []);
 
   useEffect(() => {
@@ -237,7 +233,6 @@ export default function Layout() {
 
     const handleUserActivity = () => {
       setIsIdle(false);
-      checkLuminance();
       clearTimeout(timeout);
       timeout = setTimeout(() => {
         setIsIdle(true);
@@ -245,24 +240,16 @@ export default function Layout() {
     };
 
     const events = [
-      'mousemove',
       'mousedown',
-      'mouseup',
       'touchstart',
-      'touchmove',
-      'touchend',
-      'scroll',
       'keydown',
       'wheel',
-      'pointermove',
-      'pointerdown'
+      'scroll'
     ];
 
     events.forEach(eventName => {
-      window.addEventListener(eventName, handleUserActivity, { capture: true, passive: true });
+      window.addEventListener(eventName, handleUserActivity, { passive: true });
     });
-
-    checkLuminance();
 
     timeout = setTimeout(() => {
       setIsIdle(true);
@@ -270,11 +257,11 @@ export default function Layout() {
 
     return () => {
       events.forEach(eventName => {
-        window.removeEventListener(eventName, handleUserActivity, { capture: true });
+        window.removeEventListener(eventName, handleUserActivity);
       });
       clearTimeout(timeout);
     };
-  }, [checkLuminance]);
+  }, []);
 
   useEffect(() => {
     setIsIdle(false);
@@ -283,25 +270,36 @@ export default function Layout() {
   }, [location.pathname, location.search, checkLuminance]);
 
   useEffect(() => {
+    let scrollCheckTimer: NodeJS.Timeout;
     const handleScroll = () => {
-      if (mainRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = mainRef.current;
-        const isTop = scrollTop < 50;
-        const isBottom = scrollHeight - scrollTop - clientHeight < 50;
-        setIsNavExpanded(isTop || isBottom);
+      const scrollTop = window.scrollY || document.documentElement.scrollTop || (mainRef.current?.scrollTop || 0);
+      const scrollHeight = document.documentElement.scrollHeight || (mainRef.current?.scrollHeight || 0);
+      const clientHeight = window.innerHeight;
+      const isTop = scrollTop < 50;
+      const isBottom = scrollHeight - scrollTop - clientHeight < 50;
+      setIsNavExpanded(isTop || isBottom);
+
+      // Only check luminance debounced on the home page where bottom-nav-bar exists
+      if (location.pathname === '/') {
+        clearTimeout(scrollCheckTimer);
+        scrollCheckTimer = setTimeout(() => {
+          checkLuminance();
+        }, 150);
       }
     };
-    const mainEl = mainRef.current;
-    if (mainEl) {
-      mainEl.addEventListener('scroll', handleScroll, { passive: true });
-      handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    if (mainRef.current) {
+      mainRef.current.addEventListener('scroll', handleScroll, { passive: true });
     }
+    handleScroll();
     return () => {
-      if (mainEl) {
-        mainEl.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
+      if (mainRef.current) {
+        mainRef.current.removeEventListener('scroll', handleScroll);
       }
+      clearTimeout(scrollCheckTimer);
     };
-  }, []);
+  }, [location.pathname, checkLuminance]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ['layout-categories'],
@@ -315,12 +313,12 @@ export default function Layout() {
   });
 
   return (
-    <div className="flex h-screen bg-[#fffcf9] dark:bg-[#08080a] text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
+    <div className="min-h-[100dvh] flex flex-col bg-[#fffcf9] dark:bg-[#08080a] text-gray-900 dark:text-gray-100 font-sans">
 
       {/* Floating Top Left Brand Pill */}
       <div 
         id="floating-top-left-nav"
-        className={`fixed top-4 left-4 md:left-6 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out ${
+        className={`fixed top-4 left-4 md:left-6 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full border backdrop-blur-md transition-all duration-300 ease-in-out ${
           isUnderlyingDark 
             ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
             : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
@@ -338,7 +336,7 @@ export default function Layout() {
       {/* Floating Top Right Action Pill (Hides on idle) */}
       <div 
         id="floating-top-right-nav"
-        className={`fixed top-4 right-4 md:right-6 z-40 flex items-center gap-3 px-3.5 py-2 rounded-full border backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 ease-in-out ${
+        className={`fixed top-4 right-4 md:right-6 z-40 flex items-center gap-3 px-3.5 py-2 rounded-full border backdrop-blur-md transition-all duration-300 ease-in-out ${
           isUnderlyingDark 
             ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
             : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
@@ -373,7 +371,7 @@ export default function Layout() {
 
       {/* Sidebar Drawer */}
       <aside 
-        className={`fixed top-0 left-0 h-full w-64 bg-[#f3efec] dark:bg-[#0d0d12] flex flex-col py-6 border-r border-black/5 dark:border-white/5 z-50 transition-all duration-300 ease-in-out px-4 ${
+        className={`fixed top-0 left-0 h-[100dvh] w-64 bg-[#f3efec] dark:bg-[#0d0d12] flex flex-col py-6 border-r border-black/5 dark:border-white/5 z-50 transition-all duration-300 ease-in-out px-4 ${
           sidebarOpen 
             ? 'translate-x-0 opacity-100 pointer-events-auto shadow-2xl' 
             : '-translate-x-full opacity-0 pointer-events-none'
@@ -472,7 +470,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main ref={mainRef} className={`flex-1 overflow-y-auto relative bg-[#fffcf9] dark:bg-[#08080a] ${location.pathname.startsWith('/home/') ? 'pt-0' : 'pt-16'}`}>
+      <main ref={mainRef} className={`flex-1 w-full relative bg-[#fffcf9] dark:bg-[#08080a] ${location.pathname.startsWith('/home/') ? 'pt-0' : 'pt-16'}`}>
         <ScrollRestorer 
           scrollKey={location.key} 
           locationPathAndSearch={location.pathname + location.search} 
@@ -500,7 +498,7 @@ export default function Layout() {
           <div id="bottom-nav-bar" className={`fixed bottom-6 left-6 md:bottom-8 md:left-8 z-50 flex items-center transition-all duration-300 ${sidebarOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}>
             <motion.div 
               layout
-              className={`flex items-center gap-1 overflow-hidden transition-all duration-500 ease-in-out rounded-full border backdrop-blur-xl backdrop-saturate-[180%] ${
+              className={`flex items-center gap-1 overflow-hidden transition-all duration-500 ease-in-out rounded-full border backdrop-blur-md ${
                  isUnderlyingDark
                    ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
                    : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
@@ -510,7 +508,7 @@ export default function Layout() {
               }}
             >
                <button 
-                 onClick={() => { if(!isNavExpanded){ mainRef.current?.scrollTo({top:0, behavior:'smooth'}) } else { navigate('/'); } }} 
+                 onClick={() => { if(!isNavExpanded){ window.scrollTo({top:0, behavior:'smooth'}); mainRef.current?.scrollTo({top:0, behavior:'smooth'}); } else { navigate('/'); } }} 
                  className={`flex items-center justify-center rounded-full transition-all hover:bg-black/10 dark:hover:bg-white/10 ${isNavExpanded ? 'w-10 h-10 md:w-12 md:h-12' : 'w-10 h-10 md:w-12 md:h-12'} shrink-0`} 
                  title="Home"
                >

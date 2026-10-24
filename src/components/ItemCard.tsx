@@ -60,7 +60,8 @@ const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: s
         <img
           src={finalLowRes}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-100 transform-gpu backface-hidden"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover blur-sm scale-105 opacity-80 backface-hidden"
           aria-hidden="true"
         />
       )}
@@ -75,12 +76,13 @@ const MoviePoster = ({ src, lowResSrc, alt, className, fallbackText }: { src?: s
           }}
           src={finalSrc}
           alt={alt}
+          decoding="async"
           loading={isAlreadyLoaded ? 'eager' : 'lazy'}
           onLoad={() => {
             markImageLoaded(finalSrc);
             setLoaded(true);
           }}
-          className={`absolute inset-0 w-full h-full object-cover transform-gpu backface-hidden ${
+          className={`absolute inset-0 w-full h-full object-cover backface-hidden ${
             loaded 
               ? 'opacity-100' 
               : 'opacity-0 transition-opacity duration-300'
@@ -450,7 +452,7 @@ const ItemCard = function ItemCard({
 
   const renderGridContent = (
     <>
-      <div className="w-full aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-xl sm:shadow-2xl transition-[transform,shadow] duration-300 sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98] flex-shrink-0">
+      <div className="w-full aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-md sm:shadow-lg transition-[transform,shadow] duration-300 sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98] flex-shrink-0">
         <MoviePoster 
           src={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}` : null}
           lowResSrc={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w92${displayTmdb.poster_path}` : null}
