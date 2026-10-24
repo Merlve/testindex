@@ -1472,42 +1472,7 @@ export default function Details() {
   const [logoUrl, setLogoUrl] = useState<string | null>(initialLogo);
   const currentPathRef = useRef(fullPath);
 
-  // Parallax backdrop (pins backdrop until logo reaches the top bar)
-  const logoContainerRef = useRef<HTMLDivElement>(null);
-  const [parallaxThreshold, setParallaxThreshold] = useState(350);
 
-  useEffect(() => {
-    // Find the scrolling container element (<main> in Layout, or window as fallback)
-    const mainEl = logoContainerRef.current?.closest('main') || document.querySelector('main');
-    if (!mainEl) return;
-
-    const calculateThreshold = () => {
-      if (!logoContainerRef.current) return;
-      const logoRect = logoContainerRef.current.getBoundingClientRect();
-      const currentScroll = window.scrollY || document.documentElement.scrollTop || (mainEl ? mainEl.scrollTop : 0);
-      const mainRectTop = mainEl ? mainEl.getBoundingClientRect().top : 0;
-      // Calculate true distance from top of scroll viewport to the logo
-      const logoOffsetInMain = (logoRect.top - mainRectTop) + currentScroll;
-      // Stop fixing the backdrop when logo is docked ~75px from top (below top nav)
-      const calculatedThreshold = Math.max(0, logoOffsetInMain - 75);
-      const nextThreshold = calculatedThreshold > 50 ? Math.round(calculatedThreshold) : 350;
-      setParallaxThreshold(prev => Math.abs(prev - nextThreshold) > 10 ? nextThreshold : prev);
-    };
-
-    calculateThreshold();
-
-    window.addEventListener('resize', calculateThreshold, { passive: true });
-
-    // Recalculate after image/logo render passes
-    const timer1 = setTimeout(calculateThreshold, 150);
-    const timer2 = setTimeout(calculateThreshold, 600);
-
-    return () => {
-      window.removeEventListener('resize', calculateThreshold);
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-    };
-  }, [tmdb, logoUrl, name]);
 
   
   // Batch selection state
@@ -2826,59 +2791,56 @@ export default function Details() {
       {/* Placeholder to push content down into normal flow */}
       <div className="w-full h-[var(--backdrop-h)] pointer-events-none" />
 
-      {/* Sticky Parallax Container */}
+      {/* Hero Backdrop Container */}
       <div 
-        className="absolute top-0 left-0 w-full z-0 pointer-events-none"
-        style={{ height: `calc(var(--backdrop-h) + ${parallaxThreshold}px)` }}
+        className="absolute top-0 left-0 w-full h-[var(--backdrop-h)] overflow-hidden z-0 pointer-events-none"
       >
-        <div className="sticky top-0 w-full h-[var(--backdrop-h)] overflow-hidden">
-          <div className="absolute inset-0 w-full h-full overflow-hidden">
-            {(backdropUrl || posterUrl) && (
-              <img 
-                src={backdropUrl || posterUrl} 
-                alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || name} 
-                className="w-full h-full object-cover object-center sm:object-top opacity-85 pointer-events-none transition-opacity duration-700"
-              />
-            )}
+        <div className="absolute inset-0 w-full h-full overflow-hidden">
+          {(backdropUrl || posterUrl) && (
+            <img 
+              src={backdropUrl || posterUrl} 
+              alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || name} 
+              className="w-full h-full object-cover object-center sm:object-top opacity-85 pointer-events-none transition-opacity duration-700"
+            />
+          )}
 
-            {/* Seamless blend overlay into the solid adaptive background */}
+          {/* Seamless blend overlay into the solid adaptive background */}
+          <div 
+            className="absolute inset-0 pointer-events-none transition-colors duration-700" 
+            style={{
+              background: isDarkMode
+                ? `linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.45) 70%, var(--details-bg) 100%)`
+                : `linear-gradient(to bottom, transparent 40%, var(--details-bg) 100%)`
+            }}
+          />
+
+          {/* Dynamic hue tint layer to harmonize artwork into the solid tone */}
+          {colorPalette && (
             <div 
-              className="absolute inset-0 pointer-events-none transition-colors duration-700" 
+              className="absolute inset-0 pointer-events-none transition-opacity duration-700"
               style={{
-                background: isDarkMode
-                  ? `linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.45) 70%, var(--details-bg) 100%)`
-                  : `linear-gradient(to bottom, transparent 40%, var(--details-bg) 100%)`
+                opacity: isDarkMode ? 0.40 : 0.20,
+                background: `linear-gradient(to bottom, transparent 55%, var(--details-bg) 100%)`,
               }}
             />
-
-            {/* Dynamic hue tint layer to harmonize artwork into the solid tone */}
-            {colorPalette && (
-              <div 
-                className="absolute inset-0 pointer-events-none transition-opacity duration-700"
-                style={{
-                  opacity: isDarkMode ? 0.40 : 0.20,
-                  background: `linear-gradient(to bottom, transparent 55%, var(--details-bg) 100%)`,
-                }}
-              />
-            )}
-            
-            {/* Top scrim for clear readability under top floating navigation pills */}
-            <div 
-              className="absolute top-0 left-0 right-0 h-32 pointer-events-none z-10 transition-opacity duration-700"
-              style={{
-                background: isDarkMode
-                  ? 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)'
-                  : 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 100%)'
-              }}
-            />
-          </div>
+          )}
+          
+          {/* Top scrim for clear readability under top floating navigation pills */}
+          <div 
+            className="absolute top-0 left-0 right-0 h-32 pointer-events-none z-10 transition-opacity duration-700"
+            style={{
+              background: isDarkMode
+                ? 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)'
+                : 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 100%)'
+            }}
+          />
         </div>
       </div>
 
       {/* Content Section positioned below the backdrop with slight overlap */}
       <div className="relative z-20 flex flex-col items-center max-w-4xl mx-auto space-y-5 px-4 sm:px-8 -mt-24 sm:-mt-32 text-center">
         {/* Title or Logo and Subtitle Year */}
-        <div className="flex flex-col items-center" ref={logoContainerRef}>
+        <div className="flex flex-col items-center">
           {logoUrl ? (
             <img 
               src={logoUrl} 
