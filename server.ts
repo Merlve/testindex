@@ -4574,7 +4574,7 @@ app.get('/api/meta/images', cacheMiddleware(3600, true), async (req, res) => {
     const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW'].includes(typeStr) || String(type).toLowerCase() === 'tv';
     const searchType = isTv ? 'tv' : 'movie';
     const altType = searchType === 'tv' ? 'movie' : 'tv';
-    const imageLangs = typeof lang === 'string' && lang.trim() ? lang.trim() : 'en,null,ja,ko,zh,es,fr,de,it,pt';
+    const imageLangs = typeof lang === 'string' && lang.trim() ? lang.trim() : 'null,en,ja,ko,zh,es,fr,de,it,pt';
     
     let response: any = null;
     try {

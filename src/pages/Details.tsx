@@ -2481,12 +2481,14 @@ export default function Details() {
     }
   };
 
-  // Fetch available backdrops for TMDB entry (display 5 distinct backdrops)
+  // Fetch available backdrops for TMDB entry (display 5 distinct textless backdrops)
   const fetchAvailableBackdrops = async (targetId?: string | number, targetType?: string, targetInfo?: any) => {
     const idToUse = targetId || activeBackdropTmdb?.id || tmdb?.id;
     if (!idToUse) {
       if (tmdb?.images?.backdrops && Array.isArray(tmdb.images.backdrops)) {
-        setAvailableBackdrops(tmdb.images.backdrops.slice(0, 5));
+        const textlessOnly = tmdb.images.backdrops.filter((b: any) => !b.iso_639_1 || b.iso_639_1 === 'null' || b.iso_639_1 === 'xx');
+        const listToUse = textlessOnly.length > 0 ? textlessOnly : tmdb.images.backdrops;
+        setAvailableBackdrops(listToUse.slice(0, 5));
       } else {
         setAvailableBackdrops([]);
       }
@@ -2503,7 +2505,7 @@ export default function Details() {
     try {
       const isTv = targetType === 'tv' || targetInfo?.media_type === 'tv' || Boolean(targetInfo?.first_air_date) || tmdb?.media_type === 'tv' || Boolean(tmdb?.first_air_date) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
       const searchType = isTv ? 'tv' : 'movie';
-      const res = await axios.get(`/api/meta/images?id=${idToUse}&type=${searchType}`);
+      const res = await axios.get(`/api/meta/images?id=${idToUse}&type=${searchType}&lang=null,en`);
       const rawBackdrops: any[] = res.data?.backdrops || [];
       const uniqueBackdrops: any[] = [];
       const seenPaths = new Set<string>();
@@ -2513,21 +2515,29 @@ export default function Details() {
           uniqueBackdrops.push(b);
         }
       }
-      const top5 = uniqueBackdrops.slice(0, 5);
-      setAvailableBackdrops(top5);
+
+      // Filter for textless images (in TMDB, textless backdrops have iso_639_1 === null or 'xx' / undefined)
+      const textlessOnly = uniqueBackdrops.filter((b: any) => !b.iso_639_1 || b.iso_639_1 === 'null' || b.iso_639_1 === 'xx');
+      
+      // If textless backdrops are available, show only textless images (up to 5 choices)
+      // Otherwise, fallback to the available backdrops if no textless images exist on TMDB
+      const choices = (textlessOnly.length > 0 ? textlessOnly : uniqueBackdrops).slice(0, 5);
+      setAvailableBackdrops(choices);
 
       if (selectedBackdropPath === null || selectedBackdropPath === undefined) {
         const cur = tmdb?.custom_backdrop || tmdb?.backdrop_path;
         if (cur) {
           setSelectedBackdropPath(cur);
-        } else if (top5.length > 0) {
-          setSelectedBackdropPath(top5[0].file_path);
+        } else if (choices.length > 0) {
+          setSelectedBackdropPath(choices[0].file_path);
         }
       }
     } catch (err) {
       console.error('Error fetching backdrops:', err);
       if (tmdb?.images?.backdrops) {
-        setAvailableBackdrops(tmdb.images.backdrops.slice(0, 5));
+        const textlessOnly = tmdb.images.backdrops.filter((b: any) => !b.iso_639_1 || b.iso_639_1 === 'null' || b.iso_639_1 === 'xx');
+        const listToUse = textlessOnly.length > 0 ? textlessOnly : tmdb.images.backdrops;
+        setAvailableBackdrops(listToUse.slice(0, 5));
       }
     } finally {
       setLoadingBackdrops(false);
@@ -4338,7 +4348,7 @@ export default function Details() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-gray-600 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                        <span>Available TMDB Backdrops (5 Choices)</span>
+                        <span>Available TMDB Backdrops (5 Textless Choices)</span>
                         {availableBackdrops.length > 0 && (
                           <span className="px-1.5 py-0.5 rounded-md bg-purple-600/20 text-purple-600 dark:text-purple-400 text-[10px] font-mono">
                             {availableBackdrops.length}
@@ -4364,12 +4374,13 @@ export default function Details() {
                     {loadingBackdrops ? (
                       <div className="p-6 flex flex-col items-center justify-center gap-2 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 text-gray-500">
                         <Loader2 size={20} className="animate-spin text-purple-600 dark:text-purple-400" />
-                        <span className="text-xs">Fetching official backdrops from TMDB...</span>
+                        <span className="text-xs">Fetching textless backdrops from TMDB...</span>
                       </div>
                     ) : availableBackdrops.length > 0 ? (
                       <div className="max-h-52 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 p-2 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 custom-scrollbar">
                         {availableBackdrops.map((backdrop, idx) => {
                           const isSelected = selectedBackdropPath === backdrop.file_path;
+                          const isTextless = !backdrop.iso_639_1 || backdrop.iso_639_1 === 'null' || backdrop.iso_639_1 === 'xx';
                           return (
                             <div
                               key={idx}
@@ -4385,7 +4396,7 @@ export default function Details() {
                             >
                               <img
                                 src={`https://image.tmdb.org/t/p/w500${backdrop.file_path}`}
-                                alt={`TMDB Backdrop ${idx + 1}`}
+                                alt={`TMDB Textless Backdrop ${idx + 1}`}
                                 className="w-full h-full object-cover"
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
@@ -4397,11 +4408,18 @@ export default function Details() {
                                 </div>
                               )}
                               
-                              {/* Resolution & Index Tag */}
+                              {/* Resolution, Index & Textless Tag */}
                               <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between text-[8px] text-gray-200 pointer-events-none drop-shadow">
-                                <span className="font-mono bg-black/60 px-1 py-0.5 rounded text-[8px]">
-                                  #{idx + 1}
-                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono bg-black/60 px-1 py-0.5 rounded text-[8px]">
+                                    #{idx + 1}
+                                  </span>
+                                  {isTextless && (
+                                    <span className="font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 px-1 py-0.5 rounded text-[7px] uppercase tracking-wider">
+                                      Textless
+                                    </span>
+                                  )}
+                                </div>
                                 {backdrop.width && backdrop.height && (
                                   <span className="font-mono bg-black/60 px-1 py-0.5 rounded text-[8px]">
                                     {backdrop.width}x{backdrop.height}
