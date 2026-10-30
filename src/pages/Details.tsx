@@ -2270,13 +2270,15 @@ export default function Details() {
       const newMetaVer = String(Date.now());
       localStorage.setItem('meta_version', newMetaVer);
 
-      // Immediately synchronize React Query cache across all keys for this item
+      // Immediately synchronize React Query cache across all keys for this specific item and path
       queryClient.setQueryData(tmdbQueryKey, updatedData);
       queryClient.setQueryData(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, undefined], updatedData);
       queryClient.setQueryData(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, selected.id], updatedData);
-      queryClient.setQueryData(['tmdb', name, category, location.state?.item?.parentPath], updatedData);
+      const parentP = location.state?.item?.parentPath || actualFolderOpenlistPath || `/home/${category}`;
+      queryClient.setQueryData(['tmdb', name, category, parentP], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, parentP, selected?.id], updatedData);
       queryClient.setQueryData(['tmdb', name, category, `/home/${category}`], updatedData);
-      queryClient.setQueryData(['tmdb', name, category, undefined], updatedData);
+      queryClient.setQueryData(['tmdb', name, category, `/home/${category}`, selected?.id], updatedData);
 
       try {
         if (typeof window !== 'undefined' && window.history?.replaceState) {
@@ -2322,12 +2324,12 @@ export default function Details() {
       const newMetaVer = String(Date.now());
       localStorage.setItem('meta_version', newMetaVer);
 
-      // Immediately synchronize React Query cache across all keys for this item
+      // Immediately synchronize React Query cache across all keys for this specific item and path
       queryClient.setQueryData(tmdbQueryKey, updatedData);
       queryClient.setQueryData(['details-meta', actualItemOpenlistPath, cleanName, category, parsedYear, undefined], updatedData);
-      queryClient.setQueryData(['tmdb', name, category, location.state?.item?.parentPath], updatedData);
+      const parentP = location.state?.item?.parentPath || actualFolderOpenlistPath || `/home/${category}`;
+      queryClient.setQueryData(['tmdb', name, category, parentP], updatedData);
       queryClient.setQueryData(['tmdb', name, category, `/home/${category}`], updatedData);
-      queryClient.setQueryData(['tmdb', name, category, undefined], updatedData);
 
       try {
         if (typeof window !== 'undefined' && window.history?.replaceState) {

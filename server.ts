@@ -592,38 +592,83 @@ function isGenericCategoryRoot(p: string): boolean {
   return false;
 }
 
-function findOverriddenKeyInCache(cache: Record<string, any>, type: string, cleanQuery: string, year?: string | number, itemPath?: string): string | null {
+function normalizeItemPath(p: string | null | undefined): string {
+  if (!p || typeof p !== 'string') return '';
+  try {
+    let clean = decodeURIComponent(p).replace(/\\/g, '/').trim();
+    clean = clean.replace(/^\/+|\/+$/g, '');
+    clean = clean.replace(/^home\//i, '');
+    return clean.toLowerCase();
+  } catch (e) {
+    let clean = p.replace(/\\/g, '/').trim();
+    clean = clean.replace(/^\/+|\/+$/g, '');
+    clean = clean.replace(/^home\//i, '');
+    return clean.toLowerCase();
+  }
+}
+
+function findOverriddenKeyInCache(
+  cache: Record<string, any>,
+  type: string,
+  cleanQuery: string,
+  year?: string | number,
+  itemPath?: string
+): string | null {
   if (!cleanQuery && !itemPath && !year) return null;
-  const baseQuery = (cleanQuery || '').toLowerCase().trim();
   const rawType = (type || '').toUpperCase().trim();
-  const isTvType = ['SERIES', 'TV', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(rawType);
-  const typesToCheck = isTvType ? [rawType, 'TV', 'SERIES', 'ANIME', 'KDRAMA', 'ADRAMA'] : [rawType, 'MOVIE'];
+  const cleanYearStr = year ? String(year).trim() : null;
 
   // 1. EXACT PATH MATCH (HIGHEST PRIORITY - Strictly unique per Openlist item)
   if (itemPath && !isGenericCategoryRoot(itemPath)) {
-    const cleanP = itemPath.replace(/^\/+/, '').replace(/\/+$/, '');
-    const cleanWithoutHome = cleanP.replace(/^home\//i, '');
-    const cleanWithHome = `home/${cleanWithoutHome}`;
-    const pathCandidates = [
-      `path-${cleanP}`,
-      `path-/${cleanP}`,
-      `path-${cleanWithoutHome}`,
-      `path-/${cleanWithoutHome}`,
-      `path-${cleanWithHome}`,
-      `path-/${cleanWithHome}`
-    ];
-    for (const p of pathCandidates) {
-      if (cache[p]?._overridden) return p;
+    const normPath = normalizeItemPath(itemPath);
+    if (normPath) {
+      const pathCandidates = [
+        `path-${normPath}`,
+        `path-/${normPath}`,
+        `path-home/${normPath}`,
+        `path-/home/${normPath}`
+      ];
+      const rawClean = itemPath.replace(/^\/+/, '').replace(/\/+$/, '');
+      const rawCleanNoHome = rawClean.replace(/^home\//i, '');
+      pathCandidates.push(
+        `path-${rawClean}`,
+        `path-/${rawClean}`,
+        `path-${rawCleanNoHome}`,
+        `path-/${rawCleanNoHome}`,
+        `path-home/${rawCleanNoHome}`,
+        `path-/home/${rawCleanNoHome}`
+      );
+
+      for (const p of pathCandidates) {
+        if (cache[p]?._overridden) return p;
+      }
+
+      // Check if any overridden item in cache explicitly matches this normalized path
+      for (const [k, entry] of Object.entries(cache)) {
+        if (entry?._overridden) {
+          const entryNorm = entry._normalizedPath || (entry._overriddenPath ? normalizeItemPath(entry._overriddenPath) : null);
+          if (entryNorm && entryNorm === normPath) {
+            return k;
+          }
+        }
+      }
     }
   }
 
-  // 2. EXACT YEAR MATCH: ${type}-${baseQuery}-${year}
-  const cleanYearStr = year ? String(year).trim() : null;
+  // 2. TITLE-BASED OVERRIDE LOOKUP
+  // Strict Isolation Rules:
+  // - If the candidate override was saved for a specific path (_normalizedPath), and the caller has a path that differs, REJECT!
+  // - Category must strictly match (KDRAMA only matches KDRAMA; SERIES only matches SERIES). Never cross-match between separate categories!
+  const baseQuery = (cleanQuery || '').toLowerCase().trim();
   const parsed = parseMediaName(baseQuery);
   const queryCandidates = Array.from(new Set([
     baseQuery,
     (parsed.cleanName || '').toLowerCase().trim()
   ].filter(Boolean)));
+
+  const callerNormPath = itemPath ? normalizeItemPath(itemPath) : null;
+  const isTvType = ['SERIES', 'TV', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(rawType);
+  const typesToCheck = rawType ? [rawType] : (isTvType ? ['TV'] : ['MOVIE']);
 
   if (cleanYearStr && queryCandidates.length > 0) {
     for (const q of queryCandidates) {
@@ -632,6 +677,10 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
         const cacheKey = `${t}-${q}-${cleanYearStr}`;
         const candidate = cache[cacheKey];
         if (candidate?._overridden) {
+          const candidateNorm = candidate._normalizedPath || (candidate._overriddenPath ? normalizeItemPath(candidate._overriddenPath) : null);
+          if (candidateNorm && callerNormPath && candidateNorm !== callerNormPath) {
+            continue; // Overridden for a different item path - strictly reject
+          }
           const candYear = (candidate.release_date || candidate.first_air_date || '').substring(0, 4);
           if (!candYear || candYear === cleanYearStr) {
             return cacheKey;
@@ -641,7 +690,6 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
     }
   }
 
-  // 3. NO YEAR SPECIFIED: Fall back to non-year key
   if (queryCandidates.length > 0) {
     for (const q of queryCandidates) {
       for (const t of typesToCheck) {
@@ -649,6 +697,10 @@ function findOverriddenKeyInCache(cache: Record<string, any>, type: string, clea
         const baseKey = `${t}-${q}`;
         const candidate = cache[baseKey];
         if (candidate?._overridden) {
+          const candidateNorm = candidate._normalizedPath || (candidate._overriddenPath ? normalizeItemPath(candidate._overriddenPath) : null);
+          if (candidateNorm && callerNormPath && candidateNorm !== callerNormPath) {
+            continue; // Overridden for a different item path - strictly reject
+          }
           return baseKey;
         }
       }
@@ -4137,19 +4189,29 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
     const baseQuery = query.toLowerCase().trim();
     const baseKey = `${type}-${baseQuery}`;
     
-    const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year);
+    const itemPath = item.path || (item.parent ? `${item.parent}/${item.name || originalName}` : undefined) || (item.parentPath ? `${item.parentPath}/${item.name || originalName}` : undefined);
+    const normPath = itemPath ? normalizeItemPath(itemPath) : null;
+
+    const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, year, itemPath);
     if (overriddenKey) {
       results[originalName] = { ...tmdbCache[overriddenKey], _synced: true };
     } else {
-      const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
-      if (tmdbCache[cacheKey]) {
-        results[originalName] = { ...tmdbCache[cacheKey], _synced: true };
-      } else if (year && tmdbCache[baseKey]) {
-        results[originalName] = { ...tmdbCache[baseKey], _synced: true };
-      } else if (tmdbCache[cacheKey] === null) {
-        results[originalName] = null;
+      const pathMatch = normPath ? (tmdbCache[`path-${normPath}`] || tmdbCache[`path-home/${normPath}`]) : null;
+      if (pathMatch) {
+        results[originalName] = { ...pathMatch, _synced: true };
       } else {
-        toFetch.push({ ...item, cacheKey });
+        const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
+        const titleCandidate = tmdbCache[cacheKey];
+        const isMismatchedPath = titleCandidate?._normalizedPath && normPath && titleCandidate._normalizedPath !== normPath;
+        if (titleCandidate && !isMismatchedPath) {
+          results[originalName] = { ...titleCandidate, _synced: true };
+        } else if (year && tmdbCache[baseKey] && (!tmdbCache[baseKey]._normalizedPath || !normPath || tmdbCache[baseKey]._normalizedPath === normPath)) {
+          results[originalName] = { ...tmdbCache[baseKey], _synced: true };
+        } else if (tmdbCache[cacheKey] === null) {
+          results[originalName] = null;
+        } else {
+          toFetch.push({ ...item, cacheKey, normPath });
+        }
       }
     }
   }
@@ -4201,13 +4263,25 @@ app.post('/api/meta/batch', adminMiddleware, async (req, res) => {
                    }
                } catch(e) {}
            }
+           if (item.normPath) {
+             tmdbCache[`path-${item.normPath}`] = topResult;
+             tmdbCache[`path-home/${item.normPath}`] = topResult;
+           }
            tmdbCache[item.cacheKey] = topResult;
            results[item.originalName] = { ...topResult, _synced: false };
         } else {
+           if (item.normPath) {
+             tmdbCache[`path-${item.normPath}`] = null;
+             tmdbCache[`path-home/${item.normPath}`] = null;
+           }
            tmdbCache[item.cacheKey] = null;
            results[item.originalName] = null;
         }
       } catch (e) {
+        if (item.normPath) {
+          tmdbCache[`path-${item.normPath}`] = null;
+          tmdbCache[`path-home/${item.normPath}`] = null;
+        }
         tmdbCache[item.cacheKey] = null;
         results[item.originalName] = null;
       }
@@ -4317,6 +4391,7 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
   
   const baseQuery = query.toLowerCase().trim();
   const baseKey = `${type}-${baseQuery}`;
+  const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
   
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) {
@@ -4343,33 +4418,51 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
      return await attachFullDataToItem(item, searchType, tmdbKey);
   };
 
+  const overriddenKey = findOverriddenKeyInCache(tmdbCache, type as string, baseQuery, year ? String(year).trim() : null, rawPath);
+
   // ALWAYS prioritize manually overridden items
-  const overriddenKey = findOverriddenKeyInCache(tmdbCache, type as string, baseQuery, year as string, cleanPath || undefined);
-  const cacheKey = `${type}-${baseQuery}${year ? `-${year}` : ''}`;
-  
+  const normPath = cleanPath ? normalizeItemPath(cleanPath) : null;
+  const pathCandidates = normPath ? [
+    `path-${normPath}`,
+    `path-/${normPath}`,
+    `path-home/${normPath}`,
+    `path-/home/${normPath}`,
+    pathKey1,
+    pathKey2
+  ].filter(Boolean) as string[] : [];
+
   let cachedItem = null;
   let cacheKeyToUpdate = null;
   if (overriddenKey && tmdbCache[overriddenKey]) {
     cachedItem = tmdbCache[overriddenKey];
     cacheKeyToUpdate = overriddenKey;
-  } else if (pathKey1 && tmdbCache[pathKey1] !== undefined) {
-    cachedItem = tmdbCache[pathKey1];
-    cacheKeyToUpdate = pathKey1;
-  } else if (pathKey2 && tmdbCache[pathKey2] !== undefined) {
-    cachedItem = tmdbCache[pathKey2];
-    cacheKeyToUpdate = pathKey2;
-  } else if (tmdbCache[cacheKey] !== undefined) {
-    // Only accept cachedItem if year is either empty OR matches the requested year!
-    const cand = tmdbCache[cacheKey];
-    const candYear = (cand?.release_date || cand?.first_air_date || '').substring(0, 4);
-    if (!year || !candYear || String(year).trim() === candYear) {
-      cachedItem = cand;
-      cacheKeyToUpdate = cacheKey;
+  } else if (pathCandidates.length > 0) {
+    for (const pk of pathCandidates) {
+      if (tmdbCache[pk] !== undefined && tmdbCache[pk] !== null) {
+        cachedItem = tmdbCache[pk];
+        cacheKeyToUpdate = pk;
+        break;
+      }
     }
-  } else if (!year && tmdbCache[baseKey] !== undefined) {
-    // ONLY check baseKey without year if caller did NOT provide a year!
-    cachedItem = tmdbCache[baseKey];
-    cacheKeyToUpdate = baseKey;
+  }
+  
+  if (!cachedItem && tmdbCache[cacheKey] !== undefined) {
+    const cand = tmdbCache[cacheKey];
+    const candNorm = cand?._normalizedPath || (cand?._overriddenPath ? normalizeItemPath(cand._overriddenPath) : null);
+    if (!candNorm || !normPath || candNorm === normPath) {
+      const candYear = (cand?.release_date || cand?.first_air_date || '').substring(0, 4);
+      if (!year || !candYear || String(year).trim() === candYear) {
+        cachedItem = cand;
+        cacheKeyToUpdate = cacheKey;
+      }
+    }
+  } else if (!cachedItem && !year && tmdbCache[baseKey] !== undefined) {
+    const cand = tmdbCache[baseKey];
+    const candNorm = cand?._normalizedPath || (cand?._overriddenPath ? normalizeItemPath(cand._overriddenPath) : null);
+    if (!candNorm || !normPath || candNorm === normPath) {
+      cachedItem = cand;
+      cacheKeyToUpdate = baseKey;
+    }
   }
 
   // Strict year mismatch safeguard: If caller requested a specific year and non-overridden cachedItem has a contradicting year, discard cachedItem!
@@ -4534,8 +4627,10 @@ app.get('/api/meta/search', cacheMiddleware(3600, true), async (req, res) => {
     
     if (data.results && data.results.length > 0) {
        if (full === 'true') await attachFullData(data.results[0]);
-       if (pathKey) {
-           tmdbCache[pathKey] = data.results[0];
+       if (normPath) {
+           tmdbCache[`path-${normPath}`] = data.results[0];
+           tmdbCache[`path-home/${normPath}`] = data.results[0];
+           if (pathKey) tmdbCache[pathKey] = data.results[0];
        } else {
            tmdbCache[cacheKey] = data.results[0];
        }
@@ -5597,6 +5692,8 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
       }
     };
 
+    const normPath = cleanPath ? normalizeItemPath(cleanPath) : null;
+
     const setOverriddenDataInCache = (dataToStore: any) => {
       dataToStore._overridden = true;
       dataToStore._synced = true;
@@ -5605,61 +5702,69 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
       const cleanQ = (parsedMedia.cleanName || query).toLowerCase().trim();
       const rawQ = query.toLowerCase().trim();
       const qYear = year ? String(year).trim() : (parsedMedia.year ? String(parsedMedia.year).trim() : '');
-
       const tmdbReleaseYear = (dataToStore.release_date || dataToStore.first_air_date || '').substring(0, 4);
 
-      const keysToSet = new Set<string>();
-      keysToSet.add(cacheKey);
-      if (qYear) {
-        keysToSet.add(`${typeStr}-${cleanQ}-${qYear}`);
-        keysToSet.add(`${typeStr}-${rawQ}-${qYear}`);
-      }
-      if (tmdbReleaseYear) {
-        keysToSet.add(`${typeStr}-${cleanQ}-${tmdbReleaseYear}`);
-        keysToSet.add(`${typeStr}-${rawQ}-${tmdbReleaseYear}`);
-      }
-      keysToSet.add(`${typeStr}-${cleanQ}`);
-      keysToSet.add(`${typeStr}-${rawQ}`);
+      if (cleanPath && normPath) {
+        dataToStore._overriddenPath = rawPath || cleanPath;
+        dataToStore._normalizedPath = normPath;
+        dataToStore._category = typeStr;
 
-      if (cleanPath) {
+        // Path-specific override keys ONLY tied to this specific item path
+        const pathKeys = [
+          `path-${normPath}`,
+          `path-/${normPath}`,
+          `path-home/${normPath}`,
+          `path-/home/${normPath}`,
+          `path-${cleanPath}`,
+          `path-/${cleanPath}`
+        ];
+        
         const withoutHome = cleanPath.replace(/^home\//i, '');
         const withHome = `home/${withoutHome}`;
-        keysToSet.add(`path-${cleanPath}`);
-        keysToSet.add(`path-/${cleanPath}`);
-        keysToSet.add(`path-${withoutHome}`);
-        keysToSet.add(`path-/${withoutHome}`);
-        keysToSet.add(`path-${withHome}`);
-        keysToSet.add(`path-/${withHome}`);
+        pathKeys.push(`path-${withoutHome}`, `path-/${withoutHome}`, `path-${withHome}`, `path-/${withHome}`);
 
-        const folderName = cleanPath.split('/').pop() || '';
-        if (folderName) {
-          const folderLower = folderName.toLowerCase();
-          const folderParsed = parseMediaName(folderName);
-          const folderClean = (folderParsed.cleanName || folderName).toLowerCase();
-          const folderYear = folderParsed.year || qYear;
-          if (folderYear) {
-            keysToSet.add(`${typeStr}-${folderClean}-${folderYear}`);
-            keysToSet.add(`${typeStr}-${folderLower}-${folderYear}`);
-          }
-          if (tmdbReleaseYear) {
-            keysToSet.add(`${typeStr}-${folderClean}-${tmdbReleaseYear}`);
-            keysToSet.add(`${typeStr}-${folderLower}-${tmdbReleaseYear}`);
-          }
-          keysToSet.add(`${typeStr}-${folderClean}`);
-          keysToSet.add(`${typeStr}-${folderLower}`);
+        for (const k of pathKeys) {
+          tmdbCache[k] = dataToStore;
         }
-      }
 
-      for (const k of keysToSet) {
-        tmdbCache[k] = dataToStore;
+        // CRITICAL: When an override is tied to a specific Openlist path,
+        // it must NOT pollute or overwrite global title keys that other paths could accidentally inherit!
+        // We do NOT set generic title keys when a unique item path is provided.
+        // Instead, the override remains strictly and purely tied to this unique item path.
+      } else {
+        // Only if NO specific path is provided (e.g. pure title override):
+        const keysToSet = new Set<string>();
+        keysToSet.add(cacheKey);
+        if (qYear) {
+          keysToSet.add(`${typeStr}-${cleanQ}-${qYear}`);
+          keysToSet.add(`${typeStr}-${rawQ}-${qYear}`);
+        }
+        if (tmdbReleaseYear) {
+          keysToSet.add(`${typeStr}-${cleanQ}-${tmdbReleaseYear}`);
+          keysToSet.add(`${typeStr}-${rawQ}-${tmdbReleaseYear}`);
+        }
+        keysToSet.add(`${typeStr}-${cleanQ}`);
+        keysToSet.add(`${typeStr}-${rawQ}`);
+
+        for (const k of keysToSet) {
+          tmdbCache[k] = dataToStore;
+        }
       }
     };
 
     const isMovieCategory = (type || '').toUpperCase() === 'MOVIES';
 
     if (updateLogoOnly || updateBackdropOnly || ((customTitle || customYear || customLogo !== undefined || customBackdrop !== undefined) && !tmdbId)) {
-      // Just override title/year/logo/backdrop in existing cache or create a mock
-      let data = { ...(tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || currentData || {}) };
+      // Just override title/year/logo/backdrop in existing cache or create a mock.
+      // Prioritize this exact path's existing data first!
+      let existingData = null;
+      if (normPath) {
+        existingData = tmdbCache[`path-${normPath}`] || tmdbCache[`path-home/${normPath}`] || (pathKey1 ? tmdbCache[pathKey1] : null) || (pathKey2 ? tmdbCache[pathKey2] : null);
+      }
+      if (!existingData) {
+        existingData = tmdbCache[cacheKey] || tmdbCache[baseKey] || currentData || {};
+      }
+      let data = { ...existingData };
       
       if (customTitle) {
         data.title = customTitle;
@@ -6087,12 +6192,17 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
                     const searchYear = item._jf?.year || year;
                     const type = item._cat || '';
                     
+                    const itemPath = item.path || (item._parent ? `${item._parent}/${item.name}` : item.name);
+                    const normPath = itemPath ? normalizeItemPath(itemPath) : null;
+                    const pathCacheKey = normPath ? `path-${normPath}` : null;
+                    const cleanItemPath = itemPath ? itemPath.replace(/^\/+/, '') : null;
+                    
                     const baseQuery = cleanName.toLowerCase().trim();
                     const baseKey = `${type}-${baseQuery}`;
                     const cacheKey = `${type}-${baseQuery}${searchYear ? `-${searchYear}` : ''}`;
                     
-                    const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, searchYear);
-                    if (overriddenKey || tmdbCache[cacheKey] !== undefined) {
+                    const overriddenKey = findOverriddenKeyInCache(tmdbCache, type, baseQuery, searchYear, itemPath);
+                    if (overriddenKey || (pathCacheKey && tmdbCache[pathCacheKey] !== undefined) || tmdbCache[cacheKey] !== undefined) {
                         continue; // Already cached or overridden
                     }
                     
@@ -6109,21 +6219,20 @@ app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, 
                             url += searchType === 'movie' ? `&primary_release_year=${searchYear}` : `&first_air_date_year=${searchYear}`;
                         }
                     }
-                    
-                    const itemPath = item.path || (item._parent ? `${item._parent}/${item.name}` : item.name);
-                    const cleanItemPath = itemPath ? itemPath.replace(/^\/+/, '') : null;
-                    const pKey1 = cleanItemPath ? `path-${cleanItemPath}` : null;
-                    const pKey2 = cleanItemPath ? `path-/${cleanItemPath}` : null;
 
                     const setCacheKeys = async (dataObj: any) => {
                         if (dataObj && typeof dataObj === 'object') {
                             await attachFullDataToItem(dataObj, searchType, tmdbKey);
                             tmdbCache[cacheKey] = dataObj;
                             tmdbCache[baseKey] = dataObj;
-                            if (pKey1) tmdbCache[pKey1] = dataObj;
-                            if (pKey2) tmdbCache[pKey2] = dataObj;
+                            if (pathCacheKey) tmdbCache[pathCacheKey] = dataObj;
+                            if (cleanItemPath) {
+                                tmdbCache[`path-${cleanItemPath}`] = dataObj;
+                                tmdbCache[`path-/${cleanItemPath}`] = dataObj;
+                            }
                         } else {
                             tmdbCache[cacheKey] = dataObj;
+                            if (pathCacheKey) tmdbCache[pathCacheKey] = dataObj;
                         }
                         modified = true;
                     };
@@ -6215,14 +6324,26 @@ export async function initSQLiteState() {
     if (tmdbCache && typeof tmdbCache === 'object') {
       let cleanedBadKeys = false;
       for (const k of Object.keys(tmdbCache)) {
-        // --- CLEANUP OF OLD BAD OVERRIDES ---
+        // --- CLEANUP OF OLD BAD OVERRIDES & NORMALIZE PATHS ---
         if (k.startsWith('path-')) {
-          const p = k.replace('path-', '');
+          const p = k.replace(/^path-/, '');
           if (isGenericCategoryRoot(p)) {
             console.log('Auto-cleaning bad broad path override at startup:', k);
             delete tmdbCache[k];
             cleanedBadKeys = true;
             continue;
+          }
+          const normP = normalizeItemPath(p);
+          const item = tmdbCache[k];
+          if (item && typeof item === 'object') {
+            if (!item._overriddenPath) item._overriddenPath = p;
+            if (!item._normalizedPath) item._normalizedPath = normP;
+            // Also ensure the normalized path key exists
+            const normKey = `path-${normP}`;
+            if (!tmdbCache[normKey]) {
+              tmdbCache[normKey] = item;
+              cleanedBadKeys = true;
+            }
           }
         }
         // ------------------------------------
@@ -6230,6 +6351,9 @@ export async function initSQLiteState() {
         const item = tmdbCache[k];
         if (item && item._overridden) {
           item._synced = true;
+          if (item._overriddenPath && !item._normalizedPath) {
+            item._normalizedPath = normalizeItemPath(item._overriddenPath);
+          }
           // Never copy year-specific overrides to generic non-year base keys, to prevent leaking across movies with the same name.
           // Clean up any stale generic baseKey if a year-specific override exists:
           const yearMatch = k.match(/^(.*)-(\d{4})$/);
