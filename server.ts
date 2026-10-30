@@ -310,7 +310,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api-docs', async (req, res, next) => {
+app.use(['/api-docs', '/api/docs'], async (req, res, next) => {
   try {
     const swaggerUi = (await import('swagger-ui-express')).default;
     const YAML = (await import('yamljs')).default;
