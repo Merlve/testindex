@@ -1414,9 +1414,9 @@ export default function Details() {
   const [trailerUrl, setTrailerUrl] = useState<string | null>(null);
   const [loadingTrailer, setLoadingTrailer] = useState(false);
 
-  // Metadata Correction & Logo Fix Modal
+  // Metadata Correction, Logo Fix, & Backdrop Image Fix Modal
   const [showMetadataModal, setShowMetadataModal] = useState(false);
-  const [modalTab, setModalTab] = useState<'info' | 'logo'>('info');
+  const [modalTab, setModalTab] = useState<'info' | 'logo' | 'image'>('info');
   const [searchTitle, setSearchTitle] = useState('');
   const [customTitle, setCustomTitle] = useState('');
   const [customYear, setCustomYear] = useState('');
@@ -1433,11 +1433,20 @@ export default function Details() {
   const [customLogoInput, setCustomLogoInput] = useState('');
   const [savingLogo, setSavingLogo] = useState(false);
   const [logoSearchQuery, setLogoSearchQuery] = useState('');
-
-
   const [searchingLogos, setSearchingLogos] = useState(false);
   const [logoSearchResults, setLogoSearchResults] = useState<any[]>([]);
   const [activeLogoTmdb, setActiveLogoTmdb] = useState<any>(null);
+
+  // Backdrop / Image Fix State
+  const [availableBackdrops, setAvailableBackdrops] = useState<any[]>([]);
+  const [loadingBackdrops, setLoadingBackdrops] = useState(false);
+  const [selectedBackdropPath, setSelectedBackdropPath] = useState<string | null>(null);
+  const [customBackdropInput, setCustomBackdropInput] = useState('');
+  const [savingBackdrop, setSavingBackdrop] = useState(false);
+  const [backdropSearchQuery, setBackdropSearchQuery] = useState('');
+  const [searchingBackdrops, setSearchingBackdrops] = useState(false);
+  const [backdropSearchResults, setBackdropSearchResults] = useState<any[]>([]);
+  const [activeBackdropTmdb, setActiveBackdropTmdb] = useState<any>(null);
 
   // Dominant color palette state (prioritize backdrop, fallback to poster)
   const initialPalette = useMemo(() => {
@@ -2472,6 +2481,141 @@ export default function Details() {
     }
   };
 
+  // Fetch available backdrops for TMDB entry (display 5 distinct backdrops)
+  const fetchAvailableBackdrops = async (targetId?: string | number, targetType?: string, targetInfo?: any) => {
+    const idToUse = targetId || activeBackdropTmdb?.id || tmdb?.id;
+    if (!idToUse) {
+      if (tmdb?.images?.backdrops && Array.isArray(tmdb.images.backdrops)) {
+        setAvailableBackdrops(tmdb.images.backdrops.slice(0, 5));
+      } else {
+        setAvailableBackdrops([]);
+      }
+      return;
+    }
+
+    if (targetInfo) {
+      setActiveBackdropTmdb(targetInfo);
+    } else if (!activeBackdropTmdb && tmdb) {
+      setActiveBackdropTmdb(tmdb);
+    }
+
+    setLoadingBackdrops(true);
+    try {
+      const isTv = targetType === 'tv' || targetInfo?.media_type === 'tv' || Boolean(targetInfo?.first_air_date) || tmdb?.media_type === 'tv' || Boolean(tmdb?.first_air_date) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+      const searchType = isTv ? 'tv' : 'movie';
+      const res = await axios.get(`/api/meta/images?id=${idToUse}&type=${searchType}`);
+      const rawBackdrops: any[] = res.data?.backdrops || [];
+      const uniqueBackdrops: any[] = [];
+      const seenPaths = new Set<string>();
+      for (const b of rawBackdrops) {
+        if (b.file_path && !seenPaths.has(b.file_path)) {
+          seenPaths.add(b.file_path);
+          uniqueBackdrops.push(b);
+        }
+      }
+      const top5 = uniqueBackdrops.slice(0, 5);
+      setAvailableBackdrops(top5);
+
+      if (selectedBackdropPath === null || selectedBackdropPath === undefined) {
+        const cur = tmdb?.custom_backdrop || tmdb?.backdrop_path;
+        if (cur) {
+          setSelectedBackdropPath(cur);
+        } else if (top5.length > 0) {
+          setSelectedBackdropPath(top5[0].file_path);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching backdrops:', err);
+      if (tmdb?.images?.backdrops) {
+        setAvailableBackdrops(tmdb.images.backdrops.slice(0, 5));
+      }
+    } finally {
+      setLoadingBackdrops(false);
+    }
+  };
+
+  // Search for backdrops using TMDB ID or show/movie title
+  const handleSearchBackdrops = async (overrideQuery?: string) => {
+    const query = (overrideQuery !== undefined ? overrideQuery : backdropSearchQuery).trim();
+    if (!query) return;
+
+    setSearchingBackdrops(true);
+    try {
+      const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+      const searchType = isTv ? 'tv' : 'movie';
+      const res = await axios.get(`/api/meta/search_all?query=${encodeURIComponent(query)}&type=${category}`);
+      const results = res.data?.results || [];
+      setBackdropSearchResults(results);
+      if (results.length > 0) {
+        const topResult = results[0];
+        setActiveBackdropTmdb(topResult);
+        const topType = topResult.media_type || (topResult.first_air_date ? 'tv' : 'movie') || searchType;
+        await fetchAvailableBackdrops(topResult.id, topType, topResult);
+      } else if (/^\d+$/.test(query)) {
+        const info = { id: query, title: `TMDB ID #${query}` };
+        setActiveBackdropTmdb(info);
+        setBackdropSearchResults([]);
+        await fetchAvailableBackdrops(query, searchType, info);
+      } else {
+        setAvailableBackdrops([]);
+        setActiveBackdropTmdb(null);
+      }
+    } catch (err) {
+      console.error('Error searching backdrops:', err);
+      setToast('Failed to search TMDB for images');
+      setTimeout(() => setToast(''), 2500);
+    } finally {
+      setSearchingBackdrops(false);
+    }
+  };
+
+  // Save / Override Backdrop Persistently
+  const handleSaveBackdrop = async (overridePath?: string) => {
+    const targetBackdrop = overridePath !== undefined 
+      ? overridePath 
+      : (customBackdropInput.trim() || (selectedBackdropPath !== null ? selectedBackdropPath : ''));
+      
+    if (!targetBackdrop && targetBackdrop !== '') return;
+
+    setSavingBackdrop(true);
+    try {
+      const parsed = parseMediaName(name || '');
+      const tmdbIdToSave = activeBackdropTmdb?.id || tmdb?.id;
+      const res = await axios.post('/api/meta/override', {
+        query: parsed.cleanName,
+        type: category,
+        year: parsed.year,
+        tmdbId: tmdbIdToSave || undefined,
+        customBackdrop: targetBackdrop,
+        path: actualOpenlistPath,
+        updateBackdropOnly: true,
+        currentData: tmdb
+      }, { headers: { Authorization: token } });
+
+      if (res.data?.data) {
+        setTmdb(res.data.data);
+      } else {
+        setTmdb((prev: any) => ({
+          ...prev,
+          custom_backdrop: targetBackdrop,
+          backdrop_path: targetBackdrop
+        }));
+      }
+
+      setShowMetadataModal(false);
+      setToast('Backdrop image updated persistently');
+      setTimeout(() => setToast(''), 2500);
+      localStorage.setItem('meta_version', String(Date.now()));
+      softRefreshMediaCaches(queryClient);
+    } catch (err: any) {
+      console.error('Error saving custom backdrop:', err);
+      setToast('Failed to save backdrop override');
+      setTimeout(() => setToast(''), 2500);
+    } finally {
+      setSavingBackdrop(false);
+    }
+  };
+
   // Extract Genres
   const genreList = useMemo(() => {
     if (!tmdb) return [];
@@ -3004,7 +3148,7 @@ export default function Details() {
               </button>
             )}
 
-            {user && user !== 'guest' && (
+            {user?.toLowerCase() === 'admin' && (
             <button
               onClick={() => {
                 const curTitle = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
@@ -3029,7 +3173,7 @@ export default function Details() {
                 setCustomLogoInput('');
                 setShowMetadataModal(true);
               }}
-              title="Fix Metadata & Logo"
+              title="Fix Metadata, Logo & Image (Admin Only)"
               className="p-2.5 sm:p-3 rounded-full active:scale-95 transition flex items-center justify-center cursor-pointer border"
               style={{
                 backgroundColor: 'var(--details-surface)',
@@ -3621,14 +3765,14 @@ export default function Details() {
 
       {/* Metadata Correction & Logo Fix Modal */}
       <AnimatePresence>
-        {showMetadataModal && (
+        {showMetadataModal && user?.toLowerCase() === 'admin' && (
           <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto" onClick={() => setShowMetadataModal(false)}>
             <motion.div 
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#fffcf9] dark:bg-[#121218] border border-black/10 dark:border-white/10 rounded-2xl p-4 sm:p-6 max-w-md w-full shadow-2xl relative space-y-4 my-auto overflow-hidden box-border"
+              className="bg-[#fffcf9] dark:bg-[#121218] border border-black/10 dark:border-white/10 rounded-2xl p-4 sm:p-6 max-w-lg w-full shadow-2xl relative space-y-4 my-auto overflow-hidden box-border"
             >
               <button 
                 onClick={() => setShowMetadataModal(false)} 
@@ -3640,14 +3784,18 @@ export default function Details() {
               <div className="flex items-center justify-between pr-8 min-w-0">
                 <div className="min-w-0 flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                    {modalTab === 'info' ? <Edit2 size={16} /> : <ImageIcon size={16} />}
+                    {modalTab === 'info' ? <Edit2 size={16} /> : modalTab === 'logo' ? <ImageIcon size={16} /> : <Film size={16} />}
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-base sm:text-lg font-bold text-black dark:text-white truncate">
-                      {modalTab === 'info' ? 'Fix Metadata' : 'Fix Title Logo'}
+                      {modalTab === 'info' ? 'Fix Metadata' : modalTab === 'logo' ? 'Fix Title Logo' : 'Fix Backdrop Image'}
                     </h3>
                     <p className="text-[11px] text-gray-500 truncate">
-                      {modalTab === 'info' ? 'Search TMDB or specify custom media info' : 'Select or override the title logo from TMDB'}
+                      {modalTab === 'info' 
+                        ? 'Search TMDB or specify custom media info' 
+                        : modalTab === 'logo' 
+                        ? 'Select or override the title logo from TMDB' 
+                        : 'Choose from 5 available TMDB backdrops or set custom image'}
                     </p>
                   </div>
                 </div>
@@ -3658,14 +3806,14 @@ export default function Details() {
                 <button
                   type="button"
                   onClick={() => setModalTab('info')}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     modalTab === 'info'
                       ? 'bg-purple-600 text-white shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
                   }`}
                 >
-                  <Edit2 size={14} />
-                  <span>Metadata Info</span>
+                  <Edit2 size={13} />
+                  <span>Info</span>
                 </button>
                 <button
                   type="button"
@@ -3679,15 +3827,41 @@ export default function Details() {
                       fetchAvailableLogos(tmdb.id, isTv ? 'tv' : 'movie', tmdb);
                     }
                   }}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     modalTab === 'logo'
                       ? 'bg-purple-600 text-white shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
                   }`}
                 >
-                  <ImageIcon size={14} />
+                  <ImageIcon size={13} />
                   <span>Fix Logo</span>
                   {logoUrl && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const curTitle = tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || parseMediaName(name).cleanName || '';
+                    setModalTab('image');
+                    setBackdropSearchQuery(curTitle);
+                    const curBackdrop = tmdb?.backdrop_path || tmdb?.custom_backdrop || '';
+                    if (curBackdrop) setSelectedBackdropPath(curBackdrop);
+                    if (tmdb?.id) {
+                      setActiveBackdropTmdb(tmdb);
+                      const isTv = tmdb.media_type === 'tv' || Boolean(tmdb.first_air_date) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+                      fetchAvailableBackdrops(tmdb.id, isTv ? 'tv' : 'movie', tmdb);
+                    }
+                  }}
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    modalTab === 'image'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  <Film size={13} />
+                  <span>Fix Image</span>
+                  {backdropUrl && (
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
                   )}
                 </button>
@@ -4045,6 +4219,239 @@ export default function Details() {
                   >
                     {savingLogo ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                     <span>Apply & Save Logo Persistently</span>
+                  </button>
+                </div>
+              )}
+
+              {/* TAB 3: FIX IMAGE (BACKDROP) */}
+              {modalTab === 'image' && (
+                <div className="space-y-3.5 w-full min-w-0">
+                  {/* Search Bar for Backdrops by TMDB ID or Title */}
+                  <div className="w-full min-w-0 space-y-1.5">
+                    <label className="block text-gray-600 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+                      Search Image via TMDB ID or Title
+                    </label>
+                    <div className="flex items-center gap-2 w-full min-w-0">
+                      <input
+                        type="text"
+                        value={backdropSearchQuery}
+                        onChange={(e) => setBackdropSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearchBackdrops()}
+                        placeholder="Search title, TMDb ID, or IMDb ID (e.g. tt1234567)..."
+                        className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSearchBackdrops()}
+                        disabled={searchingBackdrops || !backdropSearchQuery.trim()}
+                        className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 shadow-sm"
+                      >
+                        {searchingBackdrops ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                        <span>Search</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Multiple Search Candidates Picker (if searching by title returned multiple matches) */}
+                  {backdropSearchResults.length > 1 && (
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                        Matched Titles ({backdropSearchResults.length})
+                      </span>
+                      <div className="flex gap-2 overflow-x-auto pb-1.5 custom-scrollbar">
+                        {backdropSearchResults.map((resItem: any, rIdx: number) => {
+                          const isCurrentActive = String(activeBackdropTmdb?.id) === String(resItem.id);
+                          return (
+                            <button
+                              key={rIdx}
+                              type="button"
+                              onClick={() => {
+                                setActiveBackdropTmdb(resItem);
+                                const isTv = resItem.media_type === 'tv' || Boolean(resItem.first_air_date) || ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME'].includes(category);
+                                fetchAvailableBackdrops(resItem.id, isTv ? 'tv' : 'movie', resItem);
+                              }}
+                              className={`flex items-center gap-2 p-1.5 pr-2.5 rounded-xl border text-left shrink-0 transition cursor-pointer ${
+                                isCurrentActive
+                                  ? 'bg-purple-600/15 border-purple-500 text-purple-600 dark:text-purple-400 font-bold'
+                                  : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              {resItem.poster_path ? (
+                                <img
+                                  src={`https://image.tmdb.org/t/p/w92${resItem.poster_path}`}
+                                  alt=""
+                                  className="w-6 h-8 object-cover rounded-md"
+                                />
+                              ) : (
+                                <div className="w-6 h-8 rounded-md bg-purple-600/20 flex items-center justify-center text-[9px] font-bold">
+                                  TMDB
+                                </div>
+                              )}
+                              <div className="min-w-0 max-w-[140px]">
+                                <div className="text-[11px] truncate font-medium">{resItem.title || resItem.name}</div>
+                                <div className="text-[9px] text-gray-500 flex items-center gap-1">
+                                  <span>{(resItem.release_date || resItem.first_air_date || '').substring(0, 4)}</span>
+                                  <span>•</span>
+                                  <span className="font-mono">#{resItem.id}</span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selected Backdrop Preview Banner */}
+                  <div className="bg-black/90 dark:bg-black border border-black/10 dark:border-white/15 rounded-xl p-2.5 flex flex-col items-center justify-center min-h-[110px] relative overflow-hidden group">
+                    <span className="absolute top-2 left-2.5 text-[9px] uppercase tracking-wider font-bold text-gray-300 bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
+                      Selected Backdrop Preview
+                    </span>
+                    {activeBackdropTmdb?.id && (
+                      <span className="absolute top-2 right-2.5 text-[9px] font-mono text-purple-400 bg-black/60 px-1.5 py-0.5 rounded border border-purple-500/30 backdrop-blur-sm z-10">
+                        TMDB #{activeBackdropTmdb.id}
+                      </span>
+                    )}
+                    {selectedBackdropPath ? (
+                      <div className="w-full aspect-[16/9] max-h-40 rounded-lg overflow-hidden relative shadow-inner mt-4">
+                        <img
+                          src={selectedBackdropPath.startsWith('http') ? selectedBackdropPath : `https://image.tmdb.org/t/p/w780${selectedBackdropPath}`}
+                          alt="Backdrop Preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] text-white/90">
+                          <span className="font-semibold truncate drop-shadow">
+                            {activeBackdropTmdb?.title || activeBackdropTmdb?.name || tmdb?.title || tmdb?.name || 'Selected Backdrop'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500 my-6 flex flex-col items-center gap-1">
+                        <Film size={20} className="opacity-40" />
+                        <span>No backdrop selected</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* TMDB Available Backdrops (Display 5) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-gray-600 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Available TMDB Backdrops (5 Choices)</span>
+                        {availableBackdrops.length > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-md bg-purple-600/20 text-purple-600 dark:text-purple-400 text-[10px] font-mono">
+                            {availableBackdrops.length}
+                          </span>
+                        )}
+                        {activeBackdropTmdb && (
+                          <span className="text-[10px] text-gray-400 truncate max-w-[150px] font-normal">
+                            ({activeBackdropTmdb.title || activeBackdropTmdb.name || `ID ${activeBackdropTmdb.id}`})
+                          </span>
+                        )}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => fetchAvailableBackdrops(activeBackdropTmdb?.id || tmdb?.id)}
+                        disabled={loadingBackdrops}
+                        className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw size={12} className={loadingBackdrops ? "animate-spin" : ""} />
+                        <span>Reload</span>
+                      </button>
+                    </div>
+
+                    {loadingBackdrops ? (
+                      <div className="p-6 flex flex-col items-center justify-center gap-2 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 text-gray-500">
+                        <Loader2 size={20} className="animate-spin text-purple-600 dark:text-purple-400" />
+                        <span className="text-xs">Fetching official backdrops from TMDB...</span>
+                      </div>
+                    ) : availableBackdrops.length > 0 ? (
+                      <div className="max-h-52 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 p-2 bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 custom-scrollbar">
+                        {availableBackdrops.map((backdrop, idx) => {
+                          const isSelected = selectedBackdropPath === backdrop.file_path;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setSelectedBackdropPath(backdrop.file_path);
+                                setCustomBackdropInput('');
+                              }}
+                              className={`relative aspect-[16/9] rounded-lg overflow-hidden cursor-pointer transition border bg-black/80 hover:scale-[1.02] group ${
+                                isSelected
+                                  ? 'border-purple-500 ring-2 ring-purple-500/50 shadow-md'
+                                  : 'border-white/10 hover:border-white/30'
+                              }`}
+                            >
+                              <img
+                                src={`https://image.tmdb.org/t/p/w500${backdrop.file_path}`}
+                                alt={`TMDB Backdrop ${idx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                              
+                              {/* Selection Indicator */}
+                              {isSelected && (
+                                <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg z-10">
+                                  <Check size={12} strokeWidth={3} />
+                                </div>
+                              )}
+                              
+                              {/* Resolution & Index Tag */}
+                              <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between text-[8px] text-gray-200 pointer-events-none drop-shadow">
+                                <span className="font-mono bg-black/60 px-1 py-0.5 rounded text-[8px]">
+                                  #{idx + 1}
+                                </span>
+                                {backdrop.width && backdrop.height && (
+                                  <span className="font-mono bg-black/60 px-1 py-0.5 rounded text-[8px]">
+                                    {backdrop.width}x{backdrop.height}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center bg-black/5 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 space-y-1">
+                        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">No backdrops found on TMDB</p>
+                        <p className="text-[11px] text-gray-500">
+                          Search by TMDB ID or title using the search bar above, or provide a custom image URL below.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Custom Backdrop URL Input */}
+                  <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-1.5">
+                    <label className="block text-gray-600 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+                      Or Custom Backdrop URL
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customBackdropInput}
+                        onChange={(e) => {
+                          setCustomBackdropInput(e.target.value);
+                          if (e.target.value.trim()) {
+                            setSelectedBackdropPath(e.target.value.trim());
+                          }
+                        }}
+                        placeholder="https://example.com/backdrop.jpg"
+                        className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs focus:outline-none focus:border-purple-500 text-black dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Apply Backdrop Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleSaveBackdrop()}
+                    disabled={savingBackdrop || !selectedBackdropPath}
+                    className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-semibold text-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md"
+                  >
+                    {savingBackdrop ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                    <span>Apply & Save Image Persistently</span>
                   </button>
                 </div>
               )}

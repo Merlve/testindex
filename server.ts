@@ -5545,8 +5545,8 @@ app.post('/api/meta/correct', adminMiddleware, async (req, res) => {
 
 // Admin override for TMDB by ID
 app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
-  const { query, type, year, tmdbId, customTitle, customYear, customLogo, path: itemPath, updateLogoOnly, currentData } = req.body;
-  if (!query || (!tmdbId && !customTitle && !customYear && customLogo === undefined)) return res.status(400).json({ error: 'Invalid data' });
+  const { query, type, year, tmdbId, customTitle, customYear, customLogo, customBackdrop, path: itemPath, updateLogoOnly, updateBackdropOnly, currentData } = req.body;
+  if (!query || (!tmdbId && !customTitle && !customYear && customLogo === undefined && customBackdrop === undefined)) return res.status(400).json({ error: 'Invalid data' });
 
   try {
     const lowerQuery = query.toLowerCase().trim();
@@ -5579,6 +5579,21 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
         if (dataToUpdate.images) {
           dataToUpdate.images.logos = [];
         }
+      }
+    };
+
+    const applyBackdropToData = (dataToUpdate: any, backdropVal: any) => {
+      if (typeof backdropVal === 'string' && backdropVal.trim()) {
+        const cleanBackdrop = backdropVal.trim();
+        dataToUpdate.custom_backdrop = cleanBackdrop;
+        dataToUpdate.backdrop_path = cleanBackdrop;
+        dataToUpdate.images = dataToUpdate.images || {};
+        dataToUpdate.images.backdrops = dataToUpdate.images.backdrops || [];
+        dataToUpdate.images.backdrops = dataToUpdate.images.backdrops.filter((b: any) => b.file_path !== cleanBackdrop);
+        dataToUpdate.images.backdrops.unshift({ file_path: cleanBackdrop });
+      } else if (backdropVal === '' || backdropVal === null) {
+        dataToUpdate.custom_backdrop = '';
+        dataToUpdate.backdrop_path = '';
       }
     };
 
@@ -5642,8 +5657,8 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
 
     const isMovieCategory = (type || '').toUpperCase() === 'MOVIES';
 
-    if (updateLogoOnly || ((customTitle || customYear || customLogo !== undefined) && !tmdbId)) {
-      // Just override title/year/logo in existing cache or create a mock
+    if (updateLogoOnly || updateBackdropOnly || ((customTitle || customYear || customLogo !== undefined || customBackdrop !== undefined) && !tmdbId)) {
+      // Just override title/year/logo/backdrop in existing cache or create a mock
       let data = { ...(tmdbCache[cacheKey] || tmdbCache[baseKey] || (pathKey1 ? tmdbCache[pathKey1] : null) || currentData || {}) };
       
       if (customTitle) {
@@ -5661,6 +5676,9 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
       if (customLogo !== undefined) {
         applyLogoToData(data, customLogo);
       }
+      if (customBackdrop !== undefined) {
+        applyBackdropToData(data, customBackdrop);
+      }
       
       try {
           setOverriddenDataInCache(data);
@@ -5675,7 +5693,7 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
       }
       
       try {
-          addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'}, Logo: ${customLogo !== undefined ? (customLogo || 'Removed') : 'N/A'})`);
+          addLog('TMDB Overridden', 'Admin', `Overrode TMDB data for query: ${query} (Custom title: ${customTitle || 'N/A'}, Custom year: ${customYear || 'N/A'}, Logo: ${customLogo !== undefined ? (customLogo || 'Removed') : 'N/A'}, Backdrop: ${customBackdrop !== undefined ? customBackdrop : 'N/A'})`);
       } catch (err: any) {
           console.error("Error in addLog:", err.message);
       }
@@ -5722,6 +5740,9 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
        }
        if (customLogo !== undefined) {
          applyLogoToData(data, customLogo);
+       }
+       if (customBackdrop !== undefined) {
+         applyBackdropToData(data, customBackdrop);
        }
        
        const tmdbKey = process.env.TMDB_API_KEY;
