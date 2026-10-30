@@ -102,7 +102,7 @@ async function fetchSeriesDetails(
   try {
     const res = await axios.get(`${cleanUrl}/Items/${seriesId}`, {
       params: {
-        fields: "ProductionYear,PremiereDate",
+        fields: "ProductionYear,PremiereDate,Name",
         ...(userId ? { userId } : {}),
         api_key: apiKey
       },
@@ -118,7 +118,7 @@ async function fetchSeriesDetails(
   try {
     const res = await axios.get(`${cleanUrl}/Shows/${seriesId}`, {
       params: {
-        fields: "ProductionYear,PremiereDate",
+        fields: "ProductionYear,PremiereDate,Name",
         ...(userId ? { userId } : {}),
         api_key: apiKey
       },
@@ -135,7 +135,7 @@ async function fetchSeriesDetails(
     try {
       const res = await axios.get(`${cleanUrl}/Users/${userId}/Items/${seriesId}`, {
         params: {
-          fields: "ProductionYear,PremiereDate",
+          fields: "ProductionYear,PremiereDate,Name",
           api_key: apiKey
         },
         headers,
@@ -148,6 +148,59 @@ async function fetchSeriesDetails(
   }
 
   return null;
+}
+
+/**
+ * Helper to fetch the latest episode added to a season on Jellyfin.
+ * Identifies the latest added episode (e.g. S07E07) rather than generic 'Season 7'.
+ */
+async function fetchLatestEpisodeForSeason(
+  cleanUrl: string,
+  seriesId: string,
+  seasonId: string,
+  userId: string | undefined,
+  headers: Record<string, string>,
+  apiKey: string
+): Promise<{ latestEp: any, addedText: string } | null> {
+  try {
+    const res = await axios.get(`${cleanUrl}/Shows/${seriesId}/Episodes`, {
+      params: {
+        userId,
+        seasonId,
+        fields: "IndexNumber,ParentIndexNumber,DateCreated,MediaSources,MediaStreams,Name",
+        api_key: apiKey
+      },
+      headers,
+      timeout: 25000
+    });
+    const eps: any[] = res.data?.Items || res.data?.items || (Array.isArray(res.data) ? res.data : []);
+    if (eps.length === 0) return null;
+
+    let maxTime = 0;
+    for (const ep of eps) {
+      const t = ep.DateCreated ? new Date(ep.DateCreated).getTime() : 0;
+      if (t > maxTime) maxTime = t;
+    }
+
+    const recentBatch = eps.filter(ep => {
+      const t = ep.DateCreated ? new Date(ep.DateCreated).getTime() : 0;
+      return (maxTime - t) < 24 * 60 * 60 * 1000;
+    });
+
+    recentBatch.sort((a, b) => (b.IndexNumber ?? 0) - (a.IndexNumber ?? 0));
+    const latestEp = recentBatch[0] || eps[eps.length - 1];
+
+    const s = latestEp.ParentIndexNumber !== undefined && latestEp.ParentIndexNumber !== null ? String(latestEp.ParentIndexNumber).padStart(2, "0") : "";
+    const e = latestEp.IndexNumber !== undefined && latestEp.IndexNumber !== null ? String(latestEp.IndexNumber).padStart(2, "0") : "";
+    const addedText = s && e ? `S${s}E${e} added` : (e ? `Episode ${latestEp.IndexNumber} added` : "Episode added");
+
+    return {
+      latestEp,
+      addedText
+    };
+  } catch (err) {
+    return null;
+  }
 }
 
 async function fetchAndMatchJellyfin(
@@ -360,6 +413,9 @@ async function fetchAndMatchJellyfin(
             } else {
               seriesYearCache.set(seriesId, targetYear);
             }
+            if ((!name || /^(season\s*\d+|s\d+|episode\s*\d+|e\d+)$/i.test(name.trim())) && (seriesData?.Name || seriesData?.name)) {
+              name = seriesData.Name || seriesData.name;
+            }
           }
         }
 
@@ -372,8 +428,66 @@ async function fetchAndMatchJellyfin(
         } else {
            addedText = 'Episode added';
         }
+      } else if (itemType === 'season') {
+        name = seriesName || name;
+        isSeries = true;
+        targetYear = seriesYear ?? null;
+
+        if (seriesId) {
+          if (seriesYearCache.has(seriesId)) {
+            const cachedYear = seriesYearCache.get(seriesId);
+            if (cachedYear) targetYear = cachedYear;
+          } else {
+            const seriesData = await fetchSeriesDetails(cleanUrl, seriesId, userId, headers, apiKey);
+            const sYear = seriesData?.ProductionYear || seriesData?.productionYear ||
+              (seriesData?.PremiereDate ? new Date(seriesData.PremiereDate).getFullYear() : null) ||
+              (seriesData?.premiereDate ? new Date(seriesData.premiereDate).getFullYear() : null);
+            if (sYear) {
+              targetYear = sYear;
+              seriesYearCache.set(seriesId, sYear);
+            } else {
+              seriesYearCache.set(seriesId, targetYear);
+            }
+            if ((!name || /^(season\s*\d+|s\d+)$/i.test(name.trim())) && (seriesData?.Name || seriesData?.name)) {
+              name = seriesData.Name || seriesData.name;
+            }
+          }
+        }
+
+        if (seriesId && (item.Id || item.id)) {
+          const epInfo = await fetchLatestEpisodeForSeason(cleanUrl, seriesId, item.Id || item.id, userId, headers, apiKey);
+          if (epInfo?.addedText) {
+            addedText = epInfo.addedText;
+            if (epInfo.latestEp?.MediaSources) {
+              item.MediaSources = epInfo.latestEp.MediaSources;
+            }
+          }
+        }
+
+        if (!addedText || addedText === 'Added') {
+          const seasonNum = indexNumber ?? (item.Name ? item.Name.match(/\d+/)?.[0] : null);
+          if (seasonNum) {
+            addedText = `Season ${seasonNum} added`;
+          } else {
+            addedText = item.Name ? `${item.Name} added` : 'Season added';
+          }
+        }
       } else if (itemType === 'series') {
         isSeries = true;
+      }
+
+      // Universal guard against orphan/unresolved season or episode titles
+      if (/^(season\s*\d+|s\d+|episode\s*\d+|e\d+)$/i.test(name.trim())) {
+        if (seriesName) {
+          name = seriesName;
+          isSeries = true;
+        } else if (seriesId) {
+          const seriesData = await fetchSeriesDetails(cleanUrl, seriesId, userId, headers, apiKey);
+          if (seriesData?.Name || seriesData?.name) {
+            name = seriesData.Name || seriesData.name;
+            isSeries = true;
+          }
+        }
       }
 
       if (targetYear && !name.includes(String(targetYear))) {
@@ -500,6 +614,7 @@ async function fetchAndMatchJellyfin(
 
         for (const c of content) {
           if (!c.is_dir) continue;
+          if (/^(season\s*\d+|s\d+|specials)$/i.test(c.name.trim())) continue;
 
           const candNorm = normalizeStr(c.name);
           let score = 0;
