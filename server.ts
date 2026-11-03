@@ -1327,7 +1327,11 @@ function convertSrtToVtt(srtText: string): string {
     .replace(/\\N/gi, '\n')
     .replace(/\{[^}]+\}/g, '');
 
-  return `WEBVTT\n\n${normalized}`.trim() + '\n';
+  // Filter out promotional and ad cues
+  const blocks = normalized.split(/\n\s*\n/);
+  const cleanBlocks = blocks.filter(b => !/store\.wyzie\.io|wyzie\.io/i.test(b));
+
+  return `WEBVTT\n\n${cleanBlocks.join('\n\n')}`.trim() + '\n';
 }
 
 function convertSubtitlesToVtt(rawText: string): string {
@@ -1350,105 +1354,20 @@ function convertSubtitlesToVtt(rawText: string): string {
 
   // 2. Check if it's already compliant WebVTT (starts with WEBVTT)
   if (text.startsWith('WEBVTT')) {
-    return text
+    const blocks = text.split(/\n\s*\n/);
+    const cleanBlocks = blocks.filter(b => !/store\.wyzie\.io|wyzie\.io/i.test(b));
+    return cleanBlocks.join('\n\n')
       .replace(/\\h/g, ' ')
       .replace(/\\N/gi, '\n')
-      .replace(/\{[^}]+\}/g, '');
+      .replace(/\{[^}]+\}/g, '')
+      .trim() + '\n';
   }
 
   // 3. Otherwise treat as SRT or generic cue-based format
   return convertSrtToVtt(text);
 }
 
-app.get('/api/subtitles', async (req, res) => {
-  try {
-    const { tmdb_id, type, season, episode, language = 'en' } = req.query;
-    if (!tmdb_id) return res.status(400).json({ error: 'tmdb_id is required' });
-
-    // Check local cache first
-    const subsDir = path.join(process.cwd(), 'data', 'subtitles');
-    if (!fs.existsSync(subsDir)) {
-      fs.mkdirSync(subsDir, { recursive: true });
-    }
-    const cacheKey = `${tmdb_id}_${type}_${season || 0}_${episode || 0}_${language}.vtt`;
-    const cachePath = path.join(subsDir, cacheKey);
-
-    if (fs.existsSync(cachePath)) {
-      let cachedSub = fs.readFileSync(cachePath, 'utf8');
-      
-      // If cached file is unconverted ASS/SSA or malformed, convert it and update the cache file
-      if (
-        cachedSub.includes('[Script Info]') ||
-        cachedSub.includes('[Events]') ||
-        /^\s*Dialogue:\s*/m.test(cachedSub) ||
-        !cachedSub.trim().startsWith('WEBVTT')
-      ) {
-        cachedSub = convertSubtitlesToVtt(cachedSub);
-        try {
-          fs.writeFileSync(cachePath, cachedSub, 'utf8');
-        } catch (e) {
-          console.error('Failed to update subtitle cache file:', e);
-        }
-      } else {
-        cachedSub = cachedSub.replace(/\\h/g, ' ').replace(/\{[^}]+\}/g, '');
-      }
-
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send(cachedSub);
-    }
-
-    const apiKey = process.env.WYZIE_API_KEY || '';
-
-    // Wyzie Subs API Search
-    let searchUrl = `https://sub.wyzie.io/search?id=${tmdb_id}&language=${language}`;
-    if (apiKey) searchUrl += `&key=${apiKey}`;
-    if (type === 'episode' || type === 'tv') {
-      if (season) searchUrl += `&season=${season}`;
-      if (episode) searchUrl += `&episode=${episode}`;
-    }
-
-    const searchResponse = await fetch(searchUrl);
-
-    if (!searchResponse.ok) {
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send('WEBVTT\n\nNOTE\nFailed to search subtitles');
-    }
-
-    const searchData = await searchResponse.json();
-
-    if (!Array.isArray(searchData) || searchData.length === 0) {
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send('WEBVTT\n\nNOTE\nNo subtitles found');
-    }
-
-    const downloadLink = searchData[0].url;
-    
-    if (downloadLink) {
-      const subRes = await fetch(downloadLink);
-      let subText = await subRes.text();
-      
-      // Convert ASS, SSA, or SRT subtitles to compliant WebVTT
-      subText = convertSubtitlesToVtt(subText);
-
-      // Save to cache
-      fs.writeFileSync(cachePath, subText, 'utf8');
-
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send(subText);
-    } else {
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send('WEBVTT\n\nNOTE\nNo download link found');
-    }
-  } catch (error) {
-    console.error('Subtitle API error:', error);
-    res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-    return res.send('WEBVTT\n\nNOTE\nInternal error');
-  }
-});
-
-// --- SUBTITLE DOWNLOAD & MATCHING LOGIC (Wyzie API) ---
-let subtitleDownloadsDaily: Record<string, { date: string; count: number; timestamps: number[] }> = {};
-
+// --- SUBTITLE MATCHING LOGIC (Wyzie API) ---
 function detectSourceTag(filename: string): 'WEBRIP' | 'WEB-DL' | 'BLURAY' | null {
   const clean = String(filename || '').toLowerCase();
   if (/web[-._]?rip/i.test(clean)) return 'WEBRIP';
@@ -1538,6 +1457,193 @@ function findBestEnglishSubtitle(subtitles: any[], filename: string): any | null
   scored.sort((a, b) => b.score - a.score);
   return scored[0]?.sub || candidates[0];
 }
+
+app.get('/api/subtitles', async (req, res) => {
+  try {
+    const { tmdb_id, type, season, episode, language = 'en', filename = '', url: customUrl } = req.query;
+    
+    // Check local cache directory
+    const subsDir = path.join(process.cwd(), 'data', 'subtitles');
+    if (!fs.existsSync(subsDir)) {
+      fs.mkdirSync(subsDir, { recursive: true });
+    }
+
+    // If a direct Wyzie subtitle URL was provided
+    if (customUrl) {
+      const targetUrl = String(customUrl);
+      const urlHash = crypto.createHash('md5').update(targetUrl).digest('hex');
+      const directCachePath = path.join(subsDir, `wyzie_${urlHash}.vtt`);
+
+      if (fs.existsSync(directCachePath)) {
+        res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+        return res.send(fs.readFileSync(directCachePath, 'utf8'));
+      }
+
+      try {
+        const subRes = await fetch(targetUrl);
+        if (subRes.ok) {
+          let subText = await subRes.text();
+          subText = convertSubtitlesToVtt(subText);
+          fs.writeFileSync(directCachePath, subText, 'utf8');
+          res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+          return res.send(subText);
+        }
+      } catch (err) {
+        console.error('Failed to fetch direct subtitle URL:', err);
+      }
+    }
+
+    if (!tmdb_id) return res.status(400).json({ error: 'tmdb_id is required' });
+
+    const safeFilenameHash = filename ? crypto.createHash('md5').update(String(filename)).digest('hex').substring(0, 8) : 'default';
+    const cacheKey = `${tmdb_id}_${type}_${season || 0}_${episode || 0}_${language}_${safeFilenameHash}.vtt`;
+    const cachePath = path.join(subsDir, cacheKey);
+
+    if (fs.existsSync(cachePath)) {
+      let cachedSub = fs.readFileSync(cachePath, 'utf8');
+      
+      // If cached file is unconverted ASS/SSA or malformed, convert it and update the cache file
+      if (
+        cachedSub.includes('[Script Info]') ||
+        cachedSub.includes('[Events]') ||
+        /^\s*Dialogue:\s*/m.test(cachedSub) ||
+        !cachedSub.trim().startsWith('WEBVTT')
+      ) {
+        cachedSub = convertSubtitlesToVtt(cachedSub);
+        try {
+          fs.writeFileSync(cachePath, cachedSub, 'utf8');
+        } catch (e) {
+          console.error('Failed to update subtitle cache file:', e);
+        }
+      } else {
+        cachedSub = cachedSub.replace(/\\h/g, ' ').replace(/\{[^}]+\}/g, '');
+      }
+
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send(cachedSub);
+    }
+
+    const apiKey = process.env.WYZIE_API_KEY || '';
+
+    // Wyzie Subs API Search
+    let searchUrl = `https://sub.wyzie.io/search?id=${tmdb_id}&language=${language}`;
+    if (apiKey) searchUrl += `&key=${apiKey}`;
+    if (type === 'episode' || type === 'tv') {
+      if (season) searchUrl += `&season=${season}`;
+      if (episode) searchUrl += `&episode=${episode}`;
+    }
+
+    const searchResponse = await fetch(searchUrl);
+
+    if (!searchResponse.ok) {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send('WEBVTT\n\nNOTE\nFailed to search subtitles');
+    }
+
+    const searchData = await searchResponse.json();
+
+    if (!Array.isArray(searchData) || searchData.length === 0) {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send('WEBVTT\n\nNOTE\nNo subtitles found');
+    }
+
+    // Pick best match using filename and scoring logic
+    const bestSub = findBestEnglishSubtitle(searchData, String(filename || ''));
+    const downloadLink = bestSub?.url || searchData[0]?.url;
+    
+    if (downloadLink) {
+      const subRes = await fetch(downloadLink);
+      let subText = await subRes.text();
+      
+      // Convert ASS, SSA, or SRT subtitles to compliant WebVTT
+      subText = convertSubtitlesToVtt(subText);
+
+      // Save to cache
+      fs.writeFileSync(cachePath, subText, 'utf8');
+
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send(subText);
+    } else {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      return res.send('WEBVTT\n\nNOTE\nNo download link found');
+    }
+  } catch (error) {
+    console.error('Subtitle API error:', error);
+    res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+    return res.send('WEBVTT\n\nNOTE\nInternal error');
+  }
+});
+
+// List all available subtitles from Wyzie Subs with ranked best match
+app.get('/api/subtitles/list', async (req, res) => {
+  try {
+    const { tmdb_id, type, season, episode, language = 'en', filename = '' } = req.query;
+    if (!tmdb_id) return res.status(400).json({ error: 'tmdb_id is required' });
+
+    const apiKey = process.env.WYZIE_API_KEY || '';
+    let searchUrl = `https://sub.wyzie.io/search?id=${tmdb_id}&language=${language}`;
+    if (apiKey) searchUrl += `&key=${apiKey}`;
+    if (type === 'episode' || type === 'tv') {
+      if (season !== undefined && season !== null && season !== '') searchUrl += `&season=${season}`;
+      if (episode !== undefined && episode !== null && episode !== '') searchUrl += `&episode=${episode}`;
+    }
+
+    let searchResponse: any = null;
+    try {
+      searchResponse = await fetch(searchUrl);
+    } catch (e: any) {
+      console.warn('Wyzie search fetch failed:', e.message);
+      return res.json({ subtitles: [], bestMatch: null });
+    }
+
+    if (!searchResponse || !searchResponse.ok) {
+      return res.json({ subtitles: [], bestMatch: null });
+    }
+
+    const searchData = await searchResponse.json().catch(() => null);
+    if (!Array.isArray(searchData) || searchData.length === 0) {
+      return res.json({ subtitles: [], bestMatch: null });
+    }
+
+    // Identify best match using tag & score
+    const bestSub = findBestEnglishSubtitle(searchData, String(filename || ''));
+
+    const list = searchData.map((s: any, idx: number) => {
+      const isBest = bestSub && (s.id === bestSub.id || s.url === bestSub.url);
+      const label = s.display || s.language || 'English';
+      const releaseName = s.release || (Array.isArray(s.releases) ? s.releases.join(', ') : '') || s.origin || '';
+      return {
+        id: s.id || `wyzie-${idx}`,
+        url: s.url,
+        display: label,
+        language: s.language || 'en',
+        release: releaseName,
+        origin: s.origin || '',
+        isHearingImpaired: !!s.isHearingImpaired,
+        downloadCount: s.downloadCount || 0,
+        isBestMatch: isBest,
+        vttUrl: `/api/subtitles?tmdb_id=${tmdb_id}&type=${type || ''}&season=${season || ''}&episode=${episode || ''}&language=${s.language || 'en'}&url=${encodeURIComponent(s.url)}`
+      };
+    });
+
+    list.sort((a: any, b: any) => {
+      if (a.isBestMatch) return -1;
+      if (b.isBestMatch) return 1;
+      return (b.downloadCount || 0) - (a.downloadCount || 0);
+    });
+
+    return res.json({
+      subtitles: list,
+      bestMatch: list.find((s: any) => s.isBestMatch) || list[0] || null
+    });
+  } catch (error: any) {
+    console.error('Subtitle list API error:', error);
+    return res.status(500).json({ error: error.message, subtitles: [] });
+  }
+});
+
+// --- SUBTITLE DOWNLOAD & QUOTA (Wyzie API) ---
+let subtitleDownloadsDaily: Record<string, { date: string; count: number; timestamps: number[] }> = {};
 
 // Check Subtitle Daily Quota
 app.get('/api/subtitles/quota', async (req, res) => {

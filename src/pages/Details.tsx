@@ -3749,18 +3749,19 @@ export default function Details() {
         {playingUrl && (() => {
           const ep = playingItemData?.tmdbEpisode;
           let playerTitle = name;
+          const filename = playingItemData?.file?.name || playingItemData?.rawItem?.name || playingUrl.split('/').pop() || '';
           let subtitles = [];
           
           if (tmdb) {
             const tmdbId = tmdb.id;
-            let query = `?tmdb_id=${tmdbId}&type=${ep ? 'episode' : 'movie'}`;
+            let query = `?tmdb_id=${tmdbId}&type=${ep ? 'episode' : 'movie'}&filename=${encodeURIComponent(filename)}`;
             if (ep) {
               query += `&season=${ep.season_number}&episode=${ep.episode_number}`;
               playerTitle = `${name} - S${ep.season_number}E${ep.episode_number}: ${ep.name || 'Episode ' + ep.episode_number}`;
             }
             
             subtitles = [
-              { src: `/api/subtitles${query}&language=en`, label: 'English', srclang: 'en' }
+              { src: `/api/subtitles${query}&language=en`, label: 'English (Wyzie)', srclang: 'en' }
             ];
           }
 
@@ -3768,6 +3769,12 @@ export default function Details() {
             <VideoPlayer 
               src={playingUrl} 
               title={playerTitle} 
+              poster={backdropUrl || posterUrl}
+              tmdbId={tmdb?.id}
+              mediaType={ep ? 'episode' : 'movie'}
+              season={ep?.season_number}
+              episode={ep?.episode_number}
+              filename={filename}
               subtitles={subtitles}
               onClose={() => { setPlayingUrl(''); setPlayingItemData(null); }} 
             />
