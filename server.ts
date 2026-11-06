@@ -26,6 +26,7 @@ import Fuse from 'fuse.js';
 import dns from 'dns';
 import http from 'http';
 import https from 'https';
+import { spawn } from 'child_process';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -1367,6 +1368,68 @@ function convertSubtitlesToVtt(rawText: string): string {
   return convertSrtToVtt(text);
 }
 
+// Shifts all WebVTT cue timestamps by offset (in seconds) so subtitles stay in perfect sync when seeking
+function shiftVttBlocks(vtt: string, offset: number): string {
+  if (!offset || isNaN(offset) || offset === 0) return vtt;
+
+  const timeRegex = /(?:(\d{2,}):)?(\d{2}):(\d{2})\.(\d{3})\s+-->\s+(?:(\d{2,}):)?(\d{2}):(\d{2})\.(\d{3})(.*)/;
+  function parseSec(h?: string, m?: string, s?: string, ms?: string) {
+    return (h ? parseInt(h, 10) : 0) * 3600 + (m ? parseInt(m, 10) : 0) * 60 + (s ? parseInt(s, 10) : 0) + (ms ? parseInt(ms, 10) : 0) / 1000;
+  }
+  function formatSec(t: number) {
+    if (t < 0) t = 0;
+    const totalMs = Math.round(t * 1000);
+    const ms = totalMs % 1000;
+    const totalSec = Math.floor(totalMs / 1000);
+    const s = totalSec % 60;
+    const m = Math.floor(totalSec / 60) % 60;
+    const h = Math.floor(totalSec / 3600);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+  }
+
+  const rawBlocks = vtt.trim().split(/\r?\n\s*\r?\n/);
+  const outBlocks: string[] = [];
+
+  for (let i = 0; i < rawBlocks.length; i++) {
+    const block = rawBlocks[i].trim();
+    if (!block) continue;
+    if (i === 0 && block.startsWith('WEBVTT')) {
+      outBlocks.push(block);
+      continue;
+    }
+    if (block.startsWith('NOTE') || block.startsWith('STYLE') || block.startsWith('REGION')) {
+      outBlocks.push(block);
+      continue;
+    }
+
+    const lines = block.split(/\r?\n/);
+    const timeLineIdx = lines.findIndex(l => timeRegex.test(l));
+    if (timeLineIdx === -1) {
+      outBlocks.push(block);
+      continue;
+    }
+
+    const timeLine = lines[timeLineIdx];
+    const match = timeLine.match(timeRegex);
+    if (!match) continue;
+
+    const startSec = parseSec(match[1], match[2], match[3], match[4]);
+    const endSec = parseSec(match[5], match[6], match[7], match[8]);
+    const settings = match[9] || '';
+
+    const newStart = startSec - offset;
+    const newEnd = endSec - offset;
+
+    // Retain cue if it has active presentation after the seek timestamp
+    if (newEnd > 0) {
+      lines[timeLineIdx] = `${formatSec(Math.max(0, newStart))} --> ${formatSec(newEnd)}${settings}`;
+      outBlocks.push(lines.join('\n'));
+    }
+  }
+
+  return outBlocks.join('\n\n') + '\n';
+}
+
 // --- SUBTITLE MATCHING LOGIC (Wyzie API) ---
 function detectSourceTag(filename: string): 'WEBRIP' | 'WEB-DL' | 'BLURAY' | null {
   const clean = String(filename || '').toLowerCase();
@@ -1458,10 +1521,323 @@ function findBestEnglishSubtitle(subtitles: any[], filename: string): any | null
   return scored[0]?.sub || candidates[0];
 }
 
+// Zero-copy Fragmented MP4 Transmuxer for MKV streaming on Android and PC browsers
+app.get('/api/stream/mkv', (req, res) => {
+  const { url, ss, audio } = req.query;
+  if (!url || typeof url !== 'string') {
+    return res.status(400).send('Missing url parameter');
+  }
+
+  let inputSource = url;
+  if (inputSource.startsWith('/')) {
+    if (!fs.existsSync(inputSource)) {
+      const port = process.env.PORT || 3000;
+      inputSource = `http://127.0.0.1:${port}${inputSource}`;
+    }
+  }
+
+  const ssNum = parseFloat(String(ss || '0'));
+  const audioMode = String(audio || 'aac');
+
+  const args: string[] = [
+    '-hide_banner',
+    '-loglevel', 'error',
+  ];
+
+  // Fast seek if offset is provided
+  if (!isNaN(ssNum) && ssNum > 0) {
+    args.push('-ss', ssNum.toString());
+  }
+
+  // Network reconnection resilience and Cloudflare CDN bypass for remote HTTP(S) video URLs
+  if (inputSource.startsWith('http://') || inputSource.startsWith('https://')) {
+    args.push(
+      '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      '-headers', 'Accept: */*\r\nConnection: keep-alive\r\n\r\n',
+      '-reconnect', '1',
+      '-reconnect_streamed', '1',
+      '-reconnect_delay_max', '5'
+    );
+  }
+
+  args.push(
+    '-i', inputSource,
+    '-map', '0:v:0',
+    '-c:v', 'copy',
+    '-map', '0:a:0?',
+    '-c:a', 'copy',
+    '-sn'
+  );
+
+  // Fragmented MP4 flags for direct HTML5 streaming
+  args.push(
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+    '-avoid_negative_ts', 'make_zero',
+    '-f', 'mp4',
+    'pipe:1'
+  );
+
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Accept-Ranges', 'none');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  let clientDisconnected = false;
+  const ffmpeg = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+  ffmpeg.stdout.pipe(res);
+
+  ffmpeg.stderr.on('data', (chunk) => {
+    // Normal socket closure happens when user seeks, pauses or navigates away
+    if (clientDisconnected || req.destroyed || res.writableEnded) return;
+    const msg = chunk.toString();
+    if (msg.includes('Broken pipe') || msg.includes('Conversion failed') || msg.includes('Input/output error')) {
+      return;
+    }
+    if (msg.trim()) {
+      console.log(`[MKV Transmuxer] ${msg.trim()}`);
+    }
+  });
+
+  const cleanup = () => {
+    clientDisconnected = true;
+    try {
+      if (!ffmpeg.killed) {
+        ffmpeg.kill('SIGKILL');
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  req.on('close', cleanup);
+  res.on('finish', cleanup);
+  res.on('error', cleanup);
+  ffmpeg.stdout.on('error', cleanup);
+  ffmpeg.on('error', (err) => {
+    if (clientDisconnected || req.destroyed) return;
+    console.error('[FFmpeg MKV Transmuxer Error]:', err);
+    if (!res.headersSent) {
+      res.status(500).send('FFmpeg stream error');
+    }
+  });
+});
+
+// Duration probe cache to avoid repetitive ffprobe calls
+const durationCache = new Map<string, number>();
+
+// Probe exact duration of media streams (especially MKV / fragmented MP4)
+app.get('/api/stream/duration', (req, res) => {
+  const { url } = req.query;
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'Missing url parameter' });
+  }
+
+  let inputSource = url;
+  if (inputSource.startsWith('/')) {
+    if (!fs.existsSync(inputSource)) {
+      const port = process.env.PORT || 3000;
+      inputSource = `http://127.0.0.1:${port}${inputSource}`;
+    }
+  }
+
+  if (durationCache.has(inputSource)) {
+    return res.json({ duration: durationCache.get(inputSource) });
+  }
+
+  const args: string[] = [
+    '-v', 'error',
+    '-show_entries', 'format=duration',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+  ];
+
+  if (inputSource.startsWith('http://') || inputSource.startsWith('https://')) {
+    args.push(
+      '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      '-headers', 'Accept: */*\r\nConnection: keep-alive\r\n\r\n'
+    );
+  }
+
+  args.push(inputSource);
+
+  try {
+    const ffprobe = spawn('ffprobe', args);
+    let output = '';
+
+    const timer = setTimeout(() => {
+      try {
+        ffprobe.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
+    }, 10000);
+
+    ffprobe.stdout.on('data', (d) => {
+      output += d.toString();
+    });
+
+    ffprobe.on('close', (code) => {
+      clearTimeout(timer);
+      const parsed = parseFloat(output.trim());
+      if (!isNaN(parsed) && parsed > 0) {
+        durationCache.set(inputSource, parsed);
+        return res.json({ duration: parsed });
+      }
+      return res.json({ duration: null });
+    });
+
+    ffprobe.on('error', () => {
+      clearTimeout(timer);
+      return res.json({ duration: null });
+    });
+  } catch {
+    return res.json({ duration: null });
+  }
+});
+
+// Keyframe index cache to align MKV seek timestamps and guarantee frame-accurate subtitle synchronization
+const keyframeIndexCache = new Map<string, number[]>();
+
+async function getNearestKeyframe(url: string, targetTime: number): Promise<number> {
+  if (targetTime <= 0) return 0;
+
+  let inputSource = url;
+  if (inputSource.startsWith('/')) {
+    if (!fs.existsSync(inputSource)) {
+      const port = process.env.PORT || 3000;
+      inputSource = `http://127.0.0.1:${port}${inputSource}`;
+    }
+  }
+
+  // Check cache for keyframe at or immediately before targetTime
+  const cachedList = keyframeIndexCache.get(inputSource);
+  if (cachedList && cachedList.length > 0) {
+    const valid = cachedList.filter(k => k <= targetTime);
+    if (valid.length > 0) {
+      const best = valid[valid.length - 1];
+      // If the best cached keyframe is within 6 seconds of targetTime, use it immediately
+      if (targetTime - best <= 6.0) {
+        return best;
+      }
+    }
+  }
+
+  const rangeStart = Math.max(0, targetTime - 8);
+  const rangeEnd = targetTime + 0.5;
+
+  const args: string[] = [
+    '-v', 'error',
+    '-skip_frame', 'nokey',
+    '-select_streams', 'v:0',
+    '-show_entries', 'frame=pkt_pts_time',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+  ];
+
+  if (inputSource.startsWith('http://') || inputSource.startsWith('https://')) {
+    args.push(
+      '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      '-headers', 'Accept: */*\r\nConnection: keep-alive\r\n\r\n'
+    );
+  }
+
+  args.push('-read_intervals', `${rangeStart}%${rangeEnd}`, inputSource);
+
+  return new Promise<number>((resolve) => {
+    try {
+      const ffprobe = spawn('ffprobe', args);
+      let output = '';
+
+      const timer = setTimeout(() => {
+        try { ffprobe.kill('SIGKILL'); } catch {}
+        resolve(targetTime);
+      }, 4000);
+
+      ffprobe.stdout.on('data', (d) => {
+        output += d.toString();
+      });
+
+      ffprobe.on('close', () => {
+        clearTimeout(timer);
+        const parsed = output
+          .split('\n')
+          .map(s => parseFloat(s.trim()))
+          .filter(n => !isNaN(n) && n >= 0);
+
+        if (parsed.length > 0) {
+          const currentList = keyframeIndexCache.get(inputSource) || [];
+          const merged = Array.from(new Set([...currentList, ...parsed])).sort((a, b) => a - b);
+          keyframeIndexCache.set(inputSource, merged);
+
+          const valid = parsed.filter(k => k <= targetTime);
+          if (valid.length > 0) {
+            return resolve(valid[valid.length - 1]);
+          }
+        }
+        resolve(targetTime);
+      });
+
+      ffprobe.on('error', () => {
+        clearTimeout(timer);
+        resolve(targetTime);
+      });
+    } catch {
+      resolve(targetTime);
+    }
+  });
+}
+
+// Fast keyframe lookup endpoint for zero-delay stream seeking and subtitle sync
+app.get('/api/stream/keyframe', async (req, res) => {
+  const { url, time } = req.query;
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'Missing url parameter' });
+  }
+
+  const targetTime = parseFloat(String(time || '0'));
+  if (isNaN(targetTime) || targetTime <= 0) {
+    return res.json({ keyframe: 0 });
+  }
+
+  try {
+    const kf = await getNearestKeyframe(url, targetTime);
+    return res.json({ keyframe: kf });
+  } catch {
+    return res.json({ keyframe: targetTime });
+  }
+});
+
 app.get('/api/subtitles', async (req, res) => {
   try {
-    const { tmdb_id, type, season, episode, language = 'en', filename = '', url: customUrl } = req.query;
-    
+    const { tmdb_id, type, season, episode, language = 'en', filename = '', url: customUrl, offset, sub_delay, video_url } = req.query;
+    let offsetSec = parseFloat(String(offset || '0'));
+    const subDelaySec = parseFloat(String(sub_delay || '0'));
+
+    // Align offset to exact keyframe for MKV transmuxed streams so subtitles match with frame-level accuracy
+    if (!isNaN(offsetSec) && offsetSec > 0 && video_url && typeof video_url === 'string') {
+      const isMkvStream = video_url.toLowerCase().includes('.mkv') || !video_url.toLowerCase().includes('.mp4');
+      if (isMkvStream) {
+        try {
+          const exactKeyframe = await getNearestKeyframe(video_url, offsetSec);
+          if (typeof exactKeyframe === 'number' && exactKeyframe >= 0 && exactKeyframe <= offsetSec) {
+            offsetSec = exactKeyframe;
+          }
+        } catch {
+          // fallback to raw offsetSec
+        }
+      }
+    }
+
+    const totalShift = offsetSec - (isNaN(subDelaySec) ? 0 : subDelaySec);
+
+    const sendVtt = (text: string) => {
+      const shifted = (!isNaN(totalShift) && totalShift !== 0) ? shiftVttBlocks(text, totalShift) : text;
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.send(shifted);
+    };
+
     // Check local cache directory
     const subsDir = path.join(process.cwd(), 'data', 'subtitles');
     if (!fs.existsSync(subsDir)) {
@@ -1475,8 +1851,7 @@ app.get('/api/subtitles', async (req, res) => {
       const directCachePath = path.join(subsDir, `wyzie_${urlHash}.vtt`);
 
       if (fs.existsSync(directCachePath)) {
-        res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-        return res.send(fs.readFileSync(directCachePath, 'utf8'));
+        return sendVtt(fs.readFileSync(directCachePath, 'utf8'));
       }
 
       try {
@@ -1485,8 +1860,7 @@ app.get('/api/subtitles', async (req, res) => {
           let subText = await subRes.text();
           subText = convertSubtitlesToVtt(subText);
           fs.writeFileSync(directCachePath, subText, 'utf8');
-          res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-          return res.send(subText);
+          return sendVtt(subText);
         }
       } catch (err) {
         console.error('Failed to fetch direct subtitle URL:', err);
@@ -1519,8 +1893,7 @@ app.get('/api/subtitles', async (req, res) => {
         cachedSub = cachedSub.replace(/\\h/g, ' ').replace(/\{[^}]+\}/g, '');
       }
 
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send(cachedSub);
+      return sendVtt(cachedSub);
     }
 
     const apiKey = process.env.WYZIE_API_KEY || '';
@@ -1536,15 +1909,13 @@ app.get('/api/subtitles', async (req, res) => {
     const searchResponse = await fetch(searchUrl);
 
     if (!searchResponse.ok) {
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send('WEBVTT\n\nNOTE\nFailed to search subtitles');
+      return sendVtt('WEBVTT\n\nNOTE\nFailed to search subtitles');
     }
 
     const searchData = await searchResponse.json();
 
     if (!Array.isArray(searchData) || searchData.length === 0) {
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send('WEBVTT\n\nNOTE\nNo subtitles found');
+      return sendVtt('WEBVTT\n\nNOTE\nNo subtitles found');
     }
 
     // Pick best match using filename and scoring logic
@@ -1561,11 +1932,9 @@ app.get('/api/subtitles', async (req, res) => {
       // Save to cache
       fs.writeFileSync(cachePath, subText, 'utf8');
 
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send(subText);
+      return sendVtt(subText);
     } else {
-      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-      return res.send('WEBVTT\n\nNOTE\nNo download link found');
+      return sendVtt('WEBVTT\n\nNOTE\nNo download link found');
     }
   } catch (error) {
     console.error('Subtitle API error:', error);

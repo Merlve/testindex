@@ -3749,15 +3749,19 @@ export default function Details() {
         {playingUrl && (() => {
           const ep = playingItemData?.tmdbEpisode;
           let playerTitle = name;
-          const filename = playingItemData?.file?.name || playingItemData?.rawItem?.name || playingUrl.split('/').pop() || '';
+          const filename = playingItemData?.item?.name || playingItemData?.file?.name || playingItemData?.rawItem?.name || playingUrl.split('?')[0].split('/').pop() || '';
           let subtitles = [];
           
+          const sMatch = filename.match(/s(\d+)e(\d+)/i);
+          const seasonNum = ep?.season_number !== undefined ? ep.season_number : (sMatch ? parseInt(sMatch[1], 10) : undefined);
+          const episodeNum = ep?.episode_number !== undefined ? ep.episode_number : (sMatch ? parseInt(sMatch[2], 10) : undefined);
+
           if (tmdb) {
             const tmdbId = tmdb.id;
-            let query = `?tmdb_id=${tmdbId}&type=${ep ? 'episode' : 'movie'}&filename=${encodeURIComponent(filename)}`;
-            if (ep) {
-              query += `&season=${ep.season_number}&episode=${ep.episode_number}`;
-              playerTitle = `${name} - S${ep.season_number}E${ep.episode_number}: ${ep.name || 'Episode ' + ep.episode_number}`;
+            let query = `?tmdb_id=${tmdbId}&type=${ep || isTvMedia ? 'episode' : 'movie'}&filename=${encodeURIComponent(filename)}`;
+            if (seasonNum !== undefined && episodeNum !== undefined) {
+              query += `&season=${seasonNum}&episode=${episodeNum}`;
+              playerTitle = `${name} - S${seasonNum}E${episodeNum}: ${ep?.name || 'Episode ' + episodeNum}`;
             }
             
             subtitles = [
@@ -3765,16 +3769,21 @@ export default function Details() {
             ];
           }
 
+          // Properly resolve runtime for TV episodes (ep.runtime, tmdb.episode_run_time[0]) and movies (tmdb.runtime)
+          const rawRuntime = ep?.runtime || (Array.isArray(tmdb?.episode_run_time) && tmdb.episode_run_time[0]) || tmdb?.runtime;
+          const computedRuntime = (typeof rawRuntime === 'number' && rawRuntime > 0) ? rawRuntime * 60 : undefined;
+
           return (
             <VideoPlayer 
               src={playingUrl} 
               title={playerTitle} 
               poster={backdropUrl || posterUrl}
               tmdbId={tmdb?.id}
-              mediaType={ep ? 'episode' : 'movie'}
-              season={ep?.season_number}
-              episode={ep?.episode_number}
+              mediaType={ep || isTvMedia ? 'episode' : 'movie'}
+              season={seasonNum}
+              episode={episodeNum}
               filename={filename}
+              runtime={computedRuntime}
               subtitles={subtitles}
               onClose={() => { setPlayingUrl(''); setPlayingItemData(null); }} 
             />

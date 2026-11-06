@@ -33,6 +33,10 @@ patch*.js
 query*.cjs
 test*.js
 test*.cjs
+test*
+*.mp4
+*.mkv
+current.txt
 *.db
 *.py
 *.tmp
