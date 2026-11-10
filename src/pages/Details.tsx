@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Play, Download, Copy, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, 
-  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle, Archive, Subtitles
+  X, Edit2, Bookmark, BookmarkCheck, RefreshCw, Check, Film, Tv, MonitorPlay, Sparkles, Loader2, Trash2, Youtube, Eye, EyeOff, User, HardDrive, Search, Folder, Square, CheckSquare, Lock, LogIn, Image as ImageIcon, Type, RotateCcw, AlertCircle, Archive, Subtitles, Home
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue } from 'motion/react';
 import { 
@@ -20,6 +20,7 @@ import {
 import { getGenresWithIds } from '../utils/genres';
 import VideoPlayer from '../components/VideoPlayer';
 import ZipDownloadModal from '../components/ZipDownloadModal';
+import SearchModal from '../components/SearchModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { extractDominantColor, BackdropColorPalette, getCachedPalette, useIsDarkMode } from '../utils/colorExtractor';
 import { markImageLoaded, isImageLoaded } from '../utils/imageCache';
@@ -1278,6 +1279,48 @@ export default function Details() {
   const [loading, setLoading] = useState(!initialTmdb);
   const hasAttemptedRef = useRef<string | null>(null);
 
+  // Cast & Crew state - deferred to prioritize main page elements first
+  const [credits, setCredits] = useState<{ cast: any[]; crew: any[]; created_by?: any[] } | null>(null);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+
+  // Maximum 5 actors and 1 director (director first)
+  const castAndCrew = useMemo(() => {
+    if (!credits) return [];
+
+    // Find 1 director (first in crew where job is Director, Directing, or Creator for TV)
+    const director = credits.crew?.find(
+      (c: any) => c.job === 'Director' || c.department === 'Directing' || c.job === 'Series Director' || c.job === 'Creator'
+    ) || (credits.created_by && Array.isArray(credits.created_by) && credits.created_by.length > 0 ? {
+      id: credits.created_by[0].id,
+      name: credits.created_by[0].name,
+      job: 'Creator',
+      profile_path: credits.created_by[0].profile_path
+    } : null);
+
+    const directorItem = director ? {
+      id: director.id,
+      name: director.name,
+      role: director.job === 'Creator' ? 'Creator' : 'Director',
+      profilePath: director.profile_path,
+      isDirector: true
+    } : null;
+
+    // Up to 5 actors
+    const actors = (credits.cast || [])
+      .filter((a: any) => !directorItem || a.id !== directorItem.id)
+      .slice(0, 5)
+      .map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        role: a.character || 'Actor',
+        profilePath: a.profile_path,
+        isDirector: false
+      }));
+
+    return directorItem ? [directorItem, ...actors] : actors;
+  }, [credits]);
+
   const [baseRefresh, setBaseRefresh] = useState(0);
   const [seasonRefresh, setSeasonRefresh] = useState(0);
 
@@ -1723,6 +1766,40 @@ export default function Details() {
       }
     }
   }, [isMovieCategory, isTvMedia, tmdb?.id, tmdb?.digital_release_date, location.state]);
+
+  // Fetch credits (cast & crew) in a deferred manner to prioritize other critical elements first
+  useEffect(() => {
+    let isMounted = true;
+    const targetId = tmdb?.id || tmdb?.tmdb_id || location.state?.item?.tmdbId || location.state?.item?._jf?.tmdbId;
+    if (!targetId) {
+      setCredits(null);
+      return;
+    }
+
+    // Prioritize loading/rendering other elements first: defer fetch until main DOM has settled
+    const timer = setTimeout(() => {
+      if (!isMounted) return;
+      setLoadingCredits(true);
+      const searchType = isTvMedia ? 'tv' : (category || 'movie');
+      axios.get(`/api/meta/credits?id=${targetId}&type=${encodeURIComponent(searchType)}`)
+        .then(res => {
+          if (isMounted && res.data) {
+            setCredits(res.data);
+          }
+        })
+        .catch(err => {
+          console.warn('Credits load notice:', err.message);
+        })
+        .finally(() => {
+          if (isMounted) setLoadingCredits(false);
+        });
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [tmdb?.id, tmdb?.tmdb_id, isTvMedia, category, location.state?.item]);
 
   // Check Watchlist status
   useEffect(() => {
@@ -2833,7 +2910,36 @@ export default function Details() {
     tmdbCountry
   ].filter(Boolean).join(' | ');
 
-  if (loading) return <DetailsSkeleton />;
+  if (loading) {
+    return (
+      <div className="relative min-h-[100dvh]">
+        {/* Floating Top Nav (Always visible on Details page) */}
+        <div className="fixed top-4 left-4 md:left-6 z-40 pointer-events-auto">
+          <Link
+            to="/"
+            aria-label="Back to Home"
+            title="Home"
+            className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full border border-black/10 dark:border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-xl backdrop-saturate-[180%] shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 text-gray-900 dark:text-white cursor-pointer"
+          >
+            <Home size={20} className="shrink-0" />
+          </Link>
+        </div>
+        <div className="fixed top-4 right-4 md:right-6 z-40 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setShowSearchModal(true)}
+            aria-label="Search"
+            title="Search"
+            className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full border border-black/10 dark:border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-xl backdrop-saturate-[180%] shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 text-gray-900 dark:text-white cursor-pointer"
+          >
+            <Search size={20} className="shrink-0" />
+          </button>
+        </div>
+        <DetailsSkeleton />
+        {showSearchModal && <SearchModal onClose={() => setShowSearchModal(false)} />}
+      </div>
+    );
+  }
 
   const activeBg = colorPalette 
     ? (isDarkMode ? colorPalette.darkBlendBg : colorPalette.rawBg) 
@@ -2916,7 +3022,43 @@ export default function Details() {
           background-color: var(--details-bg) !important;
           color: var(--details-text-primary) !important;
         }
+        .details-nav-icon-btn {
+          background-color: var(--details-surface);
+          border: 1px solid var(--details-border);
+          color: var(--details-text-primary);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18), inset 0 1px 1px 0 rgba(255, 255, 255, 0.16);
+        }
+        .details-nav-icon-btn:hover {
+          background-color: var(--details-surface-hover);
+          border-color: var(--details-accent);
+          color: var(--details-accent);
+          box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25), 0 0 20px var(--details-glow);
+        }
       `}</style>
+
+      {/* Top Floating Glass Navigation Icons (Always visible on Details page) */}
+      <div className="fixed top-4 left-4 md:left-6 z-40 pointer-events-auto">
+        <Link
+          to="/"
+          aria-label="Back to Home"
+          title="Home"
+          className="details-nav-icon-btn flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          <Home size={20} className="shrink-0" />
+        </Link>
+      </div>
+
+      <div className="fixed top-4 right-4 md:right-6 z-40 pointer-events-auto">
+        <button
+          type="button"
+          onClick={() => setShowSearchModal(true)}
+          aria-label="Search"
+          title="Search"
+          className="details-nav-icon-btn flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full backdrop-blur-xl backdrop-saturate-[180%] transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          <Search size={20} className="shrink-0" />
+        </button>
+      </div>
 
       {/* Toast Notification */}
       <AnimatePresence>
@@ -3219,9 +3361,75 @@ export default function Details() {
             </button>
           )}
         </div>
+
+        {/* Cast & Crew Section (Deferred loading: 1 Director first + maximum 5 actors) */}
+        {castAndCrew.length > 0 ? (
+          <div className="w-full max-w-4xl pt-1 pb-3 text-left">
+            <h3 
+              className="text-lg sm:text-xl font-bold tracking-tight mb-3.5 px-1"
+              style={{ color: 'var(--details-text-primary)' }}
+            >
+              Cast & Crew
+            </h3>
+            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-3 pt-1 no-scrollbar scroll-smooth">
+              {castAndCrew.map((person, idx) => (
+                <Link
+                  key={`${person.id}-${person.role}-${idx}`}
+                  to={`/person/${person.id}`}
+                  className="flex flex-col items-center flex-shrink-0 group cursor-pointer w-20 sm:w-24 text-center transition-transform hover:scale-[1.03]"
+                >
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md group-hover:shadow-lg transition-all duration-200 border border-black/10 dark:border-white/10 flex items-center justify-center bg-black/10 dark:bg-white/5 relative">
+                    {person.profilePath ? (
+                      <img
+                        src={`https://image.tmdb.org/t/p/w185${person.profilePath}`}
+                        alt={person.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                        <User className="w-8 h-8 opacity-60" />
+                      </div>
+                    )}
+                  </div>
+                  <span 
+                    className="text-xs sm:text-sm font-semibold tracking-tight mt-2 line-clamp-1 w-full text-center" 
+                    style={{ color: 'var(--details-text-primary)' }}
+                    title={person.name}
+                  >
+                    {person.name}
+                  </span>
+                  <span 
+                    className="text-[11px] sm:text-xs font-medium line-clamp-1 w-full text-center mt-0.5"
+                    style={{ color: 'var(--details-text-secondary)' }}
+                    title={person.role}
+                  >
+                    {person.role}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : loadingCredits ? (
+          <div className="w-full max-w-4xl pt-1 pb-3 text-left animate-pulse">
+            <div className="h-6 w-28 bg-black/10 dark:bg-white/10 rounded-lg mb-3.5 ml-1"></div>
+            <div className="flex items-center gap-4 sm:gap-5 overflow-hidden pb-3 pt-1">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="flex flex-col items-center flex-shrink-0 w-20 sm:w-24">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-black/10 dark:bg-white/10"></div>
+                  <div className="h-3 w-16 bg-black/10 dark:bg-white/10 rounded mt-2"></div>
+                  <div className="h-2.5 w-12 bg-black/10 dark:bg-white/10 rounded mt-1"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      {/* Main Files / Playable Media Section (NO Cast & Crew) */}
+      {/* Main Files / Playable Media Section */}
       <div className="px-4 sm:px-8 md:px-12 max-w-7xl mx-auto py-6 relative z-20 space-y-6">
         {user === 'guest' ? (
           <div 
@@ -4509,6 +4717,11 @@ export default function Details() {
           user={user}
           colorPalette={colorPalette}
         />
+      )}
+
+      {/* Global Search Modal */}
+      {showSearchModal && (
+        <SearchModal onClose={() => setShowSearchModal(false)} />
       )}
     </div>
   );

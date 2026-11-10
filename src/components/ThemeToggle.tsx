@@ -107,7 +107,7 @@ export default function ThemeToggle({ isUnderlyingDark = false, align = 'left', 
   }[align];
 
   return (
-    <div className={`inline-flex items-center ${className}`} ref={containerRef}>
+    <div className={`relative inline-flex items-center ${className}`} ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{ WebkitTapHighlightColor: 'transparent' }}
@@ -128,10 +128,10 @@ export default function ThemeToggle({ isUnderlyingDark = false, align = 'left', 
       <>
         {isOpen && (
           <div
-            className={`absolute ${alignClasses} top-full mt-3 w-36 p-1.5 rounded-2xl border backdrop-blur-3xl backdrop-saturate-[200%] shadow-2xl z-50 text-xs font-semibold space-y-1 transform-gpu will-change-transform ${
+            className={`absolute ${alignClasses} top-full mt-2 w-36 p-1.5 rounded-2xl border backdrop-blur-2xl shadow-xl z-50 text-xs font-semibold space-y-1 ${
               isUnderlyingDark
-                ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_12px_40px_0_rgba(0,0,0,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.25)] dark:bg-black/60 dark:border-white/20 dark:text-white'
-                : 'bg-white/60 border-white/70 text-gray-900 shadow-[0_12px_40px_0_rgba(31,38,135,0.2),inset_0_1px_1px_0_rgba(255,255,255,0.8)] dark:bg-black/60 dark:border-white/20 dark:text-white'
+                ? 'bg-neutral-900/90 border-white/20 text-white shadow-[0_12px_40px_rgba(0,0,0,0.5)]'
+                : 'bg-[#fffcf9]/95 dark:bg-[#12131d]/95 border-black/10 dark:border-white/15 text-gray-900 dark:text-white shadow-[0_12px_36px_rgba(0,0,0,0.15)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]'
             }`}
           >
             <button

@@ -143,7 +143,7 @@ export default function DigitalReleasesCarousel({ categories }: { categories?: a
         {/* Guest Lock Overlay */}
         {isGuest && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 bg-black/10 dark:bg-black/30 backdrop-blur-[2px] rounded-2xl">
-            <div className="flex flex-col items-center text-center max-w-sm sm:max-w-md mx-auto p-5 sm:p-6 rounded-2xl bg-white/50 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-[180%] border border-white/60 dark:border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.15)]">
+            <div className="liquid-glass flex flex-col items-center text-center max-w-sm sm:max-w-md mx-auto p-5 sm:p-6 rounded-2xl bg-white/50 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-[180%] border border-white/60 dark:border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.15)]">
               <div className="w-12 h-12 rounded-full bg-purple-600/15 dark:bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mb-3 text-purple-600 dark:text-purple-400 shadow-inner">
                 <Lock size={22} className="stroke-[2.5]" />
               </div>

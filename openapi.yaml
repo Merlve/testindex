@@ -1135,6 +1135,53 @@ paths:
       responses:
         '200':
           description: 'Trailers and videos collection'
+  /api/meta/credits:
+    get:
+      tags:
+        - Metadata
+      summary: 'Fetch Media Credits (Cast & Crew)'
+      description: 'Fetch official cast and crew information including directors, actors, characters, and profile photos from TMDB.'
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: 'TMDB Media ID'
+        -
+          name: type
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 'movie or tv'
+      responses:
+        '200':
+          description: 'Cast and crew lists'
+  /api/meta/person/{id}:
+    get:
+      tags:
+        - Metadata
+      summary: 'Fetch Person Details'
+      description: 'Fetch biography, profile photo, known department, and filmography for an actor or director.'
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 'TMDB Person ID'
+      responses:
+        '200':
+          description: 'Person details'
   /api/meta/images:
     get:
       tags:

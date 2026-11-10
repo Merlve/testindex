@@ -979,7 +979,7 @@ export default function Collection() {
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowProviderModal(true)}
-          className="fixed bottom-[88px] right-6 md:bottom-[112px] md:right-8 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/50 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-[180%] border border-white/60 dark:border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] text-gray-900 dark:text-white font-bold text-xs hover:border-purple-500/50 transition-all cursor-pointer"
+          className="liquid-glass fixed bottom-[88px] right-6 md:bottom-[112px] md:right-8 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/50 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-[180%] border border-white/60 dark:border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] text-gray-900 dark:text-white font-bold text-xs hover:border-purple-500/50 transition-all cursor-pointer"
           title="Add content to collection"
         >
           <Plus size={18} className="text-purple-500 dark:text-purple-400" />
@@ -1003,7 +1003,7 @@ export default function Collection() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-2xl bg-white/80 dark:bg-[#1a1a22]/80 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-3xl p-6 shadow-2xl z-10 space-y-5 max-h-[85vh] flex flex-col"
+              className="liquid-glass relative w-full max-w-2xl bg-white/80 dark:bg-[#1a1a22]/80 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-3xl p-6 shadow-2xl z-10 space-y-5 max-h-[85vh] flex flex-col"
             >
               {/* Modal Header */}
               <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10 shrink-0">

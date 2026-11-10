@@ -1016,7 +1016,7 @@ export default function VideoPlayer({
               initial={{ opacity: 0, y: -20, x: '-50%' }}
               animate={{ opacity: 1, y: 0, x: '-50%' }}
               exit={{ opacity: 0, y: -20, x: '-50%' }}
-              className="absolute top-16 left-1/2 z-50 bg-[#161622]/95 border border-purple-500/40 rounded-full px-4 py-2 shadow-2xl flex items-center gap-3 text-white backdrop-blur-md text-xs pointer-events-auto"
+              className="liquid-glass absolute top-16 left-1/2 z-50 bg-[#161622]/95 border border-purple-500/40 rounded-full px-4 py-2 shadow-2xl flex items-center gap-3 text-white backdrop-blur-md text-xs pointer-events-auto"
             >
               <span className="flex items-center gap-1.5 font-medium">
                 <Sparkles className="w-3.5 h-3.5 text-purple-400" />
@@ -1154,7 +1154,7 @@ export default function VideoPlayer({
                   e.stopPropagation();
                   togglePlay();
                 }}
-                className="pointer-events-auto p-4 sm:p-5 rounded-full bg-black/60 hover:bg-black/80 text-white hover:text-purple-300 border border-white/20 backdrop-blur-md transition active:scale-90 shadow-2xl cursor-pointer"
+                className="liquid-glass pointer-events-auto p-4 sm:p-5 rounded-full bg-black/60 hover:bg-black/80 text-white hover:text-purple-300 border border-white/20 backdrop-blur-md transition active:scale-90 shadow-2xl cursor-pointer"
               >
                 {isPlaying ? <Pause className="w-8 h-8 sm:w-10 sm:h-10" /> : <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-current" />}
               </button>

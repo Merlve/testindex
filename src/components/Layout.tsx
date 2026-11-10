@@ -159,6 +159,10 @@ export default function Layout() {
   const [isUnderlyingDark, setIsUnderlyingDark] = useState(false);
   const [isNavExpanded, setIsNavExpanded] = useState(true);
 
+  const isImmersiveDetails = location.pathname.startsWith('/home') || 
+                             location.pathname.startsWith('/person') || 
+                             location.pathname.startsWith('/actor');
+
   const checkLuminance = useCallback(() => {
     if (typeof window === 'undefined') return;
     const navElement = document.getElementById('bottom-nav-bar') || document.getElementById('floating-top-right-nav');
@@ -315,51 +319,53 @@ export default function Layout() {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-[#fffcf9] dark:bg-[#08080a] text-gray-900 dark:text-gray-100 font-sans">
 
-      {/* Floating Top Left Brand Pill */}
-      <div 
-        id="floating-top-left-nav"
-        className={`fixed top-4 left-4 md:left-6 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full border backdrop-blur-md transition-all duration-300 ease-in-out ${
-          isUnderlyingDark 
-            ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
-            : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
-        } ${
-          location.pathname.startsWith('/home') && isIdle && !sidebarOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
-        }`}
-      >
-        <Link to="/" className="flex items-center gap-2.5">
-          <SiteLogo size="sm" />
-          <span className="font-bold tracking-tight text-sm">SHUTTER!</span>
-        </Link>
-      </div>
+      {/* Floating Top Nav (Hidden on details and person/actor pages in favor of dedicated immersive glass buttons) */}
+      {!isImmersiveDetails && (
+        <>
+          {/* Floating Top Left Brand Pill */}
+          <div 
+            id="floating-top-left-nav"
+            className={`fixed top-4 left-4 md:left-6 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full border backdrop-blur-md transition-all duration-300 ease-in-out ${
+              isUnderlyingDark 
+                ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
+                : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
+            } translate-y-0 opacity-100`}
+          >
+            <Link to="/" className="flex items-center gap-2.5">
+              <SiteLogo size="sm" />
+              <span className="font-bold tracking-tight text-sm">SHUTTER!</span>
+            </Link>
+          </div>
 
-
-      {/* Floating Top Right Action Pill (Hides on idle) */}
-      <div 
-        id="floating-top-right-nav"
-        className={`fixed top-4 right-4 md:right-6 z-40 flex items-center gap-3 px-3.5 py-2 rounded-full border backdrop-blur-md transition-all duration-300 ease-in-out ${
-          isUnderlyingDark 
-            ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
-            : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
-        } ${
-          isIdle && !sidebarOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
-        }`}
-      >
-        <ThemeToggle isUnderlyingDark={isUnderlyingDark} align="right" />
-        <button 
-          onClick={() => setSearchOpen(true)} 
-          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current flex items-center gap-1.5 cursor-pointer"
-          title="Search"
-        >
-          <Search size={20} />
-        </button>
-        <button 
-          onClick={() => setSidebarOpen(!sidebarOpen)} 
-          className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current cursor-pointer"
-          title={sidebarOpen ? "Close menu" : "Open menu"}
-        >
-          {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
-      </div>
+          {/* Floating Top Right Action Pill (Hides on idle) */}
+          <div 
+            id="floating-top-right-nav"
+            className={`fixed top-4 right-4 md:right-6 z-40 flex items-center gap-3 px-3.5 py-2 rounded-full border backdrop-blur-md transition-all duration-300 ease-in-out ${
+              isUnderlyingDark 
+                ? 'bg-neutral-900/60 border-white/25 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.3)] dark:bg-black/60 dark:border-white/20 dark:text-white' 
+                : 'bg-white/50 border-white/60 text-gray-900 shadow-[0_8px_32px_0_rgba(31,38,135,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.7)] dark:bg-black/60 dark:border-white/20 dark:text-white'
+            } ${
+              isIdle && !sidebarOpen ? '-translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+            }`}
+          >
+            <ThemeToggle isUnderlyingDark={isUnderlyingDark} align="right" />
+            <button 
+              onClick={() => setSearchOpen(true)} 
+              className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current flex items-center gap-1.5 cursor-pointer"
+              title="Search"
+            >
+              <Search size={20} />
+            </button>
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)} 
+              className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-current cursor-pointer"
+              title={sidebarOpen ? "Close menu" : "Open menu"}
+            >
+              {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Overlay Backdrop */}
       {sidebarOpen && (
@@ -470,7 +476,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main ref={mainRef} className={`flex-1 w-full relative bg-[#fffcf9] dark:bg-[#08080a] ${location.pathname.startsWith('/home/') ? 'pt-0' : 'pt-16'}`}>
+      <main ref={mainRef} className={`flex-1 w-full relative bg-[#fffcf9] dark:bg-[#08080a] ${isImmersiveDetails ? 'pt-0' : 'pt-16'}`}>
         <ScrollRestorer 
           scrollKey={location.key} 
           locationPathAndSearch={location.pathname + location.search} 

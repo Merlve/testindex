@@ -89,11 +89,19 @@ export default function Category() {
         
         if (res.data.code !== 200) throw new Error(`Failed to search items: ${res.data.message || 'Unknown error'}`);
         
-        const content = (res.data.data?.content || []).map((i: any) => {
-           const parentParts = (i.parent || '').split('/');
-           const cat = parentParts[parentParts.length - 1] || 'UNKNOWN';
-           return { ...i, _cat: cat, _parent: i.parent };
-        });
+        const content = (res.data.data?.content || [])
+          .filter((i: any) => {
+            if (!i || !i.name) return false;
+            if (/^(s\d+|season\s*\d+|series\s*\d+|specials?|extras?|featurettes?|bonus|trailers?|sample|subs?|subtitles?|cd\d+|disc\d+)$/i.test(i.name)) return false;
+            const parts = (i.parent || '').split('/').filter(Boolean);
+            if (parts.length > 2) return false;
+            return true;
+          })
+          .map((i: any) => {
+            const parentParts = (i.parent || '').split('/').filter(Boolean);
+            const cat = parentParts[parentParts.length - 1] || 'UNKNOWN';
+            return { ...i, _cat: cat, _parent: i.parent };
+          });
         return { items: content, isFuzzy: res.data.data?.isFuzzyFallback || false };
       } else {
         const payload: any = { reqPath: `/home/${name}` };

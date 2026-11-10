@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Search as SearchIcon, Loader2, Film, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Search as SearchIcon, Loader2, Film, Clock, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -7,12 +7,13 @@ import { getRecentSearches, saveRecentSearch, removeRecentSearch, clearRecentSea
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseMediaName } from '../utils/nameParser';
 import { prefetchItemDetails } from '../utils/detailsPrefetch';
+import { useIsDarkMode } from '../utils/colorExtractor';
 
 function SearchItemImage({ item, metaVer }: { item: any; metaVer?: string }) {
   const directPoster = item.poster_path;
   if (directPoster) {
     return (
-      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg mr-4 shrink-0 overflow-hidden bg-black/50">
+      <div className="w-10 h-14 sm:w-12 sm:h-16 rounded-xl mr-3 sm:mr-4 shrink-0 overflow-hidden bg-black/10 dark:bg-black/60 border border-black/10 dark:border-white/10 shadow-md">
         <img 
           src={directPoster.startsWith('http') ? directPoster : `https://image.tmdb.org/t/p/w92${directPoster}`} 
           alt="" 
@@ -47,15 +48,15 @@ function SearchItemImage({ item, metaVer }: { item: any; metaVer?: string }) {
   
   if (posterPath) {
     return (
-      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg mr-4 shrink-0 overflow-hidden bg-black/50">
+      <div className="w-10 h-14 sm:w-12 sm:h-16 rounded-xl mr-3 sm:mr-4 shrink-0 overflow-hidden bg-black/10 dark:bg-black/60 border border-black/10 dark:border-white/15 shadow-md">
         <img src={`https://image.tmdb.org/t/p/w92${posterPath}`} alt="" className="w-full h-full object-cover" />
       </div>
     );
   }
 
   return (
-    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black/50 rounded-lg flex items-center justify-center mr-4 shrink-0 group-hover:bg-purple-600/20 transition-colors">
-      <Film className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 dark:text-gray-400 group-hover:text-purple-400 transition-colors" />
+    <div className="w-10 h-14 sm:w-12 sm:h-16 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/15 rounded-xl flex items-center justify-center mr-3 sm:mr-4 shrink-0 group-hover:bg-purple-600/10 dark:group-hover:bg-purple-600/25 group-hover:border-purple-300 dark:group-hover:border-purple-400/40 transition-all">
+      <Film className="w-5 h-5 text-gray-500 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors" />
     </div>
   );
 }
@@ -69,6 +70,16 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const currentMetaVer = localStorage.getItem('meta_version') || '1';
+  const isDark = useIsDarkMode();
+
+  // Keyboard navigation & escape listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handlePrefetchItem = (item: any) => {
     const parentParts = (item.parent || '').split('/').filter(Boolean);
@@ -82,7 +93,15 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
-    setRecentSearches(getRecentSearches());
+    // Purge any accidental season/subfolder items that might have been saved in recent searches
+    const rawRecents = getRecentSearches();
+    const cleanRecents = rawRecents.filter(
+      term => !/^(s\d+|season\s*\d+|series\s*\d+|specials?|extras?|subs?)$/i.test(term.trim())
+    );
+    if (cleanRecents.length !== rawRecents.length) {
+      localStorage.setItem('recent_searches', JSON.stringify(cleanRecents));
+    }
+    setRecentSearches(cleanRecents);
   }, []);
 
   useEffect(() => {
@@ -102,7 +121,15 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
         );
         if (res.data.code === 200) {
           const content = res.data.data.content || [];
-          setSuggestions(content);
+          // Ensure season subfolders or nested subdirectories are never shown in suggestions
+          const validContent = content.filter((item: any) => {
+            if (!item || !item.name) return false;
+            if (/^(s\d+|season\s*\d+|series\s*\d+|specials?|extras?|featurettes?|bonus|trailers?|sample|subs?|subtitles?|cd\d+|disc\d+)$/i.test(item.name)) return false;
+            const parts = (item.parent || '').split('/').filter(Boolean);
+            if (parts.length > 2) return false;
+            return true;
+          });
+          setSuggestions(validContent);
         }
       } catch (err) {
         if (axios.isCancel(err)) return;
@@ -153,114 +180,177 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-black/80 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20 px-3 sm:px-4 bg-black/40 dark:bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="bg-[#fffcf9]/95 dark:bg-[#1a1a22]/95 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 flex flex-col max-h-[80vh]"
+        className="w-full max-w-2xl bg-[#fffcf9]/90 dark:bg-[#0f111a]/85 text-gray-900 dark:text-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15),inset_0_1px_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_25px_70px_rgba(0,0,0,0.85),inset_0_1px_1px_0_rgba(255,255,255,0.18)] border border-black/10 dark:border-white/20 overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[80vh] backdrop-blur-2xl backdrop-saturate-[180%] transition-colors duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <form onSubmit={handleSearch} className="flex items-center px-4 sm:px-6 py-4 sm:py-5 shrink-0 border-b border-black/5 dark:border-white/5">
-          <SearchIcon className="text-purple-400 mr-3 sm:mr-4 w-6 h-6 sm:w-7 sm:h-7 shrink-0" />
+        {/* Search Input Bar */}
+        <form onSubmit={handleSearch} className="flex items-center px-4 sm:px-6 py-4 sm:py-4.5 shrink-0 border-b border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] backdrop-blur-md gap-3">
+          <div className="w-9 h-9 rounded-xl bg-purple-600/10 dark:bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-600/20 dark:border-purple-400/30 backdrop-blur-sm">
+            <SearchIcon className="text-purple-600 dark:text-purple-300 w-5 h-5 shrink-0" />
+          </div>
+          
           <input 
             type="text" 
             autoFocus
-            className="flex-1 bg-transparent text-black dark:text-white text-xl sm:text-2xl outline-none placeholder-gray-500 font-medium min-w-0" 
-            placeholder="Search Movies, Series, TMDb or IMDb ID..." 
+            className="flex-1 bg-transparent text-gray-950 dark:text-white text-base sm:text-xl font-medium outline-none placeholder:text-gray-400 dark:placeholder:text-gray-400 min-w-0" 
+            placeholder="Search Movies, Series, TMDb..." 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button type="button" onClick={onClose} className="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white rounded-full hover:bg-black/10 dark:bg-white/10 transition shrink-0 ml-2">
-            <X size={24} />
+
+          {query && (
+            <button 
+              type="button" 
+              onClick={() => setQuery('')} 
+              className="p-1.5 text-gray-400 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition shrink-0 cursor-pointer"
+              title="Clear input"
+            >
+              <X size={18} />
+            </button>
+          )}
+
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="w-9 h-9 rounded-full bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/15 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95"
+            title="Close (Esc)"
+          >
+            <X size={18} />
           </button>
         </form>
         
+        {/* Recent Searches View (Empty query) */}
         {!query.trim() && recentSearches.length > 0 && (
           <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-            <div className="flex items-center justify-between mb-3 text-xs sm:text-sm font-semibold tracking-wider text-gray-500 dark:text-gray-400 uppercase">
+            <div className="flex items-center justify-between mb-3 text-xs font-bold tracking-wider text-purple-600 dark:text-purple-400 uppercase">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+                <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                 <span>Recent Searches</span>
               </div>
               <button
                 type="button"
                 onClick={() => setRecentSearches(clearRecentSearches())}
-                className="text-xs text-red-500 hover:text-red-400 font-medium transition cursor-pointer"
+                className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-semibold transition cursor-pointer"
               >
                 Clear All
               </button>
             </div>
-            <div className="space-y-1">
-              {recentSearches.map((term) => (
-                <div
-                  key={term}
-                  className="group flex items-center justify-between px-3.5 py-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-black dark:text-white"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSelectRecent(term)}
-                    className="flex-1 flex items-center text-left truncate mr-2 cursor-pointer"
+
+            <div className="space-y-1.5">
+              {recentSearches.map((term) => {
+                const parsed = parseMediaName(term);
+                const displayName = parsed.cleanName && parsed.cleanName !== 'Unknown' ? parsed.cleanName : term;
+                const displayYear = parsed.year;
+
+                return (
+                  <div
+                    key={term}
+                    className="group flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-black/[0.03] hover:bg-black/[0.06] dark:bg-white/[0.07] dark:hover:bg-white/[0.12] border border-black/[0.06] dark:border-white/10 hover:border-purple-600/30 dark:hover:border-purple-400/50 backdrop-blur-sm transition text-gray-900 dark:text-white"
                   >
-                    <SearchIcon className="w-4 h-4 text-gray-400 mr-3 shrink-0 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition" />
-                    <span className="text-sm sm:text-base font-medium truncate">{term}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRecentSearches(removeRecentSearch(term));
-                    }}
-                    className="p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
-                    title="Remove search"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectRecent(term)}
+                      className="flex-1 flex items-center text-left truncate mr-2 cursor-pointer gap-3 min-w-0"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-purple-600/10 dark:bg-purple-500/20 flex items-center justify-center shrink-0 text-purple-600 dark:text-purple-300 group-hover:scale-110 transition-transform">
+                        <SearchIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors truncate">
+                          {displayName}
+                        </span>
+                        {displayYear && (
+                          <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-200 bg-purple-100 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-400/30 px-1.5 py-0.5 rounded shrink-0">
+                            {displayYear}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRecentSearches(removeRecentSearch(term));
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer"
+                      title="Remove search"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
+        {/* Live Search Suggestions & Results View */}
         {query.trim() && (
           <div className="overflow-y-auto flex-1">
             {loading ? (
-              <div className="p-8 flex flex-col items-center justify-center text-gray-600 dark:text-gray-400">
-                <Loader2 className="w-8 h-8 animate-spin mb-4 text-purple-400" />
-                <span className="text-sm">Searching...</span>
+              <div className="p-10 flex flex-col items-center justify-center text-gray-500 dark:text-gray-300">
+                <Loader2 className="w-8 h-8 animate-spin mb-3 text-purple-600 dark:text-purple-400" />
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-200">Searching files & metadata...</span>
               </div>
             ) : suggestions.length > 0 ? (
               <div className="py-2">
-                {suggestions.map((item) => (
-                  <button
-                    key={`${item.parent}/${item.name}`}
-                    onClick={() => handleSelect(item)}
-                    onPointerEnter={() => handlePrefetchItem(item)}
-                    onPointerDown={() => handlePrefetchItem(item)}
-                    onTouchStart={() => handlePrefetchItem(item)}
-                    onFocus={() => handlePrefetchItem(item)}
-                    className="w-full text-left px-4 sm:px-6 py-3 sm:py-4 hover:bg-black/5 dark:bg-white/5 flex items-center transition-colors group border-b border-black/5 dark:border-white/5 last:border-0 cursor-pointer"
-                  >
-                    <SearchItemImage item={item} metaVer={currentMetaVer} />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-base sm:text-lg text-black dark:text-white font-medium mb-1 break-words whitespace-normal leading-tight">
-                        {item.customTitle || item.name}
+                {suggestions.map((item) => {
+                  const parsed = parseMediaName(item.name);
+                  const displayTitle = item.customTitle || parsed.cleanName || item.name;
+                  const categoryName = (item.parent || '').replace(/^\/home\/?/i, '').split('/')[0] || 'Media';
+
+                  return (
+                    <button
+                      key={`${item.parent}/${item.name}`}
+                      onClick={() => handleSelect(item)}
+                      onPointerEnter={() => handlePrefetchItem(item)}
+                      onPointerDown={() => handlePrefetchItem(item)}
+                      onTouchStart={() => handlePrefetchItem(item)}
+                      onFocus={() => handlePrefetchItem(item)}
+                      className="w-full text-left px-4 sm:px-6 py-3.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.10] flex items-center transition-colors group border-b border-black/[0.06] dark:border-white/[0.08] last:border-0 cursor-pointer"
+                    >
+                      <SearchItemImage item={item} metaVer={currentMetaVer} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-base sm:text-lg text-gray-950 dark:text-white font-bold mb-1 break-words line-clamp-1 group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors tracking-tight">
+                          {displayTitle}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300 flex items-center gap-2 line-clamp-1">
+                          <span className="text-purple-700 dark:text-purple-200 font-bold uppercase tracking-wider text-[10px] bg-purple-100 dark:bg-purple-600/30 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-400/40">
+                            {categoryName}
+                          </span>
+                          {parsed.year && (
+                            <span className="text-gray-700 dark:text-white/90 font-semibold bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[11px]">
+                              {parsed.year}
+                            </span>
+                          )}
+                          <span className="text-gray-400 dark:text-white/40">•</span>
+                          <span className="text-gray-600 dark:text-gray-300 truncate text-xs">
+                            {item.name}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 break-words whitespace-normal leading-tight">
-                        {item.customTitle ? `${item.name} • ${item.parent}` : item.parent}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                      <ChevronRight size={19} className="text-gray-400 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-300 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
+                    </button>
+                  );
+                })}
+
                 <button 
                   onClick={handleSearch}
-                  className="w-full text-center px-4 py-4 hover:bg-black/5 dark:bg-white/5 flex items-center justify-center text-purple-400 font-bold text-sm sm:text-base transition-colors bg-purple-900/10"
+                  className="w-full text-center px-4 py-3.5 hover:bg-purple-100/70 dark:hover:bg-purple-600/30 flex items-center justify-center text-purple-700 dark:text-purple-200 font-bold text-sm sm:text-base transition-colors bg-purple-50 dark:bg-purple-950/60 border-t border-purple-200 dark:border-purple-500/30 backdrop-blur-md gap-2 cursor-pointer"
                 >
-                  See all results for "{query}"
+                  <SearchIcon size={16} />
+                  <span>See all results for "{query}"</span>
                 </button>
               </div>
             ) : (
-              <div className="p-8 text-center text-gray-600 dark:text-gray-400">
-                No Matches Found
+              <div className="p-12 text-center text-gray-500 dark:text-gray-300 space-y-2">
+                <Film className="w-10 h-10 text-gray-400 mx-auto" />
+                <div className="text-base font-semibold text-gray-900 dark:text-white">No matches found for "{query}"</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Check spelling or try searching for a different movie, show, or actor.</div>
               </div>
             )}
           </div>

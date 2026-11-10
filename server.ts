@@ -4347,45 +4347,92 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
        console.error("TMDB Cache search error", e);
     }
 
-    // Clean parent paths to ensure strict standardization across sources
-    content.forEach((item: any) => {
-       if (item.parent) {
-          // Normalize leading slashes
-          item.parent = '/' + item.parent.replace(/^\/+/, '');
-       }
-    });
-
-    // Final dedup to be absolutely sure no duplicates sneak in due to casing or slash differences
-    const finalSeen = new Set();
-    const dedupedContent = [];
-    for (const item of content) {
-       const uid = (item.parent + '/' + item.name).toLowerCase();
-       if (!finalSeen.has(uid)) {
-          finalSeen.add(uid);
-          dedupedContent.push(item);
-       }
-    }
-    content = dedupedContent;
-
-    // Filter results to avoid nuisance
+    // Standardize, roll up subfolders (e.g. SEASON 1 or nested episodes) to their parent media title,
+    // and filter results so only true media titles (e.g. /home/SERIES/Bosch.2015) appear in search results.
     const isVideo = (name: any) => /\.(mkv|mp4|avi|mov|wmv|flv|webm|ts|m2ts|iso)$/i.test(String(name));
-    const filteredContent = content.filter((item: any) => {
-      if (item.is_dir) return true; // Keep all folders
-      if (!isVideo(item.name)) return false; // Ignore non-video files
-      
-      const parentParts = (item.parent || '').split('/').filter(Boolean);
-      
-      if (parentParts.length >= 2 && parentParts[0].toLowerCase() === 'home') {
-          const cat = parentParts[1].toUpperCase();
-          if (['KDRAMA', 'ANIME', 'SERIES'].includes(cat)) {
-              return false; // No files for series/shows
-          }
+    const isSeasonOrSubfolderName = (name: any) => {
+      const n = String(name || '').trim();
+      return /^(s\d+|season\s*\d+|series\s*\d+|specials?|extras?|featurettes?|bonus|trailers?|sample|subs?|subtitles?|cd\d+|disc\d+)$/i.test(n);
+    };
+
+    const normalizedBasePath = path.posix.normalize(appConfig.basePath || '/home').replace(/\/+$/, '');
+    const basePathParts = normalizedBasePath.split('/').filter(Boolean);
+
+    const canonicalContent: any[] = [];
+    for (const rawItem of content) {
+      if (!rawItem || !rawItem.name) continue;
+
+      const rawParent = (rawItem.parent || '').replace(/\\/g, '/');
+      const normParent = ('/' + rawParent.replace(/^\/+/, '')).replace(/\/+$/, '');
+      const rawName = String(rawItem.name).trim();
+      const fullPath = normParent + '/' + rawName;
+      const fullParts = fullPath.split('/').filter(Boolean);
+
+      // Extract parts relative to base path (e.g. /home)
+      let relParts: string[] = [];
+      if (basePathParts.length > 0 && fullParts.length >= basePathParts.length &&
+          basePathParts.every((bp, i) => bp.toLowerCase() === fullParts[i].toLowerCase())) {
+        relParts = fullParts.slice(basePathParts.length);
+      } else if (fullParts.length > 0 && fullParts[0].toLowerCase() === 'home') {
+        relParts = fullParts.slice(1);
+      } else {
+        relParts = fullParts;
       }
-      
-      if (parentParts.length > 2) return false;
-      
-      return true;
-    });
+
+      // We need at least 2 parts: [Category, MediaTitle] (e.g. ['SERIES', 'Bosch.2015'])
+      // Skip the root base folder or a category folder itself (e.g. /home or /home/SERIES)
+      if (relParts.length < 2) continue;
+
+      const category = relParts[0];
+      const catUpper = category.toUpperCase();
+      const titleName = relParts[1];
+      const basePrefix = basePathParts.length > 0 ? '/' + basePathParts.join('/') : '';
+      const canonicalParent = `${basePrefix}/${category}`;
+
+      if (relParts.length === 2) {
+        // Direct child under category (e.g. /home/SERIES/Bosch.2015 or /home/MOVIES/Inception.mkv)
+        // Never allow a season or extra subfolder to be treated as a title
+        if (isSeasonOrSubfolderName(rawName)) continue;
+
+        if (!rawItem.is_dir) {
+          if (!isVideo(rawName)) continue;
+          if (['KDRAMA', 'ANIME', 'SERIES'].includes(catUpper)) {
+            // Loose files directly under series categories are skipped
+            continue;
+          }
+        }
+
+        canonicalContent.push({
+          ...rawItem,
+          name: rawName,
+          parent: canonicalParent,
+          is_dir: Boolean(rawItem.is_dir)
+        });
+      } else {
+        // relParts.length > 2: This is a subfolder (like /home/SERIES/Bosch.2015/SEASON 1)
+        // or a nested file (like /home/SERIES/Bosch.2015/SEASON 1/ep01.mkv).
+        // Roll it up to the parent series/movie title!
+        if (isSeasonOrSubfolderName(titleName)) continue;
+
+        canonicalContent.push({
+          name: titleName,
+          parent: canonicalParent,
+          is_dir: true,
+          ...(rawItem.isExact ? { isExact: true } : {})
+        });
+      }
+    }
+
+    // Dedup canonicalContent by lowercase (parent + '/' + name)
+    const finalSeen = new Set<string>();
+    const filteredContent: any[] = [];
+    for (const item of canonicalContent) {
+      const uid = (item.parent + '/' + item.name).toLowerCase();
+      if (!finalSeen.has(uid)) {
+        finalSeen.add(uid);
+        filteredContent.push(item);
+      }
+    }
     
     // If no local folder was found but an ID search resolved a title, add a virtual item so the user can open it
     if (filteredContent.length === 0 && resolvedTmdbId && tmdbTitleForId) {
@@ -5130,6 +5177,51 @@ app.get('/api/meta/videos', cacheMiddleware(3600, true), async (req, res) => {
     res.json(response.data);
   } catch (err: any) {
     res.json(null);
+  }
+});
+
+// Credits endpoint for Cast & Crew (cached for fast repeated loads)
+app.get('/api/meta/credits', cacheMiddleware(86400, true), async (req, res) => {
+  const { id, type } = req.query;
+  if (!id) return res.status(400).json({ error: 'id required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json({ id, cast: [], crew: [] });
+
+  try {
+    const typeStr = String(type || '').toUpperCase();
+    const isTv = ['SERIES', 'KDRAMA', 'ADRAMA', 'ANIME', 'TV', 'SHOW', 'TV_SHOW', 'EPISODE'].includes(typeStr) || String(type).toLowerCase() === 'tv';
+    const searchType = isTv ? 'tv' : 'movie';
+    const altType = searchType === 'tv' ? 'movie' : 'tv';
+
+    let response: any = null;
+    try {
+      response = await axios.get(`https://api.themoviedb.org/3/${searchType}/${id}/credits?api_key=${tmdbKey}`, { timeout: 4500 });
+    } catch (e) {
+      try {
+        response = await axios.get(`https://api.themoviedb.org/3/${altType}/${id}/credits?api_key=${tmdbKey}`, { timeout: 4500 });
+      } catch (e2) {}
+    }
+
+    if (response?.data) {
+      return res.json(response.data);
+    }
+    res.json({ id, cast: [], crew: [] });
+  } catch (err: any) {
+    res.json({ id, cast: [], crew: [] });
+  }
+});
+
+// Person details endpoint for actor and director profiles
+app.get('/api/meta/person/:id', cacheMiddleware(86400, true), async (req, res) => {
+  const { id } = req.params;
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!id || !tmdbKey) return res.status(404).json({ error: 'Not found' });
+
+  try {
+    const response = await axios.get(`https://api.themoviedb.org/3/person/${id}?api_key=${tmdbKey}&append_to_response=combined_credits`, { timeout: 4500 });
+    res.json(response.data);
+  } catch (err: any) {
+    res.status(404).json({ error: 'Person not found' });
   }
 });
 

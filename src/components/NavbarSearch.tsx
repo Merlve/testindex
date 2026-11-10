@@ -112,7 +112,14 @@ export default function NavbarSearch() {
         );
         if (res.data.code === 200) {
           const content = res.data.data.content || [];
-          setSuggestions(content); // Top 8 suggestions
+          const validContent = content.filter((item: any) => {
+            if (!item || !item.name) return false;
+            if (/^(s\d+|season\s*\d+|series\s*\d+|specials?|extras?|featurettes?|bonus|trailers?|sample|subs?|subtitles?|cd\d+|disc\d+)$/i.test(item.name)) return false;
+            const parts = (item.parent || '').split('/').filter(Boolean);
+            if (parts.length > 2) return false;
+            return true;
+          });
+          setSuggestions(validContent); // Top suggestions
         }
       } catch (err) {
         if (axios.isCancel(err)) return;
