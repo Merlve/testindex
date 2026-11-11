@@ -2987,6 +2987,30 @@ export default function Details() {
 
   const isBackgroundLight = !isDarkMode && (colorPalette ? colorPalette.isLightBgLight : true);
 
+  // Synchronize details page dominant colors to document root so global controls (like ScrollToTopButton) inherit them
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--details-accent', activeAccent);
+    root.style.setProperty('--details-glow', activeGlow);
+    root.style.setProperty('--details-bg', activeBg);
+    root.style.setProperty('--details-border', activeBorder);
+    root.style.setProperty('--details-text-primary', activeTextPrimary);
+    if (colorPalette?.hex) {
+      root.style.setProperty('--details-dominant', colorPalette.hex);
+    }
+    root.setAttribute('data-details-active', 'true');
+
+    return () => {
+      root.style.removeProperty('--details-accent');
+      root.style.removeProperty('--details-glow');
+      root.style.removeProperty('--details-bg');
+      root.style.removeProperty('--details-border');
+      root.style.removeProperty('--details-text-primary');
+      root.style.removeProperty('--details-dominant');
+      root.removeAttribute('data-details-active');
+    };
+  }, [activeAccent, activeGlow, activeBg, activeBorder, activeTextPrimary, colorPalette?.hex]);
+
   return (
     <div 
       className="details-page-root min-h-[100dvh] pb-24 relative"
@@ -3364,47 +3388,47 @@ export default function Details() {
 
         {/* Cast & Crew Section (Deferred loading: 1 Director first + maximum 5 actors) */}
         {castAndCrew.length > 0 ? (
-          <div className="w-full max-w-4xl pt-1 pb-3 text-left">
+          <div className="w-full max-w-4xl pt-1.5 pb-3 text-left">
             <h3 
-              className="text-lg sm:text-xl font-bold tracking-tight mb-3.5 px-1"
+              className="text-lg sm:text-xl font-bold tracking-tight mb-3 px-1"
               style={{ color: 'var(--details-text-primary)' }}
             >
               Cast & Crew
             </h3>
-            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-3 pt-1 no-scrollbar scroll-smooth">
+            <div className="flex items-start gap-3.5 sm:gap-5 overflow-x-auto pb-3 pt-1 no-scrollbar scroll-smooth">
               {castAndCrew.map((person, idx) => (
                 <Link
                   key={`${person.id}-${person.role}-${idx}`}
                   to={`/person/${person.id}`}
-                  className="flex flex-col items-center flex-shrink-0 group cursor-pointer w-20 sm:w-24 text-center transition-transform hover:scale-[1.03]"
+                  className="flex flex-col items-center flex-shrink-0 group cursor-pointer w-[76px] sm:w-[90px] text-center transition-transform hover:scale-[1.03]"
                 >
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md group-hover:shadow-lg transition-all duration-200 border border-black/10 dark:border-white/10 flex items-center justify-center bg-black/10 dark:bg-white/5 relative">
+                  <div className="w-[76px] h-[76px] sm:w-[90px] sm:h-[90px] rounded-[19px] sm:rounded-[22px] overflow-hidden shadow-md group-hover:shadow-xl transition-all duration-200 flex items-center justify-center bg-black/20 dark:bg-black/30 relative">
                     {person.profilePath ? (
                       <img
                         src={`https://image.tmdb.org/t/p/w185${person.profilePath}`}
                         alt={person.name}
                         loading="lazy"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover rounded-[19px] sm:rounded-[22px]"
                         onError={(e) => {
                           (e.currentTarget as HTMLElement).style.display = 'none';
                         }}
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                        <User className="w-8 h-8 opacity-60" />
+                        <User className="w-7 h-7 opacity-60" />
                       </div>
                     )}
                   </div>
                   <span 
-                    className="text-xs sm:text-sm font-semibold tracking-tight mt-2 line-clamp-1 w-full text-center" 
+                    className="text-xs sm:text-sm font-bold tracking-tight mt-2 line-clamp-2 w-full text-center leading-tight break-words" 
                     style={{ color: 'var(--details-text-primary)' }}
                     title={person.name}
                   >
                     {person.name}
                   </span>
                   <span 
-                    className="text-[11px] sm:text-xs font-medium line-clamp-1 w-full text-center mt-0.5"
-                    style={{ color: 'var(--details-text-secondary)' }}
+                    className="text-[10px] sm:text-[11px] font-normal line-clamp-2 w-full text-center mt-0.5 leading-tight break-words opacity-85"
+                    style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.75))' }}
                     title={person.role}
                   >
                     {person.role}
@@ -3414,14 +3438,14 @@ export default function Details() {
             </div>
           </div>
         ) : loadingCredits ? (
-          <div className="w-full max-w-4xl pt-1 pb-3 text-left animate-pulse">
-            <div className="h-6 w-28 bg-black/10 dark:bg-white/10 rounded-lg mb-3.5 ml-1"></div>
-            <div className="flex items-center gap-4 sm:gap-5 overflow-hidden pb-3 pt-1">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="flex flex-col items-center flex-shrink-0 w-20 sm:w-24">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-black/10 dark:bg-white/10"></div>
-                  <div className="h-3 w-16 bg-black/10 dark:bg-white/10 rounded mt-2"></div>
-                  <div className="h-2.5 w-12 bg-black/10 dark:bg-white/10 rounded mt-1"></div>
+          <div className="w-full max-w-4xl pt-1.5 pb-3 text-left animate-pulse">
+            <div className="h-6 w-28 bg-black/10 dark:bg-white/10 rounded-lg mb-3 ml-1"></div>
+            <div className="flex items-center gap-3.5 sm:gap-5 overflow-hidden pb-3 pt-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex flex-col items-center flex-shrink-0 w-[76px] sm:w-[90px]">
+                  <div className="w-[76px] h-[76px] sm:w-[90px] sm:h-[90px] rounded-[19px] sm:rounded-[22px] bg-black/10 dark:bg-white/10"></div>
+                  <div className="h-3 w-14 bg-black/10 dark:bg-white/10 rounded mt-2"></div>
+                  <div className="h-2.5 w-11 bg-black/10 dark:bg-white/10 rounded mt-1"></div>
                 </div>
               ))}
             </div>

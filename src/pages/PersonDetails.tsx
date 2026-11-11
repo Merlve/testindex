@@ -137,6 +137,29 @@ const PersonDetails = () => {
     ? (isDarkMode ? colorPalette.darkGlow : colorPalette.lightGlow)
     : 'rgba(130, 80, 220, 0.22)';
 
+  // Synchronize person details page dominant colors to document root so global controls (like ScrollToTopButton) inherit them
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--details-accent', activeAccent);
+    root.style.setProperty('--details-glow', activeGlow);
+    root.style.setProperty('--details-bg', activeBg);
+    root.style.setProperty('--details-border', activeBorder);
+    root.style.setProperty('--details-text-primary', activeTextPrimary);
+    if (colorPalette?.hex) {
+      root.style.setProperty('--details-dominant', colorPalette.hex);
+    }
+    root.setAttribute('data-details-active', 'true');
+
+    return () => {
+      root.style.removeProperty('--details-accent');
+      root.style.removeProperty('--details-glow');
+      root.style.removeProperty('--details-bg');
+      root.style.removeProperty('--details-border');
+      root.style.removeProperty('--details-text-primary');
+      root.style.removeProperty('--details-dominant');
+      root.removeAttribute('data-details-active');
+    };
+  }, [activeAccent, activeGlow, activeBg, activeBorder, activeTextPrimary, colorPalette?.hex]);
 
   return (
     <div 
