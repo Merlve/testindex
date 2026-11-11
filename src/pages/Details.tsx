@@ -2910,37 +2910,6 @@ export default function Details() {
     tmdbCountry
   ].filter(Boolean).join(' | ');
 
-  if (loading) {
-    return (
-      <div className="relative min-h-[100dvh]">
-        {/* Floating Top Nav (Always visible on Details page) */}
-        <div className="fixed top-4 left-4 md:left-6 z-40 pointer-events-auto">
-          <Link
-            to="/"
-            aria-label="Back to Home"
-            title="Home"
-            className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full border border-black/10 dark:border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-xl backdrop-saturate-[180%] shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 text-gray-900 dark:text-white cursor-pointer"
-          >
-            <Home size={20} className="shrink-0" />
-          </Link>
-        </div>
-        <div className="fixed top-4 right-4 md:right-6 z-40 pointer-events-auto">
-          <button
-            type="button"
-            onClick={() => setShowSearchModal(true)}
-            aria-label="Search"
-            title="Search"
-            className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full border border-black/10 dark:border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-xl backdrop-saturate-[180%] shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 text-gray-900 dark:text-white cursor-pointer"
-          >
-            <Search size={20} className="shrink-0" />
-          </button>
-        </div>
-        <DetailsSkeleton />
-        {showSearchModal && <SearchModal onClose={() => setShowSearchModal(false)} />}
-      </div>
-    );
-  }
-
   const activeBg = colorPalette 
     ? (isDarkMode ? colorPalette.darkBlendBg : colorPalette.rawBg) 
     : (isDarkMode ? '#0b0e14' : '#f8fafc');
@@ -3010,6 +2979,49 @@ export default function Details() {
       root.removeAttribute('data-details-active');
     };
   }, [activeAccent, activeGlow, activeBg, activeBorder, activeTextPrimary, colorPalette?.hex]);
+
+  if (loading) {
+    return (
+      <div 
+        className="details-page-root relative min-h-[100dvh]"
+        style={{
+          backgroundColor: 'var(--details-bg)',
+          color: 'var(--details-text-primary)',
+          '--details-bg': activeBg,
+          '--details-text-primary': activeTextPrimary,
+          '--details-accent': activeAccent,
+          '--details-glow': activeGlow,
+          '--details-border': activeBorder,
+          '--details-surface': activeSurface,
+        } as React.CSSProperties}
+      >
+        {/* Floating Top Nav (Always visible on Details page) */}
+        <div className="fixed top-4 left-4 md:left-6 z-40 pointer-events-auto">
+          <Link
+            to="/"
+            aria-label="Back to Home"
+            title="Home"
+            className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full border border-black/10 dark:border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-xl backdrop-saturate-[180%] shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 text-gray-900 dark:text-white cursor-pointer"
+          >
+            <Home size={20} className="shrink-0" />
+          </Link>
+        </div>
+        <div className="fixed top-4 right-4 md:right-6 z-40 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setShowSearchModal(true)}
+            aria-label="Search"
+            title="Search"
+            className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full border border-black/10 dark:border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-xl backdrop-saturate-[180%] shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 text-gray-900 dark:text-white cursor-pointer"
+          >
+            <Search size={20} className="shrink-0" />
+          </button>
+        </div>
+        <DetailsSkeleton />
+        {showSearchModal && <SearchModal onClose={() => setShowSearchModal(false)} />}
+      </div>
+    );
+  }
 
   return (
     <div 

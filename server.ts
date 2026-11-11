@@ -7018,7 +7018,7 @@ async function startServer() {
           !req.path.startsWith('/@') && 
           !req.path.startsWith('/src') && 
           !req.path.startsWith('/node_modules') &&
-          !/\.[a-zA-Z0-9]+$/.test(req.path);
+          !/\.(js|mjs|cjs|ts|tsx|css|json|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|map|mp4|webm|mp3|wav|ogg|mkv|avi|vtt|srt|wasm|xml|txt)$/i.test(req.path);
 
         if (isHtmlRequest) {
           try {
