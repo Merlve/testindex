@@ -4836,11 +4836,35 @@ async function attachFullDataToItem(item: any, searchType: string, tmdbKey: stri
                if (idRes.data.number_of_episodes) {
                    item.number_of_episodes = idRes.data.number_of_episodes;
                }
+               if (idRes.data.episode_run_time) {
+                   item.episode_run_time = idRes.data.episode_run_time;
+               }
                modified = true;
            }
        } catch(e) {}
    }
    
+   if (!isTv && (!item.runtime || !item.status)) {
+       try {
+           const mRes = await axios.get(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${tmdbKey}`, { timeout: 3500 });
+           if (mRes.data) {
+               if (mRes.data.runtime) {
+                   item.runtime = mRes.data.runtime;
+               }
+               if (mRes.data.status && !item.status) {
+                   item.status = mRes.data.status;
+               }
+               if (mRes.data.tagline && !item.tagline) {
+                   item.tagline = mRes.data.tagline;
+               }
+               if (mRes.data.genres && (!item.genres || item.genres.length === 0)) {
+                   item.genres = mRes.data.genres;
+               }
+               modified = true;
+           }
+       } catch(e) {}
+   }
+
    if (!isTv && !item.digital_release_date) {
        try {
            const rRes = await axios.get(`https://api.themoviedb.org/3/movie/${item.id}/release_dates?api_key=${tmdbKey}`, { timeout: 3500 });
@@ -5547,6 +5571,20 @@ app.get('/api/meta/tv_details', cacheMiddleware(3600, true), async (req, res) =>
 
   try {
     let response = await axios.get(`https://api.themoviedb.org/3/tv/${tvId}?api_key=${tmdbKey}`);
+    res.json(response.data);
+  } catch (err: any) {
+    res.json(null);
+  }
+});
+
+app.get('/api/meta/movie_details', cacheMiddleware(3600, true), async (req, res) => {
+  const { movieId } = req.query;
+  if (!movieId) return res.status(400).json({ error: 'movieId required' });
+  const tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) return res.json(null);
+
+  try {
+    let response = await axios.get(`https://api.themoviedb.org/3/movie/${movieId}?api_key=${tmdbKey}`);
     res.json(response.data);
   } catch (err: any) {
     res.json(null);

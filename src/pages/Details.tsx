@@ -13,6 +13,7 @@ import {
   parseMediaName, 
   extractFileMetadata, 
   formatBytes, 
+  formatDuration,
   formatSeasonDisplayName, 
   sortSeasonFolders, 
   getFolderSeasonNum 
@@ -334,6 +335,25 @@ function IntentPlayerModal({
               {meta.formattedSize}
             </span>
           )}
+          {(() => {
+            const rawModalDuration = isTvMedia 
+              ? (tmdbEpisode?.runtime || (Array.isArray(tmdb?.episode_run_time) && tmdb.episode_run_time[0]) || tmdb?.runtime || item?.duration)
+              : (tmdb?.runtime || item?.duration);
+            const formattedModalDuration = formatDuration(rawModalDuration);
+            if (!formattedModalDuration) return null;
+            return (
+              <span 
+                className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold border"
+                style={{
+                  backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                  borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
+                  color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.75))'
+                }}
+              >
+                {formattedModalDuration}
+              </span>
+            );
+          })()}
         </div>
 
         {loading ? (
@@ -1009,6 +1029,11 @@ const FileRowItem = memo(function FileRowItem({
             : (meta.episodeNum !== null ? `Ep ${meta.episodeNum}` : null)))
     : null;
 
+  const rawDuration = isTvMedia 
+    ? (tmdbEpisode?.runtime || (Array.isArray(tmdb?.episode_run_time) && tmdb.episode_run_time[0]) || (Array.isArray(initialTmdb?.episode_run_time) && initialTmdb.episode_run_time[0]) || tmdb?.runtime || initialTmdb?.runtime || file?.duration)
+    : (tmdb?.runtime || initialTmdb?.runtime || file?.duration);
+  const formattedDuration = formatDuration(rawDuration);
+
   return (
     <div 
       className={`p-3 sm:p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 ${
@@ -1116,6 +1141,24 @@ const FileRowItem = memo(function FileRowItem({
               >
                 {meta.formattedSize}
               </span>
+            )}
+            {formattedDuration && (
+              <>
+                {meta.formattedSize && (
+                  <span 
+                    className="text-[10px] font-medium opacity-50 select-none"
+                    style={{ color: 'var(--details-text-muted)' }}
+                  >
+                    •
+                  </span>
+                )}
+                <span 
+                  className="text-[11px] font-medium"
+                  style={{ color: 'var(--details-text-muted)' }}
+                >
+                  {formattedDuration}
+                </span>
+              </>
             )}
           </div>
         </div>
@@ -1688,6 +1731,29 @@ export default function Details() {
     }
     return () => { isMounted = false; };
   }, [tmdb?.id, tmdb?.status, isTvMedia, name]);
+
+  // If TMDB data exists for a movie but runtime is missing, fetch full movie details
+  useEffect(() => {
+    let isMounted = true;
+    const targetMovieId = tmdb?.id || tmdb?.tmdb_id || location.state?.item?._jf?.tmdbId || location.state?.item?.tmdbId;
+
+    if (!isTvMedia && targetMovieId && !tmdb?.runtime) {
+      axios.get(`/api/meta/movie_details?movieId=${targetMovieId}`)
+        .then(res => {
+          if (isMounted && res.data && res.data.runtime) {
+            setTmdb((prev: any) => ({
+              ...(prev || {}),
+              runtime: res.data.runtime,
+              status: res.data.status || prev?.status,
+              tagline: res.data.tagline || prev?.tagline,
+              genres: (prev?.genres && prev.genres.length > 0) ? prev.genres : res.data.genres,
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [tmdb?.id, tmdb?.runtime, isTvMedia]);
 
   // Fetch logo automatically whenever tmdb, name, or category changes
   useEffect(() => {

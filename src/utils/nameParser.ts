@@ -249,4 +249,43 @@ export const sortSeasonFolders = (folders: any[]): any[] => {
   });
 };
 
+/**
+ * Formats duration in minutes (or seconds / HH:MM) into a clean, human-readable format (e.g. '45m', '1h 15m', '2h')
+ */
+export const formatDuration = (val: number | string | undefined | null): string | null => {
+  if (val === undefined || val === null || val === '') return null;
 
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.includes(':')) {
+      const parts = trimmed.split(':').map(p => parseInt(p, 10));
+      if (parts.length === 3 && !parts.some(isNaN)) {
+        const [h, m] = parts;
+        if (h > 0 && m > 0) return `${h}h ${m}m`;
+        if (h > 0) return `${h}h`;
+        return `${m}m`;
+      } else if (parts.length === 2 && !parts.some(isNaN)) {
+        const [m] = parts;
+        return `${m}m`;
+      }
+    }
+    const parsed = parseFloat(trimmed);
+    if (isNaN(parsed) || parsed <= 0) return null;
+    val = parsed;
+  }
+
+  if (typeof val === 'number') {
+    if (isNaN(val) || val <= 0) return null;
+    // If value is likely in seconds (> 500, e.g. 5400s = 90m), convert to minutes
+    const totalMinutes = val > 500 ? Math.round(val / 60) : Math.round(val);
+    if (totalMinutes <= 0) return null;
+
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h`;
+    return `${mins}m`;
+  }
+
+  return null;
+};
