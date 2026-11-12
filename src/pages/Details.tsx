@@ -23,7 +23,7 @@ import VideoPlayer from '../components/VideoPlayer';
 import ZipDownloadModal from '../components/ZipDownloadModal';
 import SearchModal from '../components/SearchModal';
 import { useQueryClient } from '@tanstack/react-query';
-import { extractDominantColor, BackdropColorPalette, getCachedPalette, useIsDarkMode } from '../utils/colorExtractor';
+import { extractDominantColor, BackdropColorPalette, getCachedPalette, setCachedPalette, clearPaletteCache, useIsDarkMode } from '../utils/colorExtractor';
 import { markImageLoaded, isImageLoaded } from '../utils/imageCache';
 
 // Helper to identify video files
@@ -2757,6 +2757,17 @@ export default function Details() {
         }));
       }
 
+      // Immediately clear palette cache and extract dominant color from the new backdrop
+      clearPaletteCache();
+      const newBackdropFullUrl = targetBackdrop.startsWith('http') 
+        ? targetBackdrop 
+        : `https://image.tmdb.org/t/p/w1280${targetBackdrop}`;
+      extractDominantColor(newBackdropFullUrl)
+        .then(palette => {
+          if (palette) setColorPalette(palette);
+        })
+        .catch(() => {});
+
       setShowMetadataModal(false);
       setToast('Backdrop image updated persistently');
       setTimeout(() => setToast(''), 2500);
@@ -2790,12 +2801,12 @@ export default function Details() {
     if (isFromWatched && !prefetchedDetailsMeta && !hasLoadedAuthoritativeMeta) {
       return '';
     }
-    const raw = tmdb?.backdrop_path || initialTmdb?.backdrop_path || (!isFromWatched ? (location.state?.item?.backdrop_path || location.state?.item?.backdropPath) : null);
+    const raw = tmdb?.custom_backdrop || tmdb?.backdrop_path || initialTmdb?.custom_backdrop || initialTmdb?.backdrop_path || (!isFromWatched ? (location.state?.item?.custom_backdrop || location.state?.item?.customBackdrop || location.state?.item?.backdrop_path || location.state?.item?.backdropPath) : null);
     if (raw) {
       return raw.startsWith('http') ? raw : `https://image.tmdb.org/t/p/w1280${raw}`;
     }
     // Fallback backdrop to poster if no backdrop exists
-    const rawPoster = tmdb?.poster_path || initialTmdb?.poster_path || (!isFromWatched ? (location.state?.item?.poster_path || location.state?.item?.posterPath) : null);
+    const rawPoster = tmdb?.custom_poster || tmdb?.poster_path || initialTmdb?.custom_poster || initialTmdb?.poster_path || (!isFromWatched ? (location.state?.item?.custom_poster || location.state?.item?.poster_path || location.state?.item?.posterPath) : null);
     if (rawPoster) {
       return rawPoster.startsWith('http') ? rawPoster : `https://image.tmdb.org/t/p/w780${rawPoster}`;
     }
@@ -2807,7 +2818,7 @@ export default function Details() {
     if (isFromWatched && !prefetchedDetailsMeta && !hasLoadedAuthoritativeMeta) {
       return '';
     }
-    const raw = tmdb?.poster_path || initialTmdb?.poster_path || (!isFromWatched ? (location.state?.item?.poster_path || location.state?.item?.posterPath) : null);
+    const raw = tmdb?.custom_poster || tmdb?.poster_path || initialTmdb?.custom_poster || initialTmdb?.poster_path || (!isFromWatched ? (location.state?.item?.custom_poster || location.state?.item?.poster_path || location.state?.item?.posterPath) : null);
     if (raw) {
       return raw.startsWith('http') ? raw : `https://image.tmdb.org/t/p/w780${raw}`;
     }
@@ -2821,11 +2832,16 @@ export default function Details() {
 
   // Fallback landscape poster for episodes lacking individual TMDB episode thumbnails
   const fallbackLandscapePoster = useMemo(() => {
-    const rawPath = tmdb?.backdrop_path || 
+    const rawPath = tmdb?.custom_backdrop ||
+      tmdb?.backdrop_path || 
+      initialTmdb?.custom_backdrop ||
       initialTmdb?.backdrop_path || 
       (!isFromWatched ? (
+        location.state?.item?.custom_backdrop ||
+        location.state?.item?.customBackdrop ||
         location.state?.item?.backdropPath || 
         location.state?.item?.backdrop_path || 
+        location.state?.tmdbData?.custom_backdrop ||
         location.state?.tmdbData?.backdrop_path || 
         location.state?.tmdbData?.backdropPath
       ) : null) || 
@@ -3201,6 +3217,13 @@ export default function Details() {
               src={backdropUrl || posterUrl} 
               alt={tmdb?.custom_title || tmdb?._customTitle || location.state?.item?.customTitle || location.state?.customTitle || tmdb?.title || tmdb?.name || name} 
               className="w-full h-full object-cover object-center sm:object-top opacity-85 pointer-events-none transition-opacity duration-700"
+              onError={(e) => {
+                const currentSrc = (e.currentTarget as HTMLImageElement).src;
+                const target = backdropUrl || posterUrl;
+                if (target && (target.startsWith('http://') || target.startsWith('https://')) && !currentSrc.includes('/api/image-proxy')) {
+                  (e.currentTarget as HTMLImageElement).src = `/api/image-proxy?url=${encodeURIComponent(target)}`;
+                }
+              }}
             />
           )}
 

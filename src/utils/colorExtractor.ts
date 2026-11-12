@@ -326,7 +326,9 @@ export function generatePaletteFromRgb(r: number, g: number, b: number): Backdro
 const DEFAULT_PALETTE: BackdropColorPalette = generatePaletteFromRgb(130, 80, 220);
 
 /**
- * Extracts the dominant color from an image URL using FastAverageColor or Canvas fallback
+ * Extracts the dominant color from an image URL using FastAverageColor or Canvas fallback.
+ * Automatically proxies external/custom URLs through /api/image-proxy to guarantee CORS compliance
+ * and prevent browser canvas security taint errors.
  */
 export async function extractDominantColor(imageUrl: string): Promise<BackdropColorPalette> {
   if (!imageUrl) return DEFAULT_PALETTE;
@@ -334,65 +336,85 @@ export async function extractDominantColor(imageUrl: string): Promise<BackdropCo
   const cached = paletteCache.get(imageUrl);
   if (cached) return cached;
 
-  const corsUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + 'cors_for_color=1';
+  const isExternal = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+  const isProxied = imageUrl.includes('/api/image-proxy');
 
-  try {
-    const result = await fac.getColorAsync(corsUrl, {
-      algorithm: 'dominant',
-      mode: 'precision',
-      crossOrigin: 'anonymous',
-      ignoredColor: [
-        [255, 255, 255, 255, 10], // ignore pure white
-        [0, 0, 0, 255, 10],       // ignore pure black
-      ],
-    });
+  // Candidate URLs to try in sequence:
+  // For custom external image URLs, browser CORS prevents direct canvas/fac pixel access.
+  // We use same-origin /api/image-proxy to ensure reliable extraction without tainted canvas errors.
+  const candidateUrls: string[] = [];
 
-    if (result && result.value && result.value.length >= 3) {
-      const [r, g, b] = result.value;
-      const palette = generatePaletteFromRgb(r, g, b);
-      setCachedPalette(imageUrl, palette);
-      return palette;
+  if (isExternal && !isProxied) {
+    if (imageUrl.includes('image.tmdb.org')) {
+      candidateUrls.push(imageUrl + (imageUrl.includes('?') ? '&' : '?') + 'cors_for_color=1');
+      candidateUrls.push(`/api/image-proxy?url=${encodeURIComponent(imageUrl)}`);
+    } else {
+      candidateUrls.push(`/api/image-proxy?url=${encodeURIComponent(imageUrl)}`);
+      candidateUrls.push(imageUrl);
     }
-  } catch (err) {
-    // Fallback: manual canvas sampling with crossOrigin anonymous
+  } else {
+    candidateUrls.push(imageUrl);
+  }
+
+  for (const url of candidateUrls) {
     try {
-      const img = new Image();
-      img.crossOrigin = 'Anonymous';
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject();
-        img.src = corsUrl;
+      const result = await fac.getColorAsync(url, {
+        algorithm: 'dominant',
+        mode: 'precision',
+        crossOrigin: 'anonymous',
+        ignoredColor: [
+          [255, 255, 255, 255, 10], // ignore pure white
+          [0, 0, 0, 255, 10],       // ignore pure black
+        ],
       });
 
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        canvas.width = 40;
-        canvas.height = 40;
-        ctx.drawImage(img, 0, 0, 40, 40);
-        const data = ctx.getImageData(0, 0, 40, 40).data;
-        let rSum = 0, gSum = 0, bSum = 0, count = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          // Skip extreme dark/bright pixels to find actual dominant hue
-          const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-          if (brightness > 20 && brightness < 235) {
-            rSum += r;
-            gSum += g;
-            bSum += b;
-            count++;
+      if (result && result.value && result.value.length >= 3) {
+        const [r, g, b] = result.value;
+        const palette = generatePaletteFromRgb(r, g, b);
+        setCachedPalette(imageUrl, palette);
+        return palette;
+      }
+    } catch (err) {
+      // Fallback: manual canvas sampling with crossOrigin anonymous
+      try {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject();
+          img.src = url;
+        });
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          canvas.width = 40;
+          canvas.height = 40;
+          ctx.drawImage(img, 0, 0, 40, 40);
+          const data = ctx.getImageData(0, 0, 40, 40).data;
+          let rSum = 0, gSum = 0, bSum = 0, count = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            // Skip extreme dark/bright pixels to find actual dominant hue
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            if (brightness > 20 && brightness < 235) {
+              rSum += r;
+              gSum += g;
+              bSum += b;
+              count++;
+            }
+          }
+          if (count > 0) {
+            const palette = generatePaletteFromRgb(rSum / count, gSum / count, bSum / count);
+            setCachedPalette(imageUrl, palette);
+            return palette;
           }
         }
-        if (count > 0) {
-          const palette = generatePaletteFromRgb(rSum / count, gSum / count, bSum / count);
-          setCachedPalette(imageUrl, palette);
-          return palette;
-        }
+      } catch (e2) {
+        // Try next candidate URL
       }
-    } catch (e2) {
-      // Ignore and fallback to default
     }
   }
 

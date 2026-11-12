@@ -359,10 +359,11 @@ export function prefetchItemDetails(
       });
 
       // Preload backdrop & poster images if discovered (prioritizing backdrop, fallback to poster)
-      if (data?.backdrop_path && typeof window !== 'undefined') {
-        const bgUrl = data.backdrop_path.startsWith('http')
-          ? data.backdrop_path
-          : `https://image.tmdb.org/t/p/w1280${data.backdrop_path}`;
+      const rawBg = data?.custom_backdrop || data?.backdrop_path;
+      if (rawBg && typeof window !== 'undefined') {
+        const bgUrl = rawBg.startsWith('http')
+          ? rawBg
+          : `https://image.tmdb.org/t/p/w1280${rawBg}`;
         const img = new Image();
         img.src = bgUrl;
         img.onload = () => {
@@ -463,8 +464,8 @@ export function prefetchItemDetails(
   // 5. Preload high-res backdrop image (or fallback poster) into browser cache & extract dominant color
   // When navigating from watched history, skip speculative color extraction from tmdbData to avoid flashing mismatched colors before the authoritative backdrop is fetched
   if (!fromWatched) {
-    const backdrop = tmdbData?.backdrop_path;
-    const poster = tmdbData?.poster_path;
+    const backdrop = tmdbData?.custom_backdrop || tmdbData?.backdrop_path;
+    const poster = tmdbData?.custom_poster || tmdbData?.poster_path;
     if (backdrop && typeof window !== 'undefined') {
       const backdropUrl = backdrop.startsWith('http')
         ? backdrop

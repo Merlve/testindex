@@ -2166,12 +2166,19 @@ app.get('/api/image-proxy', async (req, res) => {
     let response = await axios({
       method: 'GET',
       url: imageUrl,
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Referer': imageUrl
+      },
+      timeout: 12000
     });
 
     const contentType = response.headers['content-type'] as string || 'image/jpeg';
     
     res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(response.data);
   } catch (err: any) {
@@ -4502,6 +4509,15 @@ app.post('/api/fs/search', cacheMiddleware(120, true), async (req, res) => {
           if (entry.poster_path) {
             item.poster_path = entry.poster_path;
           }
+          if (entry.custom_backdrop) {
+            item.custom_backdrop = entry.custom_backdrop;
+          }
+          if (entry.backdrop_path) {
+            item.backdrop_path = entry.backdrop_path;
+          }
+          if (!item.poster_path && entry.custom_backdrop) {
+            item.poster_path = entry.custom_backdrop;
+          }
           if (entry.id) {
             item.tmdbId = entry.id;
           }
@@ -6287,6 +6303,9 @@ app.post('/api/meta/override', authenticatedMiddleware, async (req, res) => {
         const cleanBackdrop = backdropVal.trim();
         dataToUpdate.custom_backdrop = cleanBackdrop;
         dataToUpdate.backdrop_path = cleanBackdrop;
+        if (!dataToUpdate.poster_path) {
+          dataToUpdate.poster_path = cleanBackdrop;
+        }
         dataToUpdate.images = dataToUpdate.images || {};
         dataToUpdate.images.backdrops = dataToUpdate.images.backdrops || [];
         dataToUpdate.images.backdrops = dataToUpdate.images.backdrops.filter((b: any) => b.file_path !== cleanBackdrop);

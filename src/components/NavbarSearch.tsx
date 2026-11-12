@@ -9,18 +9,7 @@ import { parseMediaName } from '../utils/nameParser';
 import { prefetchItemDetails } from '../utils/detailsPrefetch';
 
 function SearchItemImage({ item, metaVer }: { item: any; metaVer?: string }) {
-  const directPoster = item.poster_path;
-  if (directPoster) {
-    return (
-      <div className="w-8 h-8 rounded shrink-0 overflow-hidden bg-black/50 mr-3">
-        <img 
-          src={directPoster.startsWith('http') ? directPoster : `https://image.tmdb.org/t/p/w92${directPoster}`} 
-          alt="" 
-          className="w-full h-full object-cover" 
-        />
-      </div>
-    );
-  }
+  const directImage = item.custom_backdrop || item.poster_path || item.backdrop_path || item.backdropPath;
 
   const { data: tmdbData } = useQuery({
     queryKey: ['tmdb_search', item.name, item.parent, metaVer],
@@ -43,12 +32,50 @@ function SearchItemImage({ item, metaVer }: { item: any; metaVer?: string }) {
     staleTime: 1000 * 60 * 5,
   });
 
-  const posterPath = tmdbData?.poster_path;
-  
-  if (posterPath) {
+  const rawImage = 
+    item.custom_backdrop || 
+    tmdbData?.custom_backdrop || 
+    item.poster_path || 
+    tmdbData?.poster_path || 
+    item.backdrop_path || 
+    tmdbData?.backdrop_path || 
+    directImage;
+
+  const [imgSrc, setImgSrc] = useState<string | null>(() => {
+    if (!rawImage) return null;
+    if (rawImage.startsWith('http://') || rawImage.startsWith('https://')) return rawImage;
+    const clean = rawImage.startsWith('/') ? rawImage : `/${rawImage}`;
+    return `https://image.tmdb.org/t/p/w185${clean}`;
+  });
+
+  useEffect(() => {
+    if (!rawImage) {
+      setImgSrc(null);
+      return;
+    }
+    if (rawImage.startsWith('http://') || rawImage.startsWith('https://')) {
+      setImgSrc(rawImage);
+    } else {
+      const clean = rawImage.startsWith('/') ? rawImage : `/${rawImage}`;
+      setImgSrc(`https://image.tmdb.org/t/p/w185${clean}`);
+    }
+  }, [rawImage]);
+
+  if (imgSrc) {
     return (
       <div className="w-8 h-8 rounded shrink-0 overflow-hidden bg-black/50 mr-3">
-        <img src={`https://image.tmdb.org/t/p/w92${posterPath}`} alt="" className="w-full h-full object-cover" />
+        <img 
+          src={imgSrc} 
+          alt="" 
+          className="w-full h-full object-cover" 
+          onError={() => {
+            if (rawImage && (rawImage.startsWith('http://') || rawImage.startsWith('https://')) && !imgSrc.includes('/api/image-proxy')) {
+              setImgSrc(`/api/image-proxy?url=${encodeURIComponent(rawImage)}`);
+            } else {
+              setImgSrc(null);
+            }
+          }}
+        />
       </div>
     );
   }
