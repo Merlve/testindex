@@ -38,7 +38,6 @@ function IntentPlayerModal({
   token, 
   config, 
   onClose, 
-  onPlayWeb,
   onExternalPlay,
   user,
   tmdb,
@@ -52,7 +51,7 @@ function IntentPlayerModal({
   token: string | null; 
   config: any; 
   onClose: () => void; 
-  onPlayWeb: (url: string) => void; 
+  onPlayWeb?: (url: string) => void; 
   onExternalPlay: () => void;
   user?: string | null;
   tmdb?: any;
@@ -365,7 +364,7 @@ function IntentPlayerModal({
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="grid gap-2.5 grid-cols-2">
+            <div className={`grid gap-2.5 ${os === 'windows' || os === 'unknown' ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {os === 'ios' && (
                 <>
                   <a onClick={() => { onExternalPlay(); }}
@@ -484,39 +483,29 @@ function IntentPlayerModal({
                     </div>
                   </a>
 
-                  {/* Play Here (In Browser): Adaptive surface background with non-flushing accented border */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (url) {
-                        onPlayWeb(url);
-                        onClose();
-                      }
-                    }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl transition text-left cursor-pointer min-w-0 active:scale-95 border"
+                  <a onClick={() => { onExternalPlay(); }}
+                    href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;package=com.playit.videoplayer;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;S.title=${encodeURIComponent(item.name)};end;`}
+                    className="flex items-center gap-2.5 p-3 rounded-xl border transition text-left cursor-pointer min-w-0"
                     style={{
-                      backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
-                      borderColor: 'var(--details-accent, #9333ea)',
-                      borderWidth: '1.5px',
-                      color: 'var(--details-text-primary, #ffffff)',
-                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+                      backgroundColor: 'var(--details-surface, rgba(255, 255, 255, 0.06))',
+                      borderColor: 'var(--details-border, rgba(255, 255, 255, 0.12))',
                     }}
                   >
                     <div 
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
+                      className="w-8 h-8 rounded-lg font-bold text-[10px] flex items-center justify-center shrink-0 border"
                       style={{
                         backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
-                        borderColor: 'var(--details-accent, #9333ea)',
-                        color: 'var(--details-accent, #9333ea)'
+                        borderColor: 'var(--details-badge-border, rgba(255, 255, 255, 0.15))',
+                        color: 'var(--details-accent, #a855f7)'
                       }}
                     >
-                      <Play size={14} fill="currentColor" />
+                      PLAY
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Play Here</div>
-                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}>In Browser</div>
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>PLAYit</div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>supports resume</div>
                     </div>
-                  </button>
+                  </a>
 
                   <a onClick={() => { onExternalPlay(); }}
                     href={`intent://${url.replace(/^https?:\/\//, '')}#Intent;action=android.intent.action.VIEW;scheme=${url.startsWith('https') ? 'https' : 'http'};type=video/*;end;`}
@@ -560,40 +549,6 @@ function IntentPlayerModal({
                       <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>Windows</div>
                     </div>
                   </a>
-
-                  {/* Play Here (In Browser): Adaptive surface background with non-flushing accented border */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (url) {
-                        onPlayWeb(url);
-                        onClose();
-                      }
-                    }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl transition text-left cursor-pointer min-w-0 active:scale-95 border"
-                    style={{
-                      backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
-                      borderColor: 'var(--details-accent, #9333ea)',
-                      borderWidth: '1.5px',
-                      color: 'var(--details-text-primary, #ffffff)',
-                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
-                    }}
-                  >
-                    <div 
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
-                      style={{
-                        backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
-                        borderColor: 'var(--details-accent, #9333ea)',
-                        color: 'var(--details-accent, #9333ea)'
-                      }}
-                    >
-                      <Play size={14} fill="currentColor" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Play Here</div>
-                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}>In Browser</div>
-                    </div>
-                  </button>
                 </>
               )}
 
@@ -613,40 +568,6 @@ function IntentPlayerModal({
                       <div className="text-[10px] truncate" style={{ color: 'var(--details-text-muted, rgba(255, 255, 255, 0.50))' }}>External App</div>
                     </div>
                   </a>
-
-                  {/* Play Here (In Browser): Adaptive surface background with non-flushing accented border */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (url) {
-                        onPlayWeb(url);
-                        onClose();
-                      }
-                    }}
-                    className="flex items-center gap-2.5 p-3 rounded-xl transition text-left cursor-pointer min-w-0 active:scale-95 border"
-                    style={{
-                      backgroundColor: 'var(--details-surface-hover, rgba(255, 255, 255, 0.12))',
-                      borderColor: 'var(--details-accent, #9333ea)',
-                      borderWidth: '1.5px',
-                      color: 'var(--details-text-primary, #ffffff)',
-                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
-                    }}
-                  >
-                    <div 
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
-                      style={{
-                        backgroundColor: 'var(--details-badge-bg, rgba(255, 255, 255, 0.08))',
-                        borderColor: 'var(--details-accent, #9333ea)',
-                        color: 'var(--details-accent, #9333ea)'
-                      }}
-                    >
-                      <Play size={14} fill="currentColor" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold truncate" style={{ color: 'var(--details-text-primary, #ffffff)' }}>Play Here</div>
-                      <div className="text-[10px] truncate" style={{ color: 'var(--details-text-secondary, rgba(255, 255, 255, 0.70))' }}>In Browser</div>
-                    </div>
-                  </button>
                 </>
               )}
             </div>
@@ -726,6 +647,18 @@ function IntentPlayerModal({
                     style={{ color: 'var(--details-accent, #a855f7)' }}
                   >
                     here
+                  </a>
+                </p>
+                <p>
+                  download PLAYit from{' '}
+                  <a 
+                    href="https://play.google.com/store/apps/details?id=com.playit.videoplayer" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="underline not-italic font-medium"
+                    style={{ color: 'var(--details-accent, #a855f7)' }}
+                  >
+                    play store
                   </a>
                 </p>
               </div>
