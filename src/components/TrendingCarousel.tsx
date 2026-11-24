@@ -74,7 +74,13 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
 
   const renderedItems = useMemo(() => {
     return trendingItems.slice(0, 10).map((item, i) => (
-      <ItemCard key={`${item.id || item.name}-${i}`} item={item} category={item.category} parentPath={`/home/${item.category}`} />
+      <ItemCard
+        key={`${item.id || item.name}-${i}`}
+        item={item}
+        category={item.category}
+        parentPath={`/home/${item.category}`}
+        rank={i + 1}
+      />
     ));
   }, [trendingItems]);
 
@@ -136,7 +142,7 @@ export default function TrendingCarousel({ categories }: { categories: any[] }) 
       <div 
         ref={scrollRef} 
         onScroll={handleScroll}
-        className="flex overflow-x-auto gap-4 carousel-track pb-2 scrollbar-hide overscroll-x-contain"
+        className="flex overflow-x-auto gap-3 sm:gap-4 carousel-track pt-3 pb-3 px-1 scrollbar-hide overscroll-x-contain"
       >
          {renderedItems}
       </div>

@@ -100,7 +100,8 @@ const ItemCard = function ItemCard({
   className, 
   viewMode = 'grid', 
   tmdbData,
-  addedAt 
+  addedAt,
+  rank
 }: { 
   item: any, 
   category: string, 
@@ -108,7 +109,8 @@ const ItemCard = function ItemCard({
   className?: string, 
   viewMode?: 'grid' | 'list', 
   tmdbData?: any,
-  addedAt?: number | string 
+  addedAt?: number | string,
+  rank?: number
 }) {
   const [tmdb, setTmdb] = useState<any>(tmdbData || null);
   const { user, token } = useAuth();
@@ -450,58 +452,100 @@ const ItemCard = function ItemCard({
     </div>
   );
 
+  const isRanked = typeof rank === 'number' && rank > 0 && viewMode !== 'list';
+
+  const rankSvgSizeClasses = isRanked
+    ? rank === 1
+      ? '-left-6 sm:-left-8 md:-left-10 w-[48px] sm:w-[64px] md:w-[80px] h-[98px] sm:h-[124px] md:h-[148px]'
+      : rank >= 10
+      ? '-left-12 sm:-left-16 md:-left-20 w-[78px] sm:w-[100px] md:w-[122px] h-[98px] sm:h-[124px] md:h-[148px]'
+      : '-left-8 sm:-left-10 md:-left-12 w-[58px] sm:w-[74px] md:w-[90px] h-[98px] sm:h-[124px] md:h-[148px]'
+    : '';
+
   const renderGridContent = (
     <>
-      <div className="w-full aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden shadow-md sm:shadow-lg transition-[transform,shadow] duration-300 sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98] flex-shrink-0">
-        <MoviePoster 
-          src={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}` : null}
-          lowResSrc={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w92${displayTmdb.poster_path}` : null}
-          alt={item.name} 
-          className="absolute inset-0 w-full h-full z-0" 
-          fallbackText={item.name}
-        />
-        
-        {displayTmdb?.vote_average && (
-          <div className="absolute top-1 right-1 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 bg-black/85 rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20">
-            {Number(displayTmdb.vote_average).toFixed(1)}
-          </div>
-        )}
-        {user === 'admin' && displayTmdb?._synced && (
-          <div 
-            className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} sm:top-2 ${displayTmdb?.vote_average ? 'sm:right-11' : 'sm:right-2'} p-1 rounded-md bg-black/85 text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
-            title="Metadata synced in database (Cached)"
+      <div className={isRanked ? 'relative' : 'contents'}>
+        {isRanked && (
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none select-none absolute bottom-0 z-0 leading-none ${rankSvgSizeClasses}`}
           >
-            <Cloud size={11} className="sm:w-3 sm:h-3 fill-sky-400/20 text-sky-400" />
+            <svg
+              viewBox={rank === 1 ? '0 0 85 130' : rank >= 10 ? '0 0 144 130' : '0 0 100 130'}
+              className="w-full h-full transition-colors duration-200 text-zinc-900/45 dark:text-white/55 group-hover:text-zinc-900/75 dark:group-hover:text-white/85"
+              fill="none"
+              aria-hidden="true"
+            >
+              <text
+                x={rank === 1 ? 80 : rank >= 10 ? 138 : 95}
+                y={120}
+                textAnchor="end"
+                fontSize={rank >= 10 ? 116 : 118}
+                fontWeight="900"
+                letterSpacing={rank >= 10 ? '-5' : undefined}
+                fontFamily="'Poppins', ui-sans-serif, system-ui, sans-serif"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3.2"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              >
+                {rank}
+              </text>
+            </svg>
           </div>
         )}
-        <button
-          onClick={handleToggleWatchlist}
-          className={`absolute top-1 left-1 sm:top-2 sm:left-2 p-1 sm:p-1.5 rounded-full bg-black/85 z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
-          title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
-        >
-          {inWatchlist ? <BookmarkCheck size={12} className="sm:w-3.5 sm:h-3.5" /> : <Bookmark size={12} className="sm:w-3.5 sm:h-3.5" />}
-        </button>
+        <div className={`${isRanked ? 'w-32 sm:w-40 md:w-48 z-10 shadow-[0_8px_20px_rgba(0,0,0,0.2)] dark:shadow-[0_12px_28px_rgba(0,0,0,0.75)]' : 'w-full shadow-md sm:shadow-lg'} aspect-[2/3] rounded-xl sm:rounded-2xl bg-[#fbf4eb] dark:bg-[#1a1a22] border border-black/5 dark:border-white/5 overflow-hidden relative isolate transform-gpu backface-hidden transition-[transform,shadow] duration-300 sm:group-hover:-translate-y-2 sm:group-hover:scale-[1.02] sm:group-hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] active:scale-[0.98] flex-shrink-0`}>
+          <MoviePoster 
+            src={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w342${displayTmdb.poster_path}` : null}
+            lowResSrc={displayTmdb?.poster_path ? `https://image.tmdb.org/t/p/w92${displayTmdb.poster_path}` : null}
+            alt={item.name} 
+            className="absolute inset-0 w-full h-full z-0" 
+            fallbackText={item.name}
+          />
+          
+          {displayTmdb?.vote_average && (
+            <div className="absolute top-1 right-1 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 bg-black/85 rounded text-[9px] sm:text-[10px] font-bold text-yellow-500 z-20">
+              {Number(displayTmdb.vote_average).toFixed(1)}
+            </div>
+          )}
+          {user === 'admin' && displayTmdb?._synced && (
+            <div 
+              className={`absolute top-1 ${displayTmdb?.vote_average ? 'right-7 sm:right-10' : 'right-1 sm:right-2'} sm:top-2 ${displayTmdb?.vote_average ? 'sm:right-11' : 'sm:right-2'} p-1 rounded-md bg-black/85 text-sky-400 z-20 flex items-center justify-center border border-sky-400/30 shadow-md`}
+              title="Metadata synced in database (Cached)"
+            >
+              <Cloud size={11} className="sm:w-3 sm:h-3 fill-sky-400/20 text-sky-400" />
+            </div>
+          )}
+          <button
+            onClick={handleToggleWatchlist}
+            className={`absolute top-1 left-1 sm:top-2 sm:left-2 p-1 sm:p-1.5 rounded-full bg-black/85 z-30 transition-all hover:scale-110 ${inWatchlist ? 'text-purple-400 hover:bg-black/80' : 'text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+            title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+          >
+            {inWatchlist ? <BookmarkCheck size={12} className="sm:w-3.5 sm:h-3.5" /> : <Bookmark size={12} className="sm:w-3.5 sm:h-3.5" />}
+          </button>
 
-        <button
-          onClick={handleToggleWatched}
-          className={`absolute top-1 left-7 sm:top-2 sm:left-9 p-1 sm:p-1.5 rounded-full bg-black/85 z-30 transition-all hover:scale-110 ${isWatched ? 'text-purple-400 bg-purple-950/80 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'text-white/70 hover:text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
-          title={isWatched ? "Mark as unwatched" : "Mark as watched"}
-        >
-          {isWatched ? <Eye size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400 fill-purple-400/20" /> : <EyeOff size={12} className="sm:w-3.5 sm:h-3.5" />}
-        </button>
+          <button
+            onClick={handleToggleWatched}
+            className={`absolute top-1 left-7 sm:top-2 sm:left-9 p-1 sm:p-1.5 rounded-full bg-black/85 z-30 transition-all hover:scale-110 ${isWatched ? 'text-purple-400 bg-purple-950/80 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'text-white/70 hover:text-white hover:bg-purple-600/80'} opacity-100 focus:opacity-100`}
+            title={isWatched ? "Mark as unwatched" : "Mark as watched"}
+          >
+            {isWatched ? <Eye size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400 fill-purple-400/20" /> : <EyeOff size={12} className="sm:w-3.5 sm:h-3.5" />}
+          </button>
 
-        {item._digital_release && (item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) ? (
-          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-blue-600/90 text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-blue-400/30 truncate">
-            <span className="truncate">{new Date((item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-          </div>
-        ) : isWatched ? (
-          <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600 text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
-            <CheckCircle size={9} className="fill-current text-white flex-shrink-0" />
-            <span className="truncate">Watched</span>
-          </div>
-        ) : null}
+          {item._digital_release && (item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) ? (
+            <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-blue-600/90 text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-blue-400/30 truncate">
+              <span className="truncate">{new Date((item.digitalReleaseDate || displayTmdb?.digital_release_date || item.releaseDate) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            </div>
+          ) : isWatched ? (
+            <div className="absolute bottom-1 left-1 right-1 sm:bottom-1.5 sm:left-1.5 sm:right-1.5 px-1 py-0.5 rounded bg-purple-600 text-white font-extrabold text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center justify-center gap-0.5 z-20 shadow-md border border-purple-400/30 truncate">
+              <CheckCircle size={9} className="fill-current text-white flex-shrink-0" />
+              <span className="truncate">Watched</span>
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div>
+      <div className={isRanked ? 'w-32 sm:w-40 md:w-48' : ''}>
         <h3 className="font-semibold truncate text-black dark:text-white text-[11px] sm:text-xs">
           {item._rec && <span className="inline-block bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded mr-2 align-middle font-bold">REC</span>}
           {displayTitle}
@@ -560,9 +604,17 @@ const ItemCard = function ItemCard({
     };
   }, []);
 
+  const rankedPaddingClass = isRanked
+    ? rank === 1
+      ? 'pl-6 sm:pl-8 md:pl-10'
+      : rank >= 10
+      ? 'pl-12 sm:pl-16 md:pl-20'
+      : 'pl-8 sm:pl-10 md:pl-12'
+    : '';
+
   const cardClasses = viewMode === 'list' 
     ? 'group relative flex flex-row items-center bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:bg-white/10 rounded-2xl p-2.5 sm:p-3.5 border border-black/5 dark:border-white/5 hover:border-purple-500/30 transition-all duration-200 w-full cursor-pointer shadow-sm hover:shadow-md transform-gpu backface-hidden'
-    : `group relative transition-transform duration-300 transform-gpu backface-hidden flex flex-col gap-1 sm:gap-2 ${className || 'w-32 sm:w-40 md:w-48 flex-shrink-0'}`;
+    : `group relative transition-transform duration-300 transform-gpu backface-hidden flex flex-col gap-1 sm:gap-2 ${isRanked ? `flex-shrink-0 ${rankedPaddingClass}` : (className || 'w-32 sm:w-40 md:w-48 flex-shrink-0')}`;
 
   return (
     <>
