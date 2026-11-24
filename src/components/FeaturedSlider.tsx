@@ -1,7 +1,7 @@
 import { useState, useEffect, memo, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router';
-import { Play, Star, Cloud } from 'lucide-react';
+import { Info, Star, Cloud } from 'lucide-react';
 import { parseMediaName } from '../utils/nameParser';
 import { useAuth } from '../context/AuthContext';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -33,8 +33,6 @@ const BREAKPOINTS = {
 const MODULES = [EffectCoverflow];
 
 export default function FeaturedSlider({ featuredItems }: { featuredItems: any[] }) {
-  const navigate = useNavigate();
-
   const renderedSlides = useMemo(() => {
     if (!featuredItems || featuredItems.length === 0) return null;
     return featuredItems.map((item, idx) => (
@@ -59,8 +57,10 @@ export default function FeaturedSlider({ featuredItems }: { featuredItems: any[]
         watchSlidesProgress={true}
         speed={400}
         threshold={10}
-        preventClicks={true}
-        preventClicksPropagation={true}
+        noSwiping={true}
+        noSwipingClass="swiper-no-swiping"
+        preventClicks={false}
+        preventClicksPropagation={false}
         touchStartPreventDefault={false}
         simulateTouch={true}
         coverflowEffect={COVERFLOW_EFFECT}
@@ -166,13 +166,40 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
   const parentClean = (item.parentPath || item._parent || `/home/${item.category}`).replace(/^\/+/, '');
   const targetUrl = `/${parentClean}/${item.name}`.replace(/\/+/g, '/').split('/').map(p => encodeURIComponent(p)).join('/');
   const currentMetaVer = localStorage.getItem('meta_version') || '1';
+  const navState = { item, tmdbData: tmdb, metaVer: currentMetaVer };
+  const pointerDownPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointerDownPosRef.current = { x: e.clientX, y: e.clientY };
+    handlePrefetch();
+  };
+
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const start = pointerDownPosRef.current;
+    pointerDownPosRef.current = null;
+    if (start) {
+      const dx = Math.abs(e.clientX - start.x);
+      const dy = Math.abs(e.clientY - start.y);
+      if (dx > 10 || dy > 10) return;
+    }
+    navigate(targetUrl, { state: navState });
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      navigate(targetUrl, { state: navState });
+    }
+  };
 
   return (
-    <Link 
-      to={targetUrl}
-      state={{ item, tmdbData: tmdb, metaVer: currentMetaVer }}
+    <div 
+      role="link"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
       onPointerEnter={handlePrefetch}
-      onPointerDown={handlePrefetch}
+      onPointerDown={handleCardPointerDown}
       onTouchStart={handlePrefetch}
       onFocus={handlePrefetch}
       className="relative block w-full h-full bg-[#121216] select-none rounded-3xl overflow-hidden isolate transform-gpu backface-hidden shadow-lg border border-white/10 group cursor-pointer"
@@ -273,13 +300,22 @@ const FeaturedSlideCard = memo(function FeaturedSlideCard({ item }: { item: any 
           </div>
 
           <div className="flex items-center gap-4 mt-4">
-            <span 
-              className="cursor-pointer relative z-30 px-5 py-2 sm:px-7 sm:py-3 bg-white text-black font-bold rounded-2xl flex items-center gap-2 hover:bg-gray-100 group-hover:bg-amber-400 transition-colors text-xs sm:text-sm shadow-xl active:scale-95 pointer-events-none"
+            <Link
+              to={targetUrl}
+              state={navState}
+              onClick={(e) => e.stopPropagation()}
+              onPointerEnter={handlePrefetch}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                handlePrefetch();
+              }}
+              onTouchStart={handlePrefetch}
+              className="swiper-no-swiping cursor-pointer relative z-30 px-5 py-2 sm:px-7 sm:py-3 bg-white text-black font-bold rounded-2xl flex items-center gap-2 hover:bg-gray-100 group-hover:bg-amber-400 transition-colors text-xs sm:text-sm shadow-xl active:scale-95"
             >
-              <Play fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5" /> Watch Now
-            </span>
+              <Info className="w-4 h-4 sm:w-5 sm:h-5" /> View Details
+            </Link>
           </div>
        </div>
-    </Link>
+    </div>
   );
 });

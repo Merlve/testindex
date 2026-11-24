@@ -456,10 +456,10 @@ const ItemCard = function ItemCard({
 
   const rankSvgSizeClasses = isRanked
     ? rank === 1
-      ? '-left-6 sm:-left-8 md:-left-10 w-[48px] sm:w-[64px] md:w-[80px] h-[98px] sm:h-[124px] md:h-[148px]'
+      ? '-left-[44px] sm:-left-[54px] md:-left-[64px] w-[66px] sm:w-[82px] md:w-[98px] h-[116px] sm:h-[144px] md:h-[172px]'
       : rank >= 10
-      ? '-left-12 sm:-left-16 md:-left-20 w-[78px] sm:w-[100px] md:w-[122px] h-[98px] sm:h-[124px] md:h-[148px]'
-      : '-left-8 sm:-left-10 md:-left-12 w-[58px] sm:w-[74px] md:w-[90px] h-[98px] sm:h-[124px] md:h-[148px]'
+      ? '-left-[104px] sm:-left-[130px] md:-left-[156px] w-[147px] sm:w-[182px] md:w-[218px] h-[116px] sm:h-[144px] md:h-[172px]'
+      : '-left-[66px] sm:-left-[82px] md:-left-[98px] w-[98px] sm:w-[122px] md:w-[146px] h-[116px] sm:h-[144px] md:h-[172px]'
     : '';
 
   const renderGridContent = (
@@ -468,25 +468,26 @@ const ItemCard = function ItemCard({
         {isRanked && (
           <div
             aria-hidden="true"
-            className={`pointer-events-none select-none absolute bottom-0 z-0 leading-none ${rankSvgSizeClasses}`}
+            className={`pointer-events-none select-none absolute -bottom-0.5 z-0 leading-none ${rankSvgSizeClasses}`}
           >
             <svg
-              viewBox={rank === 1 ? '0 0 85 130' : rank >= 10 ? '0 0 144 130' : '0 0 100 130'}
-              className="w-full h-full transition-colors duration-200 text-zinc-900/45 dark:text-white/55 group-hover:text-zinc-900/75 dark:group-hover:text-white/85"
+              viewBox={rank === 1 ? '0 0 60 104' : rank >= 10 ? '0 0 132 104' : '0 0 88 104'}
+              overflow="visible"
+              className="w-full h-full transition-colors duration-200 text-zinc-900/50 dark:text-white/65 group-hover:text-zinc-900/80 dark:group-hover:text-white/90"
               fill="none"
               aria-hidden="true"
             >
               <text
-                x={rank === 1 ? 80 : rank >= 10 ? 138 : 95}
-                y={120}
-                textAnchor="end"
-                fontSize={rank >= 10 ? 116 : 118}
+                x={4}
+                y={96}
+                textAnchor="start"
+                fontSize={120}
                 fontWeight="900"
-                letterSpacing={rank >= 10 ? '-5' : undefined}
+                letterSpacing={rank >= 10 ? '-6' : undefined}
                 fontFamily="'Poppins', ui-sans-serif, system-ui, sans-serif"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="3.2"
+                strokeWidth="3.4"
                 strokeLinejoin="round"
                 strokeLinecap="round"
               >
@@ -606,10 +607,10 @@ const ItemCard = function ItemCard({
 
   const rankedPaddingClass = isRanked
     ? rank === 1
-      ? 'pl-6 sm:pl-8 md:pl-10'
+      ? 'pl-[44px] sm:pl-[54px] md:pl-[64px]'
       : rank >= 10
-      ? 'pl-12 sm:pl-16 md:pl-20'
-      : 'pl-8 sm:pl-10 md:pl-12'
+      ? 'pl-[104px] sm:pl-[130px] md:pl-[156px]'
+      : 'pl-[66px] sm:pl-[82px] md:pl-[98px]'
     : '';
 
   const cardClasses = viewMode === 'list' 
