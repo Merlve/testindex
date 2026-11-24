@@ -26,7 +26,10 @@ export default function RecentlyAddedCarousel() {
   const { data: items = [], isLoading: loading, isFetching } = useQuery({
     queryKey: ['recentlyAdded'],
     queryFn: fetchRecentlyAdded,
-    staleTime: Infinity,
+    staleTime: 60 * 1000,
+    refetchInterval: 3 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     gcTime: 24 * 60 * 60 * 1000,
     
     retry: 3,

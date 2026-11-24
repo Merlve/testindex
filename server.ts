@@ -14,7 +14,7 @@ process.on('warning', (warning) => {
 });
 
 import express from 'express';
-import { getRecentlyAdded, getLocalItems, initJellyfinCache } from './jellyfin';
+import { getRecentlyAdded, getLocalItems, initJellyfinCache, setOnJellyfinUpdate } from './jellyfin';
 import { getOgMetadataForUrl, injectOgTags } from './og_meta';
 
 import cors from 'cors';
@@ -217,6 +217,10 @@ function bumpMetaVersion(clearFullCache: boolean = false) {
     apiCache.deleteMatching(/(api\/meta|api\/jellyfin|api\/fs\/search)/);
   }
 }
+
+setOnJellyfinUpdate(() => {
+  bumpMetaVersion();
+});
 
 function cacheMiddleware(ttlSeconds: number, isPrivate: boolean = true) {
   return (req: any, res: any, next: any) => {
@@ -6770,17 +6774,18 @@ app.post('/api/meta/autofetch/stop', adminMiddleware, (req, res) => {
 // API: Gemini Chatbot
 
 // API: Jellyfin Recently Added
-app.get('/api/jellyfin/recently-added', cacheMiddleware(180, true), async (req, res) => {
+app.get('/api/jellyfin/recently-added', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
-    const force = req.query.force === 'true';
-    if (force) {
-      bumpMetaVersion();
-    }
+    const force = req.query.force === 'true' || req.query.refresh === 'true';
     let userToken = req.headers.authorization as string | undefined;
     if (userToken && userToken.startsWith('Bearer ')) userToken = userToken.substring(7);
     const getToken = () => process.env.OPENLIST_API_KEY || userToken;
 
     const items = await getRecentlyAdded(getOpenlistUrl, getToken, appConfig.basePath, force, jfOverrides);
+    if (force) {
+      bumpMetaVersion();
+    }
     
     // Proactively fetch TMDB metadata for all recent items so they are instantly ready and cached
     const tmdbKey = process.env.TMDB_API_KEY;

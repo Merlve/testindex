@@ -63,7 +63,11 @@ export default function RecentlyAddedPage() {
     try {
       const res = await axios.get('/api/jellyfin/recently-added', { headers: { Authorization: token } });
       if (res.data?.success) {
-        return res.data.data || [];
+        const data = res.data.data || [];
+        try {
+          localStorage.setItem('recently_added_cache', JSON.stringify(data));
+        } catch (e) {}
+        return data;
       }
       return [];
     } catch (err: any) {
@@ -89,9 +93,10 @@ export default function RecentlyAddedPage() {
       const res = await axios.get('/api/jellyfin/recently-added?force=true&refresh=true', { headers: { Authorization: token } });
       if (res.data?.success) {
         const fetchedItems = res.data.data || [];
+        try {
+          localStorage.setItem('recently_added_cache', JSON.stringify(fetchedItems));
+        } catch (e) {}
         queryClient.setQueryData(['recentlyAdded'], fetchedItems);
-        await refetch();
-        queryClient.invalidateQueries();
         if (fetchedItems.length === 0) {
           setToastMsg('Jellyfin fetch completed, but 0 items were matched on OpenList.');
         } else {

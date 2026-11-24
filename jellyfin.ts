@@ -4,7 +4,24 @@ import { readSQLiteJSON, writeSQLiteJSON } from './sqlite_db';
 let recentlyAddedCache: any[] = [];
 let lastFetchTime = 0;
 let isFetching = false;
-const openlistSearchCache = new Map<string, any>();
+const OPENLIST_CACHE_TTL_MS = 30 * 60 * 1000;
+const openlistSearchCache = new Map<string, { candidate: any; cachedAt: number }>();
+let onCacheUpdateCallback: (() => void) | null = null;
+
+export function setOnJellyfinUpdate(cb: () => void) {
+  onCacheUpdateCallback = cb;
+}
+
+function getCacheFingerprint(items: any[]): string {
+  return JSON.stringify(
+    (items || []).map((i) => ({
+      p: i.openlist_path || i.name,
+      a: i._jf?.addedText || '',
+      r: i._jf?.resolution || '',
+      t: i._jf?.tmdbId || '',
+    }))
+  );
+}
 
 async function saveJellyfinCache() {
   await writeSQLiteJSON('jellyfin_cache', { recentlyAddedCache, lastFetchTime });
@@ -43,6 +60,91 @@ function getCleanTitle(name: string): string {
   return clean || name;
 }
 
+function getDateCreatedMs(item: any): number {
+  const raw = item?.DateCreated || item?.dateCreated;
+  if (!raw) return 0;
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function formatEpisodeAddedText(ep: any): string {
+  const parentIdx = ep?.ParentIndexNumber ?? ep?.parentIndexNumber;
+  const epIdx = ep?.IndexNumber ?? ep?.indexNumber;
+  const s = parentIdx !== undefined && parentIdx !== null ? String(parentIdx).padStart(2, '0') : '';
+  const e = epIdx !== undefined && epIdx !== null ? String(epIdx).padStart(2, '0') : '';
+  if (s && e) return `S${s}E${e} added`;
+  if (e) return `Episode ${epIdx} added`;
+  return 'Episode added';
+}
+
+function pickNewestEpisode(eps: any[]): { latestEp: any; addedText: string } | null {
+  if (!eps || eps.length === 0) return null;
+
+  let maxTime = 0;
+  for (const ep of eps) {
+    const t = getDateCreatedMs(ep);
+    if (t > maxTime) maxTime = t;
+  }
+
+  // Only treat episodes uploaded within a 5-minute window as the same import batch
+  const BATCH_WINDOW_MS = 5 * 60 * 1000;
+  const candidates =
+    maxTime > 0
+      ? eps.filter((ep) => maxTime - getDateCreatedMs(ep) <= BATCH_WINDOW_MS)
+      : [...eps];
+
+  candidates.sort((a, b) => {
+    const sa = a.ParentIndexNumber ?? a.parentIndexNumber ?? 0;
+    const sb = b.ParentIndexNumber ?? b.parentIndexNumber ?? 0;
+    if (sb !== sa) return sb - sa;
+    const ea = a.IndexNumber ?? a.indexNumber ?? 0;
+    const eb = b.IndexNumber ?? b.indexNumber ?? 0;
+    if (eb !== ea) return eb - ea;
+    return getDateCreatedMs(b) - getDateCreatedMs(a);
+  });
+
+  const latestEp = candidates[0] || eps[eps.length - 1];
+  return {
+    latestEp,
+    addedText: formatEpisodeAddedText(latestEp),
+  };
+}
+
+function extractResolution(jfItem: any): string | null {
+  let resolution: string | null = null;
+  const sources = jfItem?.MediaSources || jfItem?.mediaSources || [];
+  if (sources.length > 0) {
+    const streams = sources[0].MediaStreams || sources[0].mediaStreams || [];
+    const videoStreams = streams.filter((s: any) => {
+      const streamType = (s.Type || s.type || '').toLowerCase();
+      const codec = (s.Codec || s.codec || '').toLowerCase();
+      return streamType === 'video' && !['mjpeg', 'png', 'jpeg', 'jpg', 'bmp', 'gif'].includes(codec);
+    });
+    if (videoStreams.length > 0) {
+      const bestStream = videoStreams.reduce((prev: any, current: any) => {
+        const prevH = prev.Height ?? prev.height ?? 0;
+        const currH = current.Height ?? current.height ?? 0;
+        return prevH > currH ? prev : current;
+      });
+      const displayTitle = bestStream.DisplayTitle || bestStream.displayTitle;
+      if (displayTitle) {
+        const m = displayTitle.match(/(\d{3,4}p|4k|8k)/i);
+        if (m) resolution = m[1].toUpperCase();
+      }
+      const streamHeight = bestStream.Height ?? bestStream.height;
+      if (!resolution && streamHeight) {
+        if (streamHeight >= 2160) resolution = '4K';
+        else if (streamHeight >= 1440) resolution = '2K';
+        else if (streamHeight >= 1080) resolution = '1080p';
+        else if (streamHeight >= 720) resolution = '720p';
+        else if (streamHeight >= 480) resolution = '480p';
+        else resolution = `${streamHeight}p`;
+      }
+    }
+  }
+  return resolution;
+}
+
 export function getLocalItems() { return recentlyAddedCache; }
 
 export async function getRecentlyAdded(
@@ -57,7 +159,7 @@ export async function getRecentlyAdded(
     isFetching = false;
     openlistSearchCache.clear();
     await fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath, jfOverrides);
-  } else if ((now - lastFetchTime > 3 * 60 * 1000) && !isFetching) {
+  } else if ((now - lastFetchTime > 2.5 * 60 * 1000) && !isFetching) {
     fetchAndMatchJellyfin(getOpenlistUrl, getOpenlistApiKey, basePath, jfOverrides).catch(e => {
        const msg = e.response?.status || e.message;
        if (String(msg).includes('timeout')) {
@@ -165,7 +267,7 @@ async function fetchLatestEpisodeForSeason(
   try {
     const res = await axios.get(`${cleanUrl}/Shows/${seriesId}/Episodes`, {
       params: {
-        userId,
+        ...(userId ? { userId } : {}),
         seasonId,
         fields: "IndexNumber,ParentIndexNumber,DateCreated,MediaSources,MediaStreams,Name",
         api_key: apiKey
@@ -174,30 +276,58 @@ async function fetchLatestEpisodeForSeason(
       timeout: 25000
     });
     const eps: any[] = res.data?.Items || res.data?.items || (Array.isArray(res.data) ? res.data : []);
-    if (eps.length === 0) return null;
+    return pickNewestEpisode(eps);
+  } catch (err) {
+    return null;
+  }
+}
 
-    let maxTime = 0;
-    for (const ep of eps) {
-      const t = ep.DateCreated ? new Date(ep.DateCreated).getTime() : 0;
-      if (t > maxTime) maxTime = t;
-    }
-
-    const recentBatch = eps.filter(ep => {
-      const t = ep.DateCreated ? new Date(ep.DateCreated).getTime() : 0;
-      return (maxTime - t) < 24 * 60 * 60 * 1000;
+/**
+ * Helper to fetch the latest episode added to a series when Jellyfin returns a grouped Series item.
+ */
+async function fetchLatestEpisodeForSeries(
+  cleanUrl: string,
+  seriesId: string,
+  userId: string | undefined,
+  headers: Record<string, string>,
+  apiKey: string
+): Promise<{ latestEp: any, addedText: string } | null> {
+  const fields = "IndexNumber,ParentIndexNumber,DateCreated,MediaSources,MediaStreams,Name";
+  try {
+    const res = await axios.get(`${cleanUrl}/Shows/${seriesId}/Episodes`, {
+      params: {
+        ...(userId ? { userId } : {}),
+        fields,
+        api_key: apiKey
+      },
+      headers,
+      timeout: 25000
     });
+    const eps: any[] = res.data?.Items || res.data?.items || (Array.isArray(res.data) ? res.data : []);
+    const picked = pickNewestEpisode(eps);
+    if (picked) return picked;
+  } catch (err) {
+    // Fallback to /Items query below
+  }
 
-    recentBatch.sort((a, b) => (b.IndexNumber ?? 0) - (a.IndexNumber ?? 0));
-    const latestEp = recentBatch[0] || eps[eps.length - 1];
-
-    const s = latestEp.ParentIndexNumber !== undefined && latestEp.ParentIndexNumber !== null ? String(latestEp.ParentIndexNumber).padStart(2, "0") : "";
-    const e = latestEp.IndexNumber !== undefined && latestEp.IndexNumber !== null ? String(latestEp.IndexNumber).padStart(2, "0") : "";
-    const addedText = s && e ? `S${s}E${e} added` : (e ? `Episode ${latestEp.IndexNumber} added` : "Episode added");
-
-    return {
-      latestEp,
-      addedText
-    };
+  try {
+    const res = await axios.get(`${cleanUrl}/Items`, {
+      params: {
+        ...(userId ? { userId } : {}),
+        parentId: seriesId,
+        recursive: true,
+        includeItemTypes: "Episode",
+        sortBy: "DateCreated",
+        sortOrder: "Descending",
+        limit: 50,
+        fields,
+        api_key: apiKey
+      },
+      headers,
+      timeout: 25000
+    });
+    const eps: any[] = res.data?.Items || res.data?.items || (Array.isArray(res.data) ? res.data : []);
+    return pickNewestEpisode(eps);
   } catch (err) {
     return null;
   }
@@ -276,13 +406,14 @@ async function fetchAndMatchJellyfin(
     let fetchSuccess = false;
     let lastError: any = null;
 
-    // Route 1 (Jellyfin 12.x standard): GET /Items/Latest
+    // Route 1 (Jellyfin 12.x standard): GET /Items/Latest (groupItems: false to return individual episodes!)
     try {
       const res = await axios.get(`${cleanUrl}/Items/Latest`, {
         params: {
           ...(userId ? { userId } : {}),
-          includeItemTypes: "Movie,Episode,Series",
-          limit: 100,
+          includeItemTypes: "Movie,Episode",
+          groupItems: false,
+          limit: 250,
           fields: itemFields,
           enableImages: true,
           api_key: apiKey
@@ -317,8 +448,8 @@ async function fetchAndMatchJellyfin(
             sortBy: "DateCreated",
             sortOrder: "Descending",
             recursive: true,
-            includeItemTypes: "Movie,Episode,Series",
-            limit: 100,
+            includeItemTypes: "Movie,Episode",
+            limit: 250,
             fields: itemFields,
             api_key: apiKey
           },
@@ -346,8 +477,9 @@ async function fetchAndMatchJellyfin(
       try {
         const res = await axios.get(`${cleanUrl}/Users/${userId}/Items/Latest`, {
           params: {
-            includeItemTypes: "Movie,Episode,Series",
-            limit: 100,
+            includeItemTypes: "Movie,Episode",
+            groupItems: false,
+            limit: 250,
             fields: itemFields,
             api_key: apiKey
           },
@@ -375,23 +507,59 @@ async function fetchAndMatchJellyfin(
       }
     }
 
-    const items = rawItems || [];
-    const seenNames = new Set<string>();
-    const toSearch: { name: string, year: number | null, isSeries: boolean, jfItem: any, addedText: string }[] = [];
+    // Ensure items are ordered newest-first before resolving per-series deduplication
+    const typePriority = (t: string) => {
+      const lower = (t || '').toLowerCase();
+      if (lower === 'episode' || lower === 'movie') return 3;
+      if (lower === 'season') return 2;
+      if (lower === 'series') return 1;
+      return 0;
+    };
+
+    const items = [...(rawItems || [])].sort((a, b) => {
+      const tb = getDateCreatedMs(b);
+      const ta = getDateCreatedMs(a);
+      if (tb !== ta) return tb - ta;
+      const pb = typePriority(b.Type || b.type);
+      const pa = typePriority(a.Type || a.type);
+      if (pb !== pa) return pb - pa;
+      const sb = b.ParentIndexNumber ?? b.parentIndexNumber ?? 0;
+      const sa = a.ParentIndexNumber ?? a.parentIndexNumber ?? 0;
+      if (sb !== sa) return sb - sa;
+      const eb = b.IndexNumber ?? b.indexNumber ?? 0;
+      const ea = a.IndexNumber ?? a.indexNumber ?? 0;
+      return eb - ea;
+    });
+
+    interface ParsedSearchEntry {
+      name: string;
+      year: number | null;
+      isSeries: boolean;
+      jfItem: any;
+      addedText: string;
+      dateCreatedMs: number;
+      seasonNum: number;
+      episodeNum: number;
+      orderIndex: number;
+    }
+
+    const bySeriesOrName = new Map<string, ParsedSearchEntry>();
     const seriesYearCache = new Map<string, number | null>();
 
+    let orderCounter = 0;
     for (const item of items) {
       let name = item.Name || item.name || '';
       let isSeries = false;
       let targetYear = item.ProductionYear ?? item.productionYear ?? null;
       let addedText = 'Added';
+      let itemDateCreatedMs = getDateCreatedMs(item);
 
       const itemType = (item.Type || item.type || '').toLowerCase();
       const seriesName = item.SeriesName || item.seriesName;
       const seriesYear = item.SeriesYear ?? item.seriesYear;
       const seriesId = item.SeriesId || item.seriesId;
-      const parentIndexNumber = item.ParentIndexNumber ?? item.parentIndexNumber;
-      const indexNumber = item.IndexNumber ?? item.indexNumber;
+      let parentIndexNumber = item.ParentIndexNumber ?? item.parentIndexNumber;
+      let indexNumber = item.IndexNumber ?? item.indexNumber;
 
       if (itemType === 'episode') {
         name = seriesName || name;
@@ -419,15 +587,7 @@ async function fetchAndMatchJellyfin(
           }
         }
 
-        const s = parentIndexNumber !== undefined && parentIndexNumber !== null ? String(parentIndexNumber).padStart(2, '0') : '';
-        const e = indexNumber !== undefined && indexNumber !== null ? String(indexNumber).padStart(2, '0') : '';
-        if (s && e) {
-           addedText = `S${s}E${e} added`;
-        } else if (e) {
-           addedText = `Episode ${indexNumber} added`;
-        } else {
-           addedText = 'Episode added';
-        }
+        addedText = formatEpisodeAddedText(item);
       } else if (itemType === 'season') {
         name = seriesName || name;
         isSeries = true;
@@ -461,6 +621,11 @@ async function fetchAndMatchJellyfin(
             if (epInfo.latestEp?.MediaSources) {
               item.MediaSources = epInfo.latestEp.MediaSources;
             }
+            if (epInfo.latestEp) {
+              parentIndexNumber = epInfo.latestEp.ParentIndexNumber ?? epInfo.latestEp.parentIndexNumber ?? parentIndexNumber;
+              indexNumber = epInfo.latestEp.IndexNumber ?? epInfo.latestEp.indexNumber ?? indexNumber;
+              itemDateCreatedMs = Math.max(itemDateCreatedMs, getDateCreatedMs(epInfo.latestEp));
+            }
           }
         }
 
@@ -474,6 +639,21 @@ async function fetchAndMatchJellyfin(
         }
       } else if (itemType === 'series') {
         isSeries = true;
+        const resolvedSeriesId = item.Id || item.id || seriesId;
+        if (resolvedSeriesId) {
+          const epInfo = await fetchLatestEpisodeForSeries(cleanUrl, resolvedSeriesId, userId, headers, apiKey);
+          if (epInfo?.addedText) {
+            addedText = epInfo.addedText;
+            if (epInfo.latestEp?.MediaSources) {
+              item.MediaSources = epInfo.latestEp.MediaSources;
+            }
+            if (epInfo.latestEp) {
+              parentIndexNumber = epInfo.latestEp.ParentIndexNumber ?? epInfo.latestEp.parentIndexNumber ?? parentIndexNumber;
+              indexNumber = epInfo.latestEp.IndexNumber ?? epInfo.latestEp.indexNumber ?? indexNumber;
+              itemDateCreatedMs = Math.max(itemDateCreatedMs, getDateCreatedMs(epInfo.latestEp));
+            }
+          }
+        }
       }
 
       // Universal guard against orphan/unresolved season or episode titles
@@ -495,11 +675,54 @@ async function fetchAndMatchJellyfin(
       }
 
       const lowerName = normalizeStr(name);
-      if (!seenNames.has(lowerName) && name) {
-        seenNames.add(lowerName);
-        toSearch.push({ name, year: targetYear, isSeries, jfItem: item, addedText });
+      if (!lowerName || !name) continue;
+
+      const candidateEntry: ParsedSearchEntry = {
+        name,
+        year: targetYear,
+        isSeries,
+        jfItem: item,
+        addedText,
+        dateCreatedMs: itemDateCreatedMs,
+        seasonNum: Number(parentIndexNumber ?? 0) || 0,
+        episodeNum: Number(indexNumber ?? 0) || 0,
+        orderIndex: orderCounter++,
+      };
+
+      const existing = bySeriesOrName.get(lowerName);
+      if (!existing) {
+        bySeriesOrName.set(lowerName, candidateEntry);
+      } else {
+        const SAME_BATCH_MS = 5 * 60 * 1000;
+        const timeDiff = candidateEntry.dateCreatedMs - existing.dateCreatedMs;
+        let shouldReplace = false;
+
+        if (timeDiff > SAME_BATCH_MS) {
+          shouldReplace = true;
+        } else if (Math.abs(timeDiff) <= SAME_BATCH_MS) {
+          // Within the same import batch, always pick the higher season/episode number
+          if (candidateEntry.seasonNum !== existing.seasonNum) {
+            shouldReplace = candidateEntry.seasonNum > existing.seasonNum;
+          } else if (candidateEntry.episodeNum !== existing.episodeNum) {
+            shouldReplace = candidateEntry.episodeNum > existing.episodeNum;
+          } else if (existing.addedText === 'Added' && candidateEntry.addedText !== 'Added') {
+            shouldReplace = true;
+          }
+        }
+
+        if (shouldReplace) {
+          candidateEntry.dateCreatedMs = Math.max(candidateEntry.dateCreatedMs, existing.dateCreatedMs);
+          bySeriesOrName.set(lowerName, candidateEntry);
+        } else {
+          existing.dateCreatedMs = Math.max(existing.dateCreatedMs, candidateEntry.dateCreatedMs);
+        }
       }
     }
+
+    const toSearch = Array.from(bySeriesOrName.values()).sort((a, b) => {
+      if (b.dateCreatedMs !== a.dateCreatedMs) return b.dateCreatedMs - a.dateCreatedMs;
+      return a.orderIndex - b.orderIndex;
+    });
 
     const matchedItems: any[] = [];
     const openlistUrl = getOpenlistUrl().replace(/\/$/, '');
@@ -510,22 +733,17 @@ async function fetchAndMatchJellyfin(
       throw new Error('No OpenList API key or authorization token available for matching directories.');
     }
 
+    const now = Date.now();
     for (const search of toSearch) {
-      if (openlistSearchCache.has(search.name)) {
-        const cachedMatch = openlistSearchCache.get(search.name);
-        if (cachedMatch) {
-            matchedItems.push(cachedMatch);
-        }
-        continue;
-      }
-
       try {
         const providerIds = search.jfItem.ProviderIds || search.jfItem.providerIds || {};
         const tmdbId = providerIds.Tmdb || providerIds.tmdb || providerIds.TMDB || null;
         const overview = search.jfItem.Overview ?? search.jfItem.overview;
         const rating = search.jfItem.CommunityRating ?? search.jfItem.communityRating;
         const genres = search.jfItem.Genres || search.jfItem.genres || [];
+        const resolution = extractResolution(search.jfItem);
 
+        // Always apply admin overrides first and build _jf fresh with latest addedText
         if (jfOverrides[search.name]) {
             const override = jfOverrides[search.name];
             const enrichedMatch = {
@@ -543,13 +761,35 @@ async function fetchAndMatchJellyfin(
                    year: search.year,
                    overview,
                    rating,
-                   resolution: null,
+                   resolution,
                    genres,
                    addedText: search.addedText
                }
             };
             matchedItems.push(enrichedMatch);
-            openlistSearchCache.set(search.name, enrichedMatch);
+            continue;
+        }
+
+        // Reuse cached OpenList directory candidate (without freezing _jf metadata!)
+        const cachedEntry = openlistSearchCache.get(search.name);
+        if (cachedEntry && (now - cachedEntry.cachedAt < OPENLIST_CACHE_TTL_MS)) {
+            const c = cachedEntry.candidate;
+            matchedItems.push({
+               ...c,
+               _cat: c.parent.split('/').filter(Boolean).pop() || (search.isSeries ? 'SERIES' : 'MOVIES'),
+               _parent: c.parent,
+               openlist_path: `${c.parent}/${c.name}`,
+               _jf_name: search.name,
+               _jf: {
+                   tmdbId,
+                   year: search.year,
+                   overview,
+                   rating,
+                   resolution,
+                   genres,
+                   addedText: search.addedText
+               }
+            });
             continue;
         }
 
@@ -646,38 +886,7 @@ async function fetchAndMatchJellyfin(
         }
 
         if (bestCandidate) {
-          let resolution = null;
-          const sources = search.jfItem.MediaSources || search.jfItem.mediaSources || [];
-          if (sources.length > 0) {
-              const streams = sources[0].MediaStreams || sources[0].mediaStreams || [];
-              const videoStreams = streams.filter((s: any) => {
-                const streamType = (s.Type || s.type || '').toLowerCase();
-                const codec = (s.Codec || s.codec || '').toLowerCase();
-                return streamType === 'video' && !['mjpeg','png','jpeg','jpg','bmp','gif'].includes(codec);
-              });
-              if (videoStreams.length > 0) {
-                  const bestStream = videoStreams.reduce((prev: any, current: any) => {
-                    const prevH = prev.Height ?? prev.height ?? 0;
-                    const currH = current.Height ?? current.height ?? 0;
-                    return prevH > currH ? prev : current;
-                  });
-                  const displayTitle = bestStream.DisplayTitle || bestStream.displayTitle;
-                  if (displayTitle) {
-                      const m = displayTitle.match(/(\d{3,4}p|4k|8k)/i);
-                      if (m) resolution = m[1].toUpperCase();
-                  }
-                  const streamHeight = bestStream.Height ?? bestStream.height;
-                  if (!resolution && streamHeight) {
-                      if (streamHeight >= 2160) resolution = '4K';
-                      else if (streamHeight >= 1440) resolution = '2K';
-                      else if (streamHeight >= 1080) resolution = '1080p';
-                      else if (streamHeight >= 720) resolution = '720p';
-                      else if (streamHeight >= 480) resolution = '480p';
-                      else resolution = `${streamHeight}p`;
-                  }
-              }
-          }
-
+          openlistSearchCache.set(search.name, { candidate: bestCandidate, cachedAt: now });
           const enrichedMatch = {
              ...bestCandidate,
              _cat: bestCandidate.parent.split('/').filter(Boolean).pop() || (search.isSeries ? 'SERIES' : 'MOVIES'),
@@ -695,7 +904,6 @@ async function fetchAndMatchJellyfin(
              }
           };
           matchedItems.push(enrichedMatch);
-          openlistSearchCache.set(search.name, enrichedMatch);
         } else {
           console.log(`[Jellyfin] No openlist match found for: ${search.name}`);
         }
@@ -704,10 +912,16 @@ async function fetchAndMatchJellyfin(
       }
     }
 
+    const prevFingerprint = getCacheFingerprint(recentlyAddedCache);
+    const nextFingerprint = getCacheFingerprint(matchedItems);
     recentlyAddedCache = matchedItems;
     lastFetchTime = Date.now();
     await saveJellyfinCache();
     console.log(`[Jellyfin] Cached ${matchedItems.length} recently added items.`);
+
+    if (prevFingerprint !== nextFingerprint && onCacheUpdateCallback) {
+      onCacheUpdateCallback();
+    }
   } finally {
     isFetching = false;
   }
